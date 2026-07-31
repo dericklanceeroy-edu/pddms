@@ -1,31 +1,30 @@
-import http from 'node:http'
+export const DEFAULT_OK_CODE = 0
+export const DEFAULT_ERROR_CODE = 1
 
-const DEFAULT_OK_CODE = 200
-const DEFAULT_ERROR_CODE = 500
-
-type ResponseData<T> = {
-  code?: number
+export type ResponseData<T> = {
   message?: string
   payload?: T
 }
 
-export const response = {
-  ok<T = unknown>(data: ResponseData<T> = {}) {
-    const code = data.code ?? DEFAULT_OK_CODE
+export interface Response<T = null> {
+  code: typeof DEFAULT_OK_CODE | typeof DEFAULT_ERROR_CODE
+  message: string
+  payload: T | null
+}
 
+export const response = {
+  ok<T = null>(data: ResponseData<T> = {}): Response<T> {
     return {
-      code,
-      message: data.message ?? http.STATUS_CODES[code],
+      code: DEFAULT_OK_CODE,
+      message: data.message ?? 'Ok',
       payload: data.payload ?? null
     }
   },
 
-  error<T = unknown>(data: ResponseData<T> = {}) {
-    const code = data.code ?? DEFAULT_ERROR_CODE
-
+  error<T = null>(data: ResponseData<T> = {}): Response<T> {
     return {
-      code,
-      message: data.message ?? http.STATUS_CODES[code],
+      code: DEFAULT_ERROR_CODE,
+      message: data.message ?? 'Error',
       payload: data.payload ?? null
     }
   }
