@@ -1,18 +1,32 @@
+import http from 'node:http'
+
+const DEFAULT_OK_CODE = 200
+const DEFAULT_ERROR_CODE = 500
+
+type ResponseData<T> = {
+  code?: number
+  message?: string
+  payload?: T
+}
+
 export const response = {
-  ok: <T = any>(data?: { code?: number; message?: string; payload?: T }) => {
+  ok<T = unknown>(data: ResponseData<T> = {}) {
+    const code = data.code ?? DEFAULT_OK_CODE
+
     return {
-      code: 200,
-      message: 'Ok',
-      payload: null,
-      ...data
+      code,
+      message: data.message ?? http.STATUS_CODES[code] ?? 'OK',
+      payload: data.payload ?? null
     }
   },
-  error: <T = any>(data?: { code?: number; message?: string; payload?: T }) => {
+
+  error<T = unknown>(data: ResponseData<T> = {}) {
+    const code = data.code ?? DEFAULT_ERROR_CODE
+
     return {
-      code: 500,
-      message: 'Internal Server Error',
-      payload: null,
-      ...data
+      code,
+      message: data.message ?? http.STATUS_CODES[code] ?? 'Internal Server Error',
+      payload: data.payload ?? null
     }
   }
 }
