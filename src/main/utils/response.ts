@@ -15,7 +15,7 @@ export const response = {
 
     return {
       code,
-      message: data.message ?? http.STATUS_CODES[code] ?? 'OK',
+      message: data.message ?? http.STATUS_CODES[code],
       payload: data.payload ?? null
     }
   },
@@ -25,7 +25,7 @@ export const response = {
 
     return {
       code,
-      message: data.message ?? http.STATUS_CODES[code] ?? 'Internal Server Error',
+      message: data.message ?? http.STATUS_CODES[code],
       payload: data.payload ?? null
     }
   }
