@@ -24,6 +24,7 @@
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
     "@tailwindcss/vite": "^4.3.3",
+    "kysely": "^0.29.4",
     "tailwindcss": "^4.3.3"
   },
   "devDependencies": {
