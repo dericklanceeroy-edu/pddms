@@ -1,6 +1,9 @@
 import type { NewUser, User, UserUpdate } from '@lib/db/tables'
-import { type IdSchema, idSchema } from '@lib/schema'
 import * as z from 'zod'
+
+export function isUserId(value: unknown): value is User['id'] {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 1
+}
 
 export const userSchema: z.ZodType<User> = z.strictObject({
   id: z.number().positive(),
@@ -15,8 +18,7 @@ export const newUserSchema: z.ZodType<NewUser> = z.strictObject({
   password: z.string()
 })
 
-// prettier-ignore
-export const userUpdateSchema: z.ZodType<UserUpdate & IdSchema> = z.strictObject({
-    username: z.string().optional(),
-    password: z.string().optional()
-}).extend(idSchema.shape)
+export const userUpdateSchema: z.ZodType<UserUpdate> = z.strictObject({
+  username: z.string().optional(),
+  password: z.string().optional()
+})

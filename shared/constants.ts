@@ -1,7 +1,7 @@
 export const apis = {
   users: {
-    insert: 'db/users/insert',
-    selectById: 'db/users/selectById',
+    create: 'db/users/create',
+    getById: 'db/users/getById',
     updateById: 'db/users/updateById',
     deleteById: 'db/users/deleteById'
   }
