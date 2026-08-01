@@ -5,5 +5,3 @@ export const idSchema = z.strictObject({
 })
 
 export type IdSchema = z.infer<typeof idSchema>
-
-export * from './users'

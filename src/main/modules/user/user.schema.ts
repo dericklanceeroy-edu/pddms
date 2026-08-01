@@ -1,6 +1,6 @@
+import type { NewUser, User, UserUpdate } from '@lib/db/tables'
+import { type IdSchema, idSchema } from '@lib/schema'
 import * as z from 'zod'
-import { type IdSchema, idSchema } from '.'
-import type { NewUser, User, UserUpdate } from '../tables'
 
 export const userSchema: z.ZodType<User> = z.strictObject({
   id: z.number().positive(),

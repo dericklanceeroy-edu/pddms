@@ -1,16 +1,17 @@
+import { response } from '@lib/response'
+import { idSchema } from '@lib/schema'
+import { apis } from '@shared/constants'
 import { ipcMain } from 'electron'
 import { NoResultError } from 'kysely'
 import { ZodError } from 'zod'
-import { apis } from '../../../../shared/constants'
-import { response } from '../../utils'
-import { idSchema, newUserSchema, userUpdateSchema } from '../schemas'
-import * as userServices from '../services/users'
+import { newUserSchema, userUpdateSchema } from './user.schema'
+import * as userServices from './user.service'
 
 ipcMain.handle(apis.users.insert, async (_, payload) => {
   try {
     const data = newUserSchema.parse(payload)
 
-    return await userServices.insert(data)
+    return response.ok({ payload: await userServices.insert(data) })
   } catch (error) {
     if (error instanceof ZodError) {
       return response.error({ message: 'Invalid payload' })
@@ -58,7 +59,7 @@ ipcMain.handle(apis.users.deleteById, async (_, payload) => {
   try {
     const data = idSchema.parse(payload)
 
-    return await userServices.deleteById(data.id)
+    return response.ok({ payload: await userServices.deleteById(data.id) })
   } catch (error) {
     if (error instanceof ZodError) {
       return response.error({ message: 'Invalid payload' })

@@ -1,6 +1,6 @@
+import { env } from '@lib/env'
 import SQLite from 'better-sqlite3'
 import { CamelCasePlugin, Kysely, SqliteDialect } from 'kysely'
-import { env } from '../lib'
 import { Database } from './tables'
 
 export const dialect = new SqliteDialect({
