@@ -10,7 +10,7 @@ export async function insert(data: NewUser): Promise<User> {
     .executeTakeFirstOrThrow()
 }
 
-export async function getById(id: number): Promise<User | null> {
+export async function findById(id: number): Promise<User | null> {
   // prettier-ignore
   return await db
     .selectFrom('users')

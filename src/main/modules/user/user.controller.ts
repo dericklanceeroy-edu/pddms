@@ -3,7 +3,7 @@ import { apis } from '@shared/constants'
 import { ipcMain } from 'electron'
 import { NoResultError } from 'kysely'
 import { ZodError } from 'zod'
-import * as userServices from './user.service'
+import * as userServices from './user.repository'
 import { isUserId, newUserSchema, userUpdateSchema } from './user.validation'
 
 ipcMain.handle(apis.users.create, async (_, payload) => {
@@ -26,7 +26,7 @@ ipcMain.handle(apis.users.getById, async (_, id) => {
       return response.error({ message: 'Invalid payload' })
     }
 
-    return response.ok({ payload: await userServices.getById(id) })
+    return response.ok({ payload: await userServices.findById(id) })
   } catch (error) {
     return response.error()
   }
