@@ -14,5 +14,5 @@
 - Keep the message concise, ideally under 72 characters.
 - Use present-tense verbs consistently.
 
-### Format 💅
+### Format 🖊️
 - Wrap code-related identifiers in backticks.
