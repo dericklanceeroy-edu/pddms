@@ -17,5 +17,5 @@
 ### Format 🖊️
 - Wrap code-related identifiers in backticks.
 
-> [!TIP]
+> [!NOTE]
 > GitHub commit messages backticks requires backslash prefix.
