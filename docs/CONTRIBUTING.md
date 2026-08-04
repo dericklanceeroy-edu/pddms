@@ -39,7 +39,7 @@ Unless otherwise specified, follow the conventions of the technologies used.
 - Use present-tense verbs consistently.
 
 ### Format 🖊️
-- Start with the ticket code enclosed in brackets.
+- Start with the ticket code enclosed in brackets if the task has a ticket.
 - Wrap code-related identifiers in backticks.
 
 > [!NOTE]
