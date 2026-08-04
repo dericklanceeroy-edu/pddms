@@ -1,4 +1,7 @@
 export const apis = {
+  auth: {
+    login: 'auth/login'
+  },
   users: {
     create: 'users/create',
     getById: 'users/getById',
