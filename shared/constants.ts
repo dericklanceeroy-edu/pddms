@@ -1,8 +1,8 @@
 export const apis = {
   users: {
-    create: 'db/users/create',
-    getById: 'db/users/getById',
-    updateById: 'db/users/updateById',
-    deleteById: 'db/users/deleteById'
+    create: 'users/create',
+    getById: 'users/getById',
+    updateById: 'users/updateById',
+    deleteById: 'users/deleteById'
   }
 }
