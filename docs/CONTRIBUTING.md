@@ -2,6 +2,30 @@
 
 &mdash; *Dan, Derick, and Gabril*
 
+## Style Guides
+
+Organize each code block into three sections:
+
+1. Variables
+2. Process
+3. Return (optional)
+
+For example:
+```ts
+// Variables
+const x = 5
+const y = 10
+let sum: number
+
+// Process
+sum = x + y
+
+// Return (in a function)
+return sum
+```
+
+Unless otherwise specified, follow the conventions of the technologies used.
+
 ## Commit Messages
 
 ### Scope 🔭
