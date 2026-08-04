@@ -15,6 +15,7 @@
 - Use present-tense verbs consistently.
 
 ### Format 🖊️
+- Start with the ticket code enclosed in brackets.
 - Wrap code-related identifiers in backticks.
 
 > [!NOTE]
