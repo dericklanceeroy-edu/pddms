@@ -1,6 +1,7 @@
 export const apis = {
   auth: {
-    login: 'auth/login'
+    signUp: 'auth/signUp',
+    signIn: 'auth/signIn'
   },
   users: {
     create: 'users/create',
