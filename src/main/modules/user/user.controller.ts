@@ -1,5 +1,6 @@
 import { response } from '@lib/response'
 import { apis } from '@shared/constants'
+import { hashSync } from 'bcrypt'
 import { ipcMain } from 'electron'
 import { NoResultError } from 'kysely'
 import { ZodError } from 'zod'
@@ -8,7 +9,12 @@ import { isUserId, newUserSchema, userUpdateSchema } from './user.validation'
 
 ipcMain.handle(apis.users.create, async (_, payload) => {
   try {
-    const data = newUserSchema.parse(payload)
+    let data = newUserSchema.parse(payload)
+
+    data = {
+      ...data,
+      password: hashSync(data.password, 10)
+    }
 
     return response.ok({ payload: await userServices.insert(data) })
   } catch (error) {
