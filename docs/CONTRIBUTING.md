@@ -8,7 +8,7 @@ Organize each code block into three sections:
 
 1. Variables
 2. Process
-3. Return (optional)
+3. Terminate (optional, `return` or `throw`)
 
 For example:
 ```ts
@@ -20,7 +20,7 @@ let sum: number
 // Process
 sum = x + y
 
-// Return (in a function)
+// Terminate
 return sum
 ```
 
