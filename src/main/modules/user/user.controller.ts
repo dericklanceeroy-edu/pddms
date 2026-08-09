@@ -1,5 +1,5 @@
 import { response } from '@lib/response'
-import { apis } from '@shared/constants'
+import { channels } from '@shared/constants'
 import { hashSync } from 'bcrypt'
 import { ipcMain } from 'electron'
 import { NoResultError } from 'kysely'
@@ -7,7 +7,7 @@ import { ZodError } from 'zod'
 import * as userRepository from './user.repository'
 import { isUserId, isUserUsername, newUserSchema, userUpdateSchema } from './user.validation'
 
-ipcMain.handle(apis.users.create, async (_, payload) => {
+ipcMain.handle(channels.users.create, async (_, payload) => {
   try {
     let data = newUserSchema.parse(payload)
 
@@ -26,7 +26,7 @@ ipcMain.handle(apis.users.create, async (_, payload) => {
   }
 })
 
-ipcMain.handle(apis.users.getById, async (_, id) => {
+ipcMain.handle(channels.users.getById, async (_, id) => {
   try {
     if (!isUserId(id)) {
       return response.error({ message: 'Invalid payload' })
@@ -38,7 +38,7 @@ ipcMain.handle(apis.users.getById, async (_, id) => {
   }
 })
 
-ipcMain.handle(apis.users.getByUsername, async (_, username) => {
+ipcMain.handle(channels.users.getByUsername, async (_, username) => {
   try {
     if (!isUserUsername(username)) {
       return response.error({ message: 'Invalid payload' })
@@ -50,7 +50,7 @@ ipcMain.handle(apis.users.getByUsername, async (_, username) => {
   }
 })
 
-ipcMain.handle(apis.users.updateById, async (_, id, payload) => {
+ipcMain.handle(channels.users.updateById, async (_, id, payload) => {
   try {
     const data = userUpdateSchema.parse(payload)
 
@@ -70,7 +70,7 @@ ipcMain.handle(apis.users.updateById, async (_, id, payload) => {
   }
 })
 
-ipcMain.handle(apis.users.deleteById, async (_, id) => {
+ipcMain.handle(channels.users.deleteById, async (_, id) => {
   try {
     if (!isUserId(id)) {
       return response.error({ message: 'Invalid payload' })

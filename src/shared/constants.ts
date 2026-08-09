@@ -1,4 +1,4 @@
-export const apis = {
+export const channels = {
   users: {
     create: 'users/create',
     getById: 'users/getById',
