@@ -4,7 +4,7 @@ import { hashSync } from 'bcrypt'
 import { ipcMain } from 'electron'
 import { NoResultError } from 'kysely'
 import { ZodError } from 'zod'
-import * as userServices from './user.repository'
+import * as userRepository from './user.repository'
 import { isUserId, newUserSchema, userUpdateSchema } from './user.validation'
 
 ipcMain.handle(apis.users.create, async (_, payload) => {
@@ -16,7 +16,7 @@ ipcMain.handle(apis.users.create, async (_, payload) => {
       password: hashSync(data.password, 10)
     }
 
-    return response.ok({ payload: await userServices.insert(data) })
+    return response.ok({ payload: await userRepository.insert(data) })
   } catch (error) {
     if (error instanceof ZodError) {
       return response.error({ message: 'Invalid payload' })
@@ -32,7 +32,7 @@ ipcMain.handle(apis.users.getById, async (_, id) => {
       return response.error({ message: 'Invalid payload' })
     }
 
-    return response.ok({ payload: await userServices.findById(id) })
+    return response.ok({ payload: await userRepository.findById(id) })
   } catch (error) {
     return response.error()
   }
@@ -42,7 +42,7 @@ ipcMain.handle(apis.users.updateById, async (_, id, payload) => {
   try {
     const data = userUpdateSchema.parse(payload)
 
-    await userServices.updateById(id, data)
+    await userRepository.updateById(id, data)
 
     return response.ok()
   } catch (error) {
@@ -64,7 +64,7 @@ ipcMain.handle(apis.users.deleteById, async (_, id) => {
       return response.error({ message: 'Invalid payload' })
     }
 
-    return response.ok({ payload: await userServices.deleteById(id) })
+    return response.ok({ payload: await userRepository.deleteById(id) })
   } catch (error) {
     if (error instanceof NoResultError) {
       return response.error({ message: 'User not found' })
