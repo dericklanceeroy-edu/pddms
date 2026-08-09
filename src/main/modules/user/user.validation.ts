@@ -5,6 +5,10 @@ export function isUserId(value: unknown): value is User['id'] {
   return typeof value === 'number' && Number.isInteger(value) && value >= 1
 }
 
+export function isUserUsername(value: unknown): value is User['username'] {
+  return typeof value === 'string'
+}
+
 export const userSchema: z.ZodType<User> = z.strictObject({
   id: z.number().positive(),
   username: z.string().min(4),

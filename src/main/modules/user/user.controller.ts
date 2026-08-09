@@ -5,7 +5,7 @@ import { ipcMain } from 'electron'
 import { NoResultError } from 'kysely'
 import { ZodError } from 'zod'
 import * as userRepository from './user.repository'
-import { isUserId, newUserSchema, userUpdateSchema } from './user.validation'
+import { isUserId, isUserUsername, newUserSchema, userUpdateSchema } from './user.validation'
 
 ipcMain.handle(apis.users.create, async (_, payload) => {
   try {
@@ -33,6 +33,18 @@ ipcMain.handle(apis.users.getById, async (_, id) => {
     }
 
     return response.ok({ payload: await userRepository.findById(id) })
+  } catch (error) {
+    return response.error()
+  }
+})
+
+ipcMain.handle(apis.users.getByUsername, async (_, username) => {
+  try {
+    if (!isUserUsername(username)) {
+      return response.error({ message: 'Invalid payload' })
+    }
+
+    return response.ok({ payload: await userRepository.findByUsername(username) })
   } catch (error) {
     return response.error()
   }
