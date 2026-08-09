@@ -7,7 +7,7 @@ import { ZodError } from 'zod'
 import * as userRepository from './user.repository'
 import { isUserId, isUserUsername, newUserSchema, userUpdateSchema } from './user.validation'
 
-ipcMain.handle(channels.users.create, async (_, payload) => {
+ipcMain.handle(channels.user.create, async (_, payload) => {
   try {
     let data = newUserSchema.parse(payload)
 
@@ -28,7 +28,7 @@ ipcMain.handle(channels.users.create, async (_, payload) => {
   }
 })
 
-ipcMain.handle(channels.users.getById, async (_, id) => {
+ipcMain.handle(channels.user.getById, async (_, id) => {
   try {
     if (!isUserId(id)) {
       return response.error({ message: 'Invalid payload' })
@@ -42,7 +42,7 @@ ipcMain.handle(channels.users.getById, async (_, id) => {
   }
 })
 
-ipcMain.handle(channels.users.getByUsername, async (_, username) => {
+ipcMain.handle(channels.user.getByUsername, async (_, username) => {
   try {
     if (!isUserUsername(username)) {
       return response.error({ message: 'Invalid payload' })
@@ -56,7 +56,7 @@ ipcMain.handle(channels.users.getByUsername, async (_, username) => {
   }
 })
 
-ipcMain.handle(channels.users.updateById, async (_, id, payload) => {
+ipcMain.handle(channels.user.updateById, async (_, id, payload) => {
   try {
     const data = userUpdateSchema.parse(payload)
 
@@ -76,7 +76,7 @@ ipcMain.handle(channels.users.updateById, async (_, id, payload) => {
   }
 })
 
-ipcMain.handle(channels.users.deleteById, async (_, id) => {
+ipcMain.handle(channels.user.deleteById, async (_, id) => {
   try {
     if (!isUserId(id)) {
       return response.error({ message: 'Invalid payload' })
