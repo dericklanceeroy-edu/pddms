@@ -45,7 +45,7 @@ ipcMain.handle(channels.users.getByUsername, async (_, username) => {
     }
 
     return response.ok({ payload: await userRepository.findByUsername(username) })
-  } catch (error) {
+  } catch {
     return response.error()
   }
 })
