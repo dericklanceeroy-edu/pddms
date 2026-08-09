@@ -16,7 +16,9 @@ ipcMain.handle(channels.users.create, async (_, payload) => {
       password: hashSync(data.password, 10)
     }
 
-    return response.ok({ payload: await userRepository.insert(data) })
+    const newUser = await userRepository.insert(data)
+
+    return response.ok({ payload: newUser })
   } catch (error) {
     if (error instanceof ZodError) {
       return response.error({ message: 'Invalid payload' })
@@ -32,7 +34,9 @@ ipcMain.handle(channels.users.getById, async (_, id) => {
       return response.error({ message: 'Invalid payload' })
     }
 
-    return response.ok({ payload: await userRepository.findById(id) })
+    const user = await userRepository.findById(id)
+
+    return response.ok({ payload: user })
   } catch (error) {
     return response.error()
   }
@@ -44,7 +48,9 @@ ipcMain.handle(channels.users.getByUsername, async (_, username) => {
       return response.error({ message: 'Invalid payload' })
     }
 
-    return response.ok({ payload: await userRepository.findByUsername(username) })
+    const user = await userRepository.findByUsername(username)
+
+    return response.ok({ payload: user })
   } catch {
     return response.error()
   }
