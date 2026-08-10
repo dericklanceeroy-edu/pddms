@@ -11,3 +11,5 @@ export const db = new Kysely<Database>({
   dialect,
   plugins: [new CamelCasePlugin()]
 })
+
+export * from './types'

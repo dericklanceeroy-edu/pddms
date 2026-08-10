@@ -1,9 +1,10 @@
 import type { ColumnType, Insertable, Selectable, Updateable } from 'kysely'
+import type { Id } from '..'
 
 export const USER_TABLE = 'users'
 
 export interface Users {
-  id: ColumnType<number, number | undefined, never>
+  id: ColumnType<Id, Id | undefined, never>
   username: string
   password: string
   createdAt: ColumnType<Date, string | undefined, never>
