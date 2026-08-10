@@ -1,4 +1,4 @@
-import { response } from '@lib/response'
+import { response } from '@lib/api'
 import { channels } from '@shared/constants'
 import { hash } from 'argon2'
 import { ipcMain } from 'electron'
