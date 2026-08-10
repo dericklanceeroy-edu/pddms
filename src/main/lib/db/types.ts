@@ -1,2 +1,2 @@
-// All database table ID-related columns are of this type.
+/** Type of all ID-related columns */
 export type Id = number
