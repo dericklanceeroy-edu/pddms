@@ -1,7 +1,4 @@
 export const channels = {
-  authentication: {
-    signIn: 'authentication/signIn'
-  },
   user: {
     create: 'users/create',
     getById: 'users/getById',
