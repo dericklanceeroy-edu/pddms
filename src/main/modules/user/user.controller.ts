@@ -1,22 +1,20 @@
 import { response } from '@lib/response'
 import { channels } from '@shared/constants'
-import { hashSync } from 'bcrypt'
+import { hash } from 'argon2'
 import { ipcMain } from 'electron'
 import { NoResultError } from 'kysely'
 import { ZodError } from 'zod'
-import * as userRepository from './user.repository'
+import { deleteById, findById, findByUsername, insert, updateById } from './user.repository'
 import { isUserId, isUserUsername, newUserSchema, userUpdateSchema } from './user.validation'
 
 ipcMain.handle(channels.user.create, async (_, payload) => {
   try {
-    let data = newUserSchema.parse(payload)
+    const data = newUserSchema.parse(payload)
 
-    data = {
+    const newUser = await insert({
       ...data,
-      password: hashSync(data.password, 10)
-    }
-
-    const newUser = await userRepository.insert(data)
+      password: await hash(data.password)
+    })
 
     return response.ok({ payload: newUser })
   } catch (error) {
@@ -34,7 +32,7 @@ ipcMain.handle(channels.user.getById, async (_, id) => {
       return response.error({ message: 'Invalid payload' })
     }
 
-    const user = await userRepository.findById(id)
+    const user = await findById(id)
 
     return response.ok({ payload: user })
   } catch (error) {
@@ -48,7 +46,7 @@ ipcMain.handle(channels.user.getByUsername, async (_, username) => {
       return response.error({ message: 'Invalid payload' })
     }
 
-    const user = await userRepository.findByUsername(username)
+    const user = await findByUsername(username)
 
     return response.ok({ payload: user })
   } catch {
@@ -60,7 +58,7 @@ ipcMain.handle(channels.user.updateById, async (_, id, payload) => {
   try {
     const data = userUpdateSchema.parse(payload)
 
-    await userRepository.updateById(id, data)
+    await updateById(id, data)
 
     return response.ok()
   } catch (error) {
@@ -82,7 +80,7 @@ ipcMain.handle(channels.user.deleteById, async (_, id) => {
       return response.error({ message: 'Invalid payload' })
     }
 
-    return response.ok({ payload: await userRepository.deleteById(id) })
+    return response.ok({ payload: await deleteById(id) })
   } catch (error) {
     if (error instanceof NoResultError) {
       return response.error({ message: 'User not found' })
