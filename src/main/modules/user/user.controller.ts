@@ -33,7 +33,7 @@ ipcMain.handle(apis.users.getById, async (_, id) => {
     }
 
     return response.ok({ payload: await userServices.findById(id) })
-  } catch (error) {
+  } catch {
     return response.error()
   }
 })
