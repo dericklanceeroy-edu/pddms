@@ -4,10 +4,10 @@ export const Route = createFileRoute('/onboarding')({
   component: OnboardingComponent
 })
 
-function OnboardingComponent() {
+export default function OnboardingComponent() {
   return (
     <div className="grid min-h-screen place-items-center">
-      <p>Place your component here at the center.</p>
+      <p>Place your component here at the center. Gabril Melecio</p>
     </div>
   )
 }
