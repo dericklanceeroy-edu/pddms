@@ -24,6 +24,29 @@ sum = x + y
 return sum
 ```
 
+Separate variables that don't relate to one another.
+
+```ts
+const user = {
+  // ...
+}
+
+const retries = 5;
+const timeout = 10 * 1000;
+```
+
+Group the variables to the process that they are tightly related to.
+
+```ts
+// This is a shared variable.
+const shared = null;
+
+let i = 0;
+while (i < 5) {
+  // ...
+}
+```
+
 Unless otherwise specified, follow the conventions of the technologies used.
 
 ## Commit Messages
