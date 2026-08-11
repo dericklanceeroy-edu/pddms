@@ -7,7 +7,7 @@ export const Route = createFileRoute('/onboarding')({
 export default function OnboardingComponent() {
   return (
     <div className="grid min-h-screen place-items-center">
-      <p>Place your component here at the center. Gabril Melecio</p>
+      <p>Place your component here at the center.</p>
     </div>
   )
 }
