@@ -12,11 +12,13 @@ export async function insert(data: NewUser): Promise<User> {
 
 export async function findById(id: number): Promise<User | null> {
   // prettier-ignore
-  return (await db
-    .selectFrom('users')
-    .selectAll()
-    .where('id', '=', id)
-    .executeTakeFirst()) ?? null
+  return (
+    (await db
+      .selectFrom('users')
+      .selectAll()
+      .where('id', '=', id)
+      .executeTakeFirst()) ?? null
+  )
 }
 
 export async function findByUsername(username: string): Promise<User | null> {
