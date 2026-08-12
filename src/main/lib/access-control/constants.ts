@@ -5,10 +5,12 @@ export const roles = {
   staff: 'staff'
 } as const
 
-export type RoleLiterals = ValueOf<typeof roles>
+export type Role = ValueOf<typeof roles>
 
 export const resources = {
   user: 'user'
 } as const
 
-export type ResourceLiterals = ValueOf<typeof resources>
+export type Resource = ValueOf<typeof resources>
+
+export const actions = {}

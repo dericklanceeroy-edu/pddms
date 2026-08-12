@@ -1,13 +1,13 @@
 import type { Id } from '@lib/db'
 import { AccessControl } from 'accesscontrol'
-import { resources as resourceKeys, type ResourceLiterals } from '.'
+import { resources as resourceKeys, type Resource } from '.'
 
 export const accessControl = new AccessControl(undefined, {
   policy: {
     strict: true,
     owner: ({ value }) => {
-      if (!(value instanceof Context)) {
-        throw new Error("Provided context value is not an instance of 'Context'")
+      if (!(value instanceof AccessControlContext)) {
+        throw new Error(`Provided context value is not an instance of '${AccessControlContext.name}'`)
       }
 
       for (const resourceKey of Object.values(resourceKeys)) {
@@ -23,14 +23,14 @@ export const accessControl = new AccessControl(undefined, {
   }
 })
 
-export class Context {
+export class AccessControlContext {
   constructor(
     public owner: Id,
-    public resources: Partial<Record<ResourceLiterals, Resource>>
+    public resources: Partial<Record<Resource, AccessControlResourceField>>
   ) {}
 }
 
-export class Resource<T = unknown> {
+export class AccessControlResourceField<T = unknown> {
   constructor(
     public owner: Id,
     public data: T
