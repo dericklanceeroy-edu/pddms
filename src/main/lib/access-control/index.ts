@@ -1,7 +1,6 @@
 import type { Id } from '@lib/db'
 import { AccessControl } from 'accesscontrol'
-import type { ValueOf } from 'type-fest'
-import { resources as resourceKeys } from '.'
+import { resources as resourceKeys, type ResourceLiterals } from '.'
 
 export const accessControl = new AccessControl(undefined, {
   policy: {
@@ -27,7 +26,7 @@ export const accessControl = new AccessControl(undefined, {
 export class Context {
   constructor(
     public owner: Id,
-    public resources: Partial<Record<ValueOf<typeof resourceKeys>, Resource>>
+    public resources: Partial<Record<ResourceLiterals, Resource>>
   ) {}
 }
 
