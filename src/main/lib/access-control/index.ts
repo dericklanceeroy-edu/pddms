@@ -18,7 +18,7 @@ export const accessControl = new AccessControl(undefined, {
       for (const resourceKey of Object.values(resources)) {
         const resource = ctx[resourceKey]
 
-        if (resource !== undefined && Object.hasOwn(resource, resourceKey)) {
+        if (resource !== undefined && Object.hasOwn(ctx, resourceKey)) {
           if (!Resource.isResource(resource)) {
             throw new Error(`Context field '${resourceKey}' is not a 'Resource'`)
           }
