@@ -47,6 +47,31 @@ while (i < 5) {
 }
 ```
 
+For React, there should be no spaces between tags.
+
+```tsx
+// ❌ Wrong
+function WrongComponent() {
+    return (
+        <div>
+            <h1>Title</h1>
+            
+            <p>Description</p>
+        </div>
+    )
+}
+
+// ✅ Correct
+function CorrectComponent(){
+    return (
+        <div>
+            <h1>Title</h1>
+            <p>Description</p>
+        </div>
+    )
+}
+```
+
 Unless otherwise specified, follow the conventions of the technologies used.
 
 ## Commit Messages
