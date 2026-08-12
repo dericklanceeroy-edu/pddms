@@ -29,6 +29,22 @@ export const accessControl = new AccessControl(undefined, {
   }
 })
 
+/**
+ * A context passed to the access control.
+ * 
+ * Example:
+ * 
+ * ```ts
+ * accessControl
+ *  .can(role)
+ *  .with({
+ *    value: new AccessControlContext(id, {
+ *      // ...
+ *    })
+ *  })
+ *  .readOwn(resource)
+ * ```
+ */
 export class AccessControlContext {
   constructor(
     public owner: Id | undefined,
