@@ -1,4 +1,4 @@
-import { response } from '@lib/api'
+import { type GlobalSingletonContext, response } from '@lib/api'
 import { channels } from '@shared/constants'
 import { hash } from 'argon2'
 import { ipcMain } from 'electron'
@@ -7,85 +7,87 @@ import { ZodError } from 'zod'
 import { deleteById, findById, findByUsername, insert, updateById } from './user.repository'
 import { isUserId, isUserUsername, newUserSchema, userUpdateSchema } from './user.validation'
 
-ipcMain.handle(channels.user.create, async (_, payload) => {
-  try {
-    const data = newUserSchema.parse(payload)
+export function setupUserHandlers(_: GlobalSingletonContext) {
+  ipcMain.handle(channels.user.create, async (_, payload) => {
+    try {
+      const data = newUserSchema.parse(payload)
 
-    const newUser = await insert({
-      ...data,
-      password: await hash(data.password)
-    })
+      const newUser = await insert({
+        ...data,
+        password: await hash(data.password)
+      })
 
-    return response.ok({ payload: newUser })
-  } catch (error) {
-    if (error instanceof ZodError) {
-      return response.error({ message: 'Invalid payload' })
+      return response.ok({ payload: newUser })
+    } catch (error) {
+      if (error instanceof ZodError) {
+        return response.error({ message: 'Invalid payload' })
+      }
+
+      return response.error()
     }
+  })
 
-    return response.error()
-  }
-})
+  ipcMain.handle(channels.user.getById, async (_, id) => {
+    try {
+      if (!isUserId(id)) {
+        return response.error({ message: 'Invalid payload' })
+      }
 
-ipcMain.handle(channels.user.getById, async (_, id) => {
-  try {
-    if (!isUserId(id)) {
-      return response.error({ message: 'Invalid payload' })
+      const user = await findById(id)
+
+      return response.ok({ payload: user })
+    } catch (error) {
+      return response.error()
     }
+  })
 
-    const user = await findById(id)
+  ipcMain.handle(channels.user.getByUsername, async (_, username) => {
+    try {
+      if (!isUserUsername(username)) {
+        return response.error({ message: 'Invalid payload' })
+      }
 
-    return response.ok({ payload: user })
-  } catch (error) {
-    return response.error()
-  }
-})
+      const user = await findByUsername(username)
 
-ipcMain.handle(channels.user.getByUsername, async (_, username) => {
-  try {
-    if (!isUserUsername(username)) {
-      return response.error({ message: 'Invalid payload' })
+      return response.ok({ payload: user })
+    } catch {
+      return response.error()
     }
+  })
 
-    const user = await findByUsername(username)
+  ipcMain.handle(channels.user.updateById, async (_, id, payload) => {
+    try {
+      const data = userUpdateSchema.parse(payload)
 
-    return response.ok({ payload: user })
-  } catch {
-    return response.error()
-  }
-})
+      await updateById(id, data)
 
-ipcMain.handle(channels.user.updateById, async (_, id, payload) => {
-  try {
-    const data = userUpdateSchema.parse(payload)
+      return response.ok()
+    } catch (error) {
+      if (error instanceof ZodError) {
+        return response.error({ message: 'Invalid payload' })
+      }
 
-    await updateById(id, data)
+      if (error instanceof NoResultError) {
+        return response.error({ message: 'User not found' })
+      }
 
-    return response.ok()
-  } catch (error) {
-    if (error instanceof ZodError) {
-      return response.error({ message: 'Invalid payload' })
+      return response.error()
     }
+  })
 
-    if (error instanceof NoResultError) {
-      return response.error({ message: 'User not found' })
+  ipcMain.handle(channels.user.deleteById, async (_, id) => {
+    try {
+      if (!isUserId(id)) {
+        return response.error({ message: 'Invalid payload' })
+      }
+
+      return response.ok({ payload: await deleteById(id) })
+    } catch (error) {
+      if (error instanceof NoResultError) {
+        return response.error({ message: 'User not found' })
+      }
+
+      return response.error()
     }
-
-    return response.error()
-  }
-})
-
-ipcMain.handle(channels.user.deleteById, async (_, id) => {
-  try {
-    if (!isUserId(id)) {
-      return response.error({ message: 'Invalid payload' })
-    }
-
-    return response.ok({ payload: await deleteById(id) })
-  } catch (error) {
-    if (error instanceof NoResultError) {
-      return response.error({ message: 'User not found' })
-    }
-
-    return response.error()
-  }
-})
+  })
+}
