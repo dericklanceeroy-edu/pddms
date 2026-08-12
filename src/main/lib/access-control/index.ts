@@ -7,13 +7,19 @@ export const accessControl = new AccessControl(undefined, {
     strict: true,
     owner: ({ value }) => {
       if (!(value instanceof AccessControlContext)) {
-        throw new Error(`Provided context value is not an instance of '${AccessControlContext.name}'`)
+        throw new Error(
+          `Provided context value is not an instance of '${AccessControlContext.name}'`
+        )
+      }
+
+      if (value.owner === undefined) {
+        return false
       }
 
       for (const resource of Object.values(resources)) {
-        const accessControlResourceField = value.resources[resource]
+        const resourceItem = value.resources[resource]
 
-        if (accessControlResourceField !== undefined && accessControlResourceField.owner !== value.owner) {
+        if (resourceItem !== undefined && resourceItem.owner !== value.owner) {
           return false
         }
       }
@@ -25,15 +31,16 @@ export const accessControl = new AccessControl(undefined, {
 
 export class AccessControlContext {
   constructor(
-    public owner: Id,
-    public resources: Partial<Record<Resource, AccessControlResourceField>>
-  ) {}
-}
-
-export class AccessControlResourceField<T = unknown> {
-  constructor(
-    public owner: Id,
-    public data: T
+    public owner: Id | undefined,
+    public resources: Partial<
+      Record<
+        Resource,
+        {
+          owner: Id
+          data: unknown
+        }
+      >
+    >
   ) {}
 }
 
