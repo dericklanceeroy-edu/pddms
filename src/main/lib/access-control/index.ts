@@ -1,6 +1,6 @@
 import type { Id } from '@lib/db'
 import { AccessControl } from 'accesscontrol'
-import { resources as resourceKeys, type Resource } from '.'
+import { resources, type Resource } from '.'
 
 export const accessControl = new AccessControl(undefined, {
   policy: {
@@ -10,10 +10,10 @@ export const accessControl = new AccessControl(undefined, {
         throw new Error(`Provided context value is not an instance of '${AccessControlContext.name}'`)
       }
 
-      for (const resourceKey of Object.values(resourceKeys)) {
-        const resource = value.resources[resourceKey]
+      for (const resource of Object.values(resources)) {
+        const accessControlResourceField = value.resources[resource]
 
-        if (resource !== undefined && resource.owner !== value.owner) {
+        if (accessControlResourceField !== undefined && accessControlResourceField.owner !== value.owner) {
           return false
         }
       }
