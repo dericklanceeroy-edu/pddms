@@ -8,7 +8,7 @@ export const accessControl = new AccessControl(undefined, {
     strict: true,
     owner: ({ value }) => {
       if (!(value instanceof Context)) {
-        throw new Error("Context is not an instance of 'Context'")
+        throw new Error("Provided context value is not an instance of 'Context'")
       }
 
       for (const resourceKey of Object.values(resourceKeys)) {
