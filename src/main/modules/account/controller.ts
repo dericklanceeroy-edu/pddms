@@ -1,4 +1,4 @@
-import { accessControl, resources } from '@libs/access-control'
+import { accessControl, isRole, resources, roles } from '@libs/access-control'
 import { type GlobalContext, authGuard } from '@libs/api'
 import { channels } from '@shared/constants'
 import { hash } from 'argon2'
@@ -110,6 +110,33 @@ export function setupAccountHandlers(ctx: GlobalContext) {
       }
 
       await repository.deleteOneById(id)
+
+      return { success: true }
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      }
+    }
+  })
+
+  ipcMain.handle(channels.account.assignRole, async (_, id, role) => {
+    try {
+      authGuard(ctx, (session) =>
+        accessControl.can(session.account.role).updateAny(resources.account)
+      )
+
+      if (!validation.isAccountId(id) || !isRole(role)) {
+        return { success: false }
+      }
+
+      // Only one account is a root role, that is the account
+      // created at installation.
+      if (role === roles.root) {
+        return { success: false }
+      }
+
+      await repository.updateOneById(id, { role })
 
       return { success: true }
     } catch (error) {
