@@ -12,5 +12,3 @@ export const resources = {
 } as const
 
 export type Resource = ValueOf<typeof resources>
-
-export const actions = {}
