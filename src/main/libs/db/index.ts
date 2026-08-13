@@ -13,4 +13,4 @@ export const db = new Kysely<Database>({
 })
 
 export * from './types'
-export * from './utils'
+export * from './validation'
