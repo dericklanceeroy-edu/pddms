@@ -1,15 +1,24 @@
+import { accessControl, resources } from '@libs/access-control'
 import { type GlobalContext, response } from '@libs/api'
+import { authGuard } from '@libs/api/guards'
 import { channels } from '@shared/constants'
 import { hash } from 'argon2'
 import { ipcMain } from 'electron'
 import { NoResultError } from 'kysely'
 import { ZodError } from 'zod'
 import { deleteById, findById, findByUsername, insert, updateById } from './repository'
-import { isAccountId, isAccountUsername, newAccountSchema, accountUpdateSchema } from './validation'
+import { accountUpdateSchema, isAccountId, isAccountUsername, newAccountSchema } from './validation'
 
 export function setupAccountHandlers(ctx: GlobalContext) {
   ipcMain.handle(channels.account.create, async (_, payload) => {
     try {
+      authGuard(ctx, (session) => {
+        // prettier-ignore
+        return accessControl
+          .can(session.role)
+          .createAny(resources.account)
+      })
+
       const data = newAccountSchema.parse(payload)
 
       const newAccount = await insert({
