@@ -4,8 +4,6 @@ import { authGuard } from '@libs/api/guards'
 import { channels } from '@shared/constants'
 import { hash } from 'argon2'
 import { ipcMain } from 'electron'
-import { NoResultError } from 'kysely'
-import { ZodError } from 'zod'
 import { deleteById, findById, findByUsername, insert, updateById } from './repository'
 import { accountUpdateSchema, isAccountId, isAccountUsername, newAccountSchema } from './validation'
 
@@ -28,10 +26,6 @@ export function setupAccountHandlers(ctx: GlobalContext) {
 
       return response.ok({ payload: newAccount })
     } catch (error) {
-      if (error instanceof ZodError) {
-        return response.error({ message: 'Invalid payload' })
-      }
-
       return response.error({
         message: error instanceof Error ? error.message : undefined
       })
@@ -99,14 +93,6 @@ export function setupAccountHandlers(ctx: GlobalContext) {
 
       return response.ok()
     } catch (error) {
-      if (error instanceof ZodError) {
-        return response.error({ message: 'Invalid payload' })
-      }
-
-      if (error instanceof NoResultError) {
-        return response.error({ message: 'Account not found' })
-      }
-
       return response.error({
         message: error instanceof Error ? error.message : undefined
       })
@@ -128,10 +114,6 @@ export function setupAccountHandlers(ctx: GlobalContext) {
 
       return response.ok({ payload: await deleteById(id) })
     } catch (error) {
-      if (error instanceof NoResultError) {
-        return response.error({ message: 'Account not found' })
-      }
-
       return response.error({
         message: error instanceof Error ? error.message : undefined
       })
