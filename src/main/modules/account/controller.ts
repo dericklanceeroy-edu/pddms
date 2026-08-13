@@ -32,7 +32,9 @@ export function setupAccountHandlers(ctx: GlobalContext) {
         return response.error({ message: 'Invalid payload' })
       }
 
-      return response.error()
+      return response.error({
+        message: error instanceof Error ? error.message : undefined
+      })
     }
   })
 
@@ -53,7 +55,9 @@ export function setupAccountHandlers(ctx: GlobalContext) {
 
       return response.ok({ payload: account })
     } catch (error) {
-      return response.error()
+      return response.error({
+        message: error instanceof Error ? error.message : undefined
+      })
     }
   })
 
@@ -73,8 +77,10 @@ export function setupAccountHandlers(ctx: GlobalContext) {
       const account = await findByUsername(username)
 
       return response.ok({ payload: account })
-    } catch {
-      return response.error()
+    } catch (error) {
+      return response.error({
+        message: error instanceof Error ? error.message : undefined
+      })
     }
   })
 
@@ -101,7 +107,9 @@ export function setupAccountHandlers(ctx: GlobalContext) {
         return response.error({ message: 'Account not found' })
       }
 
-      return response.error()
+      return response.error({
+        message: error instanceof Error ? error.message : undefined
+      })
     }
   })
 
@@ -124,7 +132,9 @@ export function setupAccountHandlers(ctx: GlobalContext) {
         return response.error({ message: 'Account not found' })
       }
 
-      return response.error()
+      return response.error({
+        message: error instanceof Error ? error.message : undefined
+      })
     }
   })
 }
