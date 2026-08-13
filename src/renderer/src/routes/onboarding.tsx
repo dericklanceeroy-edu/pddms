@@ -48,10 +48,9 @@ function Completion(): React.ReactElement {
   return (
     <div className="grid min-h-screen place-content-center gap-4">
       <div className="text-center">
-        <h1 className="text-xl font-semibold">You’re all set!</h1>
+        <h1 className="text-xl font-semibold">You're all set!</h1>
         <p>You may now use the application.</p>
       </div>
-
       <button className="cursor-pointer rounded bg-mauve-600 px-4 py-2 font-semibold text-white">
         Continue
       </button>
