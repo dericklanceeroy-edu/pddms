@@ -87,7 +87,6 @@ Unless otherwise specified, follow the conventions of the technologies used.
 - Use present-tense verbs consistently.
 
 ### Format 🖊️
-- Prefix with the ticket code in brackets and then the ticket title, if applicable.
 - Wrap code-related identifiers in backticks.
 
 > [!NOTE]
