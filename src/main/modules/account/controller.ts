@@ -46,10 +46,7 @@ export function setupAccountHandlers(ctx: GlobalContext) {
       })
 
       if (!isAccountId(id)) {
-        return {
-          success: false,
-          error: 'Invalid payload'
-        }
+        return { success: false }
       }
 
       const account = await findById(id)
@@ -76,10 +73,7 @@ export function setupAccountHandlers(ctx: GlobalContext) {
       })
 
       if (!isAccountUsername(username)) {
-        return {
-          success: false,
-          error: 'Invalid payload'
-        }
+        return { success: false }
       }
 
       const account = await findByUsername(username)
@@ -128,10 +122,7 @@ export function setupAccountHandlers(ctx: GlobalContext) {
       })
 
       if (!isAccountId(id)) {
-        return {
-          success: false,
-          error: 'Invalid payload'
-        }
+        return { success: false }
       }
 
       return { success: true }
