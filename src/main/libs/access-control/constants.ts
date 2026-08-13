@@ -2,7 +2,7 @@ import type { ValueOf } from "type-fest"
 
 export const roles = {
   admin: 'admin',
-  staff: 'staff'
+  cashier: 'cashier'
 } as const
 
 export type Role = ValueOf<typeof roles>
