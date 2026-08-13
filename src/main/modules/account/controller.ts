@@ -4,8 +4,8 @@ import { authGuard } from '@libs/api/guards'
 import { channels } from '@shared/constants'
 import { hash } from 'argon2'
 import { ipcMain } from 'electron'
-import { findById, findByUsername, insert, updateById } from './repository'
-import { accountUpdateSchema, isAccountId, isAccountUsername, newAccountSchema } from './validation'
+import * as repository from './repository'
+import * as validation from './validation'
 
 export function setupAccountHandlers(ctx: GlobalContext) {
   ipcMain.handle(channels.account.create, async (_, payload) => {
@@ -17,9 +17,9 @@ export function setupAccountHandlers(ctx: GlobalContext) {
           .createAny(resources.account)
       })
 
-      const data = newAccountSchema.parse(payload)
+      const data = validation.newAccountSchema.parse(payload)
 
-      const newAccount = await insert({
+      const newAccount = await repository.insert({
         ...data,
         password: await hash(data.password)
       })
@@ -45,11 +45,11 @@ export function setupAccountHandlers(ctx: GlobalContext) {
           .readAny(resources.account)
       })
 
-      if (!isAccountId(id)) {
+      if (!validation.isAccountId(id)) {
         return { success: false }
       }
 
-      const account = await findById(id)
+      const account = await repository.findById(id)
 
       return {
         success: true,
@@ -72,11 +72,11 @@ export function setupAccountHandlers(ctx: GlobalContext) {
           .readAny(resources.account)
       })
 
-      if (!isAccountUsername(username)) {
+      if (!validation.isAccountUsername(username)) {
         return { success: false }
       }
 
-      const account = await findByUsername(username)
+      const account = await repository.findByUsername(username)
 
       return {
         success: true,
@@ -99,9 +99,9 @@ export function setupAccountHandlers(ctx: GlobalContext) {
           .updateAny(resources.account)
       })
 
-      const data = accountUpdateSchema.parse(payload)
+      const data = validation.accountUpdateSchema.parse(payload)
 
-      await updateById(id, data)
+      await repository.updateById(id, data)
 
       return { success: true }
     } catch (error) {
@@ -121,9 +121,11 @@ export function setupAccountHandlers(ctx: GlobalContext) {
           .deleteAny(resources.account)
       })
 
-      if (!isAccountId(id)) {
+      if (!validation.isAccountId(id)) {
         return { success: false }
       }
+
+      await repository.deleteById(id)
 
       return { success: true }
     } catch (error) {
