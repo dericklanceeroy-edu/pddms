@@ -1,10 +1,10 @@
 import { accessControl, resources } from '@libs/access-control'
-import { type GlobalContext, response } from '@libs/api'
+import type { GlobalContext } from '@libs/api'
 import { authGuard } from '@libs/api/guards'
 import { channels } from '@shared/constants'
 import { hash } from 'argon2'
 import { ipcMain } from 'electron'
-import { deleteById, findById, findByUsername, insert, updateById } from './repository'
+import { findById, findByUsername, insert, updateById } from './repository'
 import { accountUpdateSchema, isAccountId, isAccountUsername, newAccountSchema } from './validation'
 
 export function setupAccountHandlers(ctx: GlobalContext) {
@@ -24,11 +24,15 @@ export function setupAccountHandlers(ctx: GlobalContext) {
         password: await hash(data.password)
       })
 
-      return response.ok({ payload: newAccount })
+      return {
+        success: true,
+        account: newAccount
+      }
     } catch (error) {
-      return response.error({
-        message: error instanceof Error ? error.message : undefined
-      })
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      }
     }
   })
 
@@ -42,16 +46,23 @@ export function setupAccountHandlers(ctx: GlobalContext) {
       })
 
       if (!isAccountId(id)) {
-        return response.error({ message: 'Invalid payload' })
+        return {
+          success: false,
+          error: 'Invalid payload'
+        }
       }
 
       const account = await findById(id)
 
-      return response.ok({ payload: account })
+      return {
+        success: true,
+        account
+      }
     } catch (error) {
-      return response.error({
-        message: error instanceof Error ? error.message : undefined
-      })
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      }
     }
   })
 
@@ -65,16 +76,23 @@ export function setupAccountHandlers(ctx: GlobalContext) {
       })
 
       if (!isAccountUsername(username)) {
-        return response.error({ message: 'Invalid payload' })
+        return {
+          success: false,
+          error: 'Invalid payload'
+        }
       }
 
       const account = await findByUsername(username)
 
-      return response.ok({ payload: account })
+      return {
+        success: true,
+        account
+      }
     } catch (error) {
-      return response.error({
-        message: error instanceof Error ? error.message : undefined
-      })
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      }
     }
   })
 
@@ -91,11 +109,12 @@ export function setupAccountHandlers(ctx: GlobalContext) {
 
       await updateById(id, data)
 
-      return response.ok()
+      return { success: true }
     } catch (error) {
-      return response.error({
-        message: error instanceof Error ? error.message : undefined
-      })
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      }
     }
   })
 
@@ -109,14 +128,18 @@ export function setupAccountHandlers(ctx: GlobalContext) {
       })
 
       if (!isAccountId(id)) {
-        return response.error({ message: 'Invalid payload' })
+        return {
+          success: false,
+          error: 'Invalid payload'
+        }
       }
 
-      return response.ok({ payload: await deleteById(id) })
+      return { success: true }
     } catch (error) {
-      return response.error({
-        message: error instanceof Error ? error.message : undefined
-      })
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      }
     }
   })
 }
