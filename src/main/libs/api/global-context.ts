@@ -1,4 +1,3 @@
-import type { Role } from '@libs/access-control'
 import type { Account } from '@libs/db/tables'
 
 /**
@@ -7,7 +6,6 @@ import type { Account } from '@libs/db/tables'
  */
 export interface GlobalContext {
   session?: {
-    role: Role
     account: Account
   }
 }
