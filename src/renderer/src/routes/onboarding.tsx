@@ -32,12 +32,14 @@ function Account({ onProceed }: { onProceed: () => void }) {
         <input
           placeholder="Username"
           className="rounded bg-neutral-100 px-4 py-2 outline-amber-500"
+          required
         />
         <div className="flex items-center rounded bg-neutral-100 focus-within:outline-2 focus-within:outline-amber-500">
           <input
             type={showPassword ? 'text' : 'password'}
             placeholder="Password"
             className="flex-1 px-4 py-2 outline-none"
+            required
           />
           <button
             type="button"
