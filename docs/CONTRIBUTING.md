@@ -80,6 +80,19 @@ function CorrectComponent(){
 }
 ```
 
+When commenting, each line should only have 11 words including the comment tag.
+```ts
+// Note: The database connection string must be stored securely inside individual
+// local environment configuration files instead of hardcoding sensitive data directly into
+// the source code repository or any public file.
+```
+
+When using comment tags, use capitalized tags with dashes between words followed by a colon, and a capitalized sentence ending with a period.
+```ts
+// Note: Validate the payload before updating the account.
+// To-do: Add support for updating the account's username.
+```
+
 Unless otherwise specified, follow the conventions of the technologies used.
 
 ## Commit Messages
