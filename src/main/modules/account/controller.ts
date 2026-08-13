@@ -10,9 +10,7 @@ import * as validation from './validation'
 export function setupAccountHandlers(ctx: GlobalContext) {
   ipcMain.handle(channels.account.create, async (_, payload) => {
     try {
-      authGuard(ctx, (session) => {
-        return accessControl.can(session.role).createAny(resources.account)
-      })
+      authGuard(ctx, (session) => accessControl.can(session.role).createAny(resources.account))
 
       const data = validation.newAccountSchema.parse(payload)
 
@@ -35,9 +33,7 @@ export function setupAccountHandlers(ctx: GlobalContext) {
 
   ipcMain.handle(channels.account.getById, async (_, id) => {
     try {
-      authGuard(ctx, (session) => {
-        return accessControl.can(session.role).readAny(resources.account)
-      })
+      authGuard(ctx, (session) => accessControl.can(session.role).readAny(resources.account))
 
       if (!validation.isAccountId(id)) {
         return { success: false }
@@ -59,9 +55,7 @@ export function setupAccountHandlers(ctx: GlobalContext) {
 
   ipcMain.handle(channels.account.getByUsername, async (_, username) => {
     try {
-      authGuard(ctx, (session) => {
-        return accessControl.can(session.role).readAny(resources.account)
-      })
+      authGuard(ctx, (session) => accessControl.can(session.role).readAny(resources.account))
 
       if (!validation.isAccountUsername(username)) {
         return { success: false }
@@ -83,9 +77,7 @@ export function setupAccountHandlers(ctx: GlobalContext) {
 
   ipcMain.handle(channels.account.updateById, async (_, id, payload) => {
     try {
-      authGuard(ctx, (session) => {
-        return accessControl.can(session.role).updateAny(resources.account)
-      })
+      authGuard(ctx, (session) => accessControl.can(session.role).updateAny(resources.account))
 
       const data = validation.accountUpdateSchema.parse(payload)
 
@@ -102,9 +94,7 @@ export function setupAccountHandlers(ctx: GlobalContext) {
 
   ipcMain.handle(channels.account.deleteById, async (_, id) => {
     try {
-      authGuard(ctx, (session) => {
-        return accessControl.can(session.role).deleteAny(resources.account)
-      })
+      authGuard(ctx, (session) => accessControl.can(session.role).deleteAny(resources.account))
 
       if (!validation.isAccountId(id)) {
         return { success: false }
