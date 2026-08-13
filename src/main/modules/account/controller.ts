@@ -1,4 +1,4 @@
-import { type GlobalSingletonContext, response } from '@libs/api'
+import { type GlobalContext, response } from '@libs/api'
 import { channels } from '@shared/constants'
 import { hash } from 'argon2'
 import { ipcMain } from 'electron'
@@ -7,7 +7,7 @@ import { ZodError } from 'zod'
 import { deleteById, findById, findByUsername, insert, updateById } from './repository'
 import { isAccountId, isAccountUsername, newAccountSchema, accountUpdateSchema } from './validation'
 
-export function setupAccountHandlers(_: GlobalSingletonContext) {
+export function setupAccountHandlers(ctx: GlobalContext) {
   ipcMain.handle(channels.account.create, async (_, payload) => {
     try {
       const data = newAccountSchema.parse(payload)
