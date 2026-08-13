@@ -47,10 +47,19 @@ while (i < 5) {
 }
 ```
 
+Use implicit return always, if possible.
+
+```ts
+const wrongFunction = () => {
+    return null
+}
+
+const correctFunction = () => null
+```
+
 For React, there should be no spaces between tags.
 
 ```tsx
-// ❌ Wrong
 function WrongComponent() {
     return (
         <div>
@@ -61,7 +70,6 @@ function WrongComponent() {
     )
 }
 
-// ✅ Correct
 function CorrectComponent(){
     return (
         <div>
