@@ -1,15 +1,14 @@
 import { accessControl, isRole, resources, roles } from '@libs/access-control'
 import { type GlobalContext, authGuard } from '@libs/api'
-import { channels } from '@shared/constants'
 import { hash } from 'argon2'
-import { ipcMain } from 'electron'
+import { IpcMainInvokeEvent } from 'electron'
 import * as repository from './repository'
 import * as validation from './validation'
 
-export function setupAccountHandlers(ctx: GlobalContext) {
-  ipcMain.handle(channels.account.createOne, async (_, payload) => {
+export function createOne(globalContext: GlobalContext) {
+  return async (_: IpcMainInvokeEvent, payload: any) => {
     try {
-      authGuard(ctx, (session) =>
+      authGuard(globalContext, (session) =>
         accessControl.can(session.account.role).createAny(resources.account)
       )
 
@@ -30,11 +29,13 @@ export function setupAccountHandlers(ctx: GlobalContext) {
         error: error instanceof Error ? error.message : String(error)
       }
     }
-  })
+  }
+}
 
-  ipcMain.handle(channels.account.getOneById, async (_, id) => {
+export function getOneById(globalContext: GlobalContext) {
+  return async (_: IpcMainInvokeEvent, id: any) => {
     try {
-      authGuard(ctx, (session) =>
+      authGuard(globalContext, (session) =>
         accessControl.can(session.account.role).readAny(resources.account)
       )
 
@@ -54,11 +55,13 @@ export function setupAccountHandlers(ctx: GlobalContext) {
         error: error instanceof Error ? error.message : String(error)
       }
     }
-  })
+  }
+}
 
-  ipcMain.handle(channels.account.getOneByUsername, async (_, username) => {
+export function getOneByUsername(globalContext: GlobalContext) {
+  return async (_: IpcMainInvokeEvent, username: any) => {
     try {
-      authGuard(ctx, (session) =>
+      authGuard(globalContext, (session) =>
         accessControl.can(session.account.role).readAny(resources.account)
       )
 
@@ -78,11 +81,13 @@ export function setupAccountHandlers(ctx: GlobalContext) {
         error: error instanceof Error ? error.message : String(error)
       }
     }
-  })
+  }
+}
 
-  ipcMain.handle(channels.account.updateOneById, async (_, id, payload) => {
+export function updateOneById(globalContext: GlobalContext) {
+  return async (_: IpcMainInvokeEvent, id: any, payload: any) => {
     try {
-      authGuard(ctx, (session) =>
+      authGuard(globalContext, (session) =>
         accessControl.can(session.account.role).updateAny(resources.account)
       )
 
@@ -97,11 +102,13 @@ export function setupAccountHandlers(ctx: GlobalContext) {
         error: error instanceof Error ? error.message : String(error)
       }
     }
-  })
+  }
+}
 
-  ipcMain.handle(channels.account.deleteOneById, async (_, id) => {
+export function deleteOneById(globalContext: GlobalContext) {
+  return async (_: IpcMainInvokeEvent, id: any) => {
     try {
-      authGuard(ctx, (session) =>
+      authGuard(globalContext, (session) =>
         accessControl.can(session.account.role).deleteAny(resources.account)
       )
 
@@ -118,11 +125,13 @@ export function setupAccountHandlers(ctx: GlobalContext) {
         error: error instanceof Error ? error.message : String(error)
       }
     }
-  })
+  }
+}
 
-  ipcMain.handle(channels.account.assignRole, async (_, id, role) => {
+export function assignRole(globalContext: GlobalContext) {
+  return async (_: IpcMainInvokeEvent, id: any, role: any) => {
     try {
-      authGuard(ctx, (session) =>
+      authGuard(globalContext, (session) =>
         accessControl.can(session.account.role).updateAny(resources.account)
       )
 
@@ -145,5 +154,5 @@ export function setupAccountHandlers(ctx: GlobalContext) {
         error: error instanceof Error ? error.message : String(error)
       }
     }
-  })
+  }
 }

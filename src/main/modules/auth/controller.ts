@@ -1,12 +1,11 @@
 import type { GlobalContext } from '@libs/api'
-import { channels } from '@shared/constants'
 import { verify } from 'argon2'
-import { ipcMain } from 'electron'
+import { IpcMainInvokeEvent } from 'electron'
 import * as accountRepository from '../account/repository'
 import * as validation from './validation'
 
-export function setupAuthHandlers(ctx: GlobalContext) {
-  ipcMain.handle(channels.auth.signIn, async (_, payload) => {
+export function signIn(ctx: GlobalContext) {
+  return async (_: IpcMainInvokeEvent, payload: any) => {
     try {
       const data = validation.credentialsSchema.parse(payload)
 
@@ -34,9 +33,11 @@ export function setupAuthHandlers(ctx: GlobalContext) {
         error: error instanceof Error ? error.message : String(error)
       }
     }
-  })
+  }
+}
 
-  ipcMain.handle(channels.auth.signOut, () => {
+export function signOut(ctx: GlobalContext) {
+  return async (_: IpcMainInvokeEvent) => {
     try {
       ctx.session = undefined
 
@@ -47,5 +48,5 @@ export function setupAuthHandlers(ctx: GlobalContext) {
         error: error instanceof Error ? error.message : String(error)
       }
     }
-  })
+  }
 }
