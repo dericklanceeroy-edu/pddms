@@ -38,6 +38,13 @@ export function setupAccountHandlers(ctx: GlobalContext) {
 
   ipcMain.handle(channels.account.getById, async (_, id) => {
     try {
+      authGuard(ctx, (session) => {
+        // prettier-ignore
+        return accessControl
+          .can(session.role)
+          .readAny(resources.account)
+      })
+
       if (!isAccountId(id)) {
         return response.error({ message: 'Invalid payload' })
       }
@@ -52,6 +59,13 @@ export function setupAccountHandlers(ctx: GlobalContext) {
 
   ipcMain.handle(channels.account.getByUsername, async (_, username) => {
     try {
+      authGuard(ctx, (session) => {
+        // prettier-ignore
+        return accessControl
+          .can(session.role)
+          .readAny(resources.account)
+      })
+
       if (!isAccountUsername(username)) {
         return response.error({ message: 'Invalid payload' })
       }
@@ -66,6 +80,13 @@ export function setupAccountHandlers(ctx: GlobalContext) {
 
   ipcMain.handle(channels.account.updateById, async (_, id, payload) => {
     try {
+      authGuard(ctx, (session) => {
+        // prettier-ignore
+        return accessControl
+          .can(session.role)
+          .updateAny(resources.account)
+      })
+
       const data = accountUpdateSchema.parse(payload)
 
       await updateById(id, data)
@@ -86,6 +107,13 @@ export function setupAccountHandlers(ctx: GlobalContext) {
 
   ipcMain.handle(channels.account.deleteById, async (_, id) => {
     try {
+      authGuard(ctx, (session) => {
+        // prettier-ignore
+        return accessControl
+          .can(session.role)
+          .deleteAny(resources.account)
+      })
+
       if (!isAccountId(id)) {
         return response.error({ message: 'Invalid payload' })
       }
