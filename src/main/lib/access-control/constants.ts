@@ -8,7 +8,7 @@ export const roles = {
 export type Role = ValueOf<typeof roles>
 
 export const resources = {
-  user: 'user'
+  account: 'account'
 } as const
 
 export type Resource = ValueOf<typeof resources>
