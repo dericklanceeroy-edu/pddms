@@ -7,7 +7,7 @@ export interface GlobalContext {
 }
 
 /**
- * Shared global context by all handlers that is passed to their
+ * Shared global context by all channels that is passed to their
  * setup functions.
  */
 export let globalContext: GlobalContext = {}
