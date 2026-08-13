@@ -4,8 +4,8 @@ import { hash } from 'argon2'
 import { ipcMain } from 'electron'
 import { NoResultError } from 'kysely'
 import { ZodError } from 'zod'
-import { deleteById, findById, findByUsername, insert, updateById } from './user.repository'
-import { isUserId, isUserUsername, newUserSchema, userUpdateSchema } from './user.validation'
+import { deleteById, findById, findByUsername, insert, updateById } from './repository'
+import { isUserId, isUserUsername, newUserSchema, userUpdateSchema } from './validation'
 
 export function setupUserHandlers(_: GlobalSingletonContext) {
   ipcMain.handle(channels.user.create, async (_, payload) => {
