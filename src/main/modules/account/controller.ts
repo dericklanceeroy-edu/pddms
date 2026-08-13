@@ -1,4 +1,4 @@
-import { type GlobalSingletonContext, response } from '@lib/api'
+import { type GlobalSingletonContext, response } from '@libs/api'
 import { channels } from '@shared/constants'
 import { hash } from 'argon2'
 import { ipcMain } from 'electron'

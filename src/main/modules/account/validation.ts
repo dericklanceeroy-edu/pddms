@@ -1,4 +1,4 @@
-import type { NewAccount, Account, AccountUpdate } from '@lib/db/tables'
+import type { NewAccount, Account, AccountUpdate } from '@libs/db/tables'
 import * as z from 'zod'
 
 export function isAccountId(value: unknown): value is Account['id'] {

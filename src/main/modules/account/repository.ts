@@ -1,5 +1,5 @@
-import { db } from '@lib/db'
-import type { NewAccount, Account, AccountUpdate } from '@lib/db/tables'
+import { db } from '@libs/db'
+import type { NewAccount, Account, AccountUpdate } from '@libs/db/tables'
 
 export async function insert(data: NewAccount): Promise<Account> {
   // prettier-ignore

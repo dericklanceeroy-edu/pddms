@@ -1,5 +1,5 @@
-import type { Role } from '@lib/access-control'
-import type { Account } from '@lib/db/tables'
+import type { Role } from '@libs/access-control'
+import type { Account } from '@libs/db/tables'
 
 /**
  * Shared global singleton context by all handlers that is passed to
