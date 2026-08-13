@@ -4,6 +4,7 @@ export async function up(db: Kysely<any>): Promise<void> {
   await sql`
     CREATE TABLE accounts (
         id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        role        TEXT NOT NULL,
         username    TEXT NOT NULL UNIQUE,
         password    TEXT NOT NULL,
         created_at  TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
