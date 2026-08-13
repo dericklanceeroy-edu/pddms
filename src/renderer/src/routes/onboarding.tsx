@@ -1,4 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router'
+import { motion, MotionNodeAnimationOptions } from 'motion/react'
 import { useState } from 'react'
 import { BsEyeFill } from 'react-icons/bs'
 
@@ -58,15 +59,47 @@ function Account({ onProceed }: { onProceed: () => void }) {
 }
 
 function Completion() {
+  // Options for sweeping background shared by the continue button and text
+  // element.
+  const { animate, transition }: MotionNodeAnimationOptions = {
+    animate: {
+      backgroundPosition: ['100% 0%', '0% 0%']
+    },
+    transition: {
+      duration: 3,
+      ease: 'easeInOut'
+    }
+  }
+
   return (
     <div className="grid min-h-screen place-content-center gap-4">
       <div className="text-center">
         <h1 className="text-xl font-semibold">You're all set!</h1>
         <p className="text-neutral-500">You may now use the application.</p>
       </div>
-      <button className="cursor-pointer rounded bg-mauve-600 px-4 py-2 font-semibold text-white">
-        Continue
-      </button>
+      <motion.button
+        animate={animate}
+        transition={transition}
+        style={{
+          background: 'linear-gradient(to right, var(--color-mauve-600) 50%, transparent 50%)',
+          backgroundSize: '200% 100%'
+        }}
+        className="cursor-pointer rounded border-2 border-mauve-600 px-4 py-2 font-semibold text-white"
+      >
+        <motion.p
+          animate={animate}
+          transition={transition}
+          style={{
+            backgroundImage: 'linear-gradient(to right, white 50%, var(--color-mauve-600) 50%)',
+            backgroundSize: '200% 100%',
+            backgroundClip: 'text',
+            WebkitBackgroundClip: 'text',
+            color: 'transparent'
+          }}
+        >
+          Continue
+        </motion.p>
+      </motion.button>
     </div>
   )
 }
