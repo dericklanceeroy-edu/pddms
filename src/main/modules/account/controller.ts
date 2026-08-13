@@ -1,6 +1,5 @@
 import { accessControl, resources } from '@libs/access-control'
-import type { GlobalContext } from '@libs/api'
-import { authGuard } from '@libs/api/guards'
+import { type GlobalContext, authGuard } from '@libs/api'
 import { channels } from '@shared/constants'
 import { hash } from 'argon2'
 import { ipcMain } from 'electron'
@@ -10,7 +9,9 @@ import * as validation from './validation'
 export function setupAccountHandlers(ctx: GlobalContext) {
   ipcMain.handle(channels.account.createOne, async (_, payload) => {
     try {
-      authGuard(ctx, (session) => accessControl.can(session.account.role).createAny(resources.account))
+      authGuard(ctx, (session) =>
+        accessControl.can(session.account.role).createAny(resources.account)
+      )
 
       const data = validation.newAccountSchema.parse(payload)
 
@@ -33,7 +34,9 @@ export function setupAccountHandlers(ctx: GlobalContext) {
 
   ipcMain.handle(channels.account.getOneById, async (_, id) => {
     try {
-      authGuard(ctx, (session) => accessControl.can(session.account.role).readAny(resources.account))
+      authGuard(ctx, (session) =>
+        accessControl.can(session.account.role).readAny(resources.account)
+      )
 
       if (!validation.isAccountId(id)) {
         return { success: false }
@@ -55,7 +58,9 @@ export function setupAccountHandlers(ctx: GlobalContext) {
 
   ipcMain.handle(channels.account.getOneByUsername, async (_, username) => {
     try {
-      authGuard(ctx, (session) => accessControl.can(session.account.role).readAny(resources.account))
+      authGuard(ctx, (session) =>
+        accessControl.can(session.account.role).readAny(resources.account)
+      )
 
       if (!validation.isAccountUsername(username)) {
         return { success: false }
@@ -77,7 +82,9 @@ export function setupAccountHandlers(ctx: GlobalContext) {
 
   ipcMain.handle(channels.account.updateOneById, async (_, id, payload) => {
     try {
-      authGuard(ctx, (session) => accessControl.can(session.account.role).updateAny(resources.account))
+      authGuard(ctx, (session) =>
+        accessControl.can(session.account.role).updateAny(resources.account)
+      )
 
       const data = validation.accountUpdateSchema.parse(payload)
 
@@ -94,7 +101,9 @@ export function setupAccountHandlers(ctx: GlobalContext) {
 
   ipcMain.handle(channels.account.deleteOneById, async (_, id) => {
     try {
-      authGuard(ctx, (session) => accessControl.can(session.account.role).deleteAny(resources.account))
+      authGuard(ctx, (session) =>
+        accessControl.can(session.account.role).deleteAny(resources.account)
+      )
 
       if (!validation.isAccountId(id)) {
         return { success: false }
