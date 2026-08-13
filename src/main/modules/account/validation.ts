@@ -1,4 +1,5 @@
-import type { NewAccount, Account, AccountUpdate } from '@libs/db/tables'
+import { roles } from '@libs/access-control'
+import type { Account, AccountUpdate, NewAccount } from '@libs/db/tables'
 import * as z from 'zod'
 
 export function isAccountId(value: unknown): value is Account['id'] {
@@ -11,6 +12,7 @@ export function isAccountUsername(value: unknown): value is Account['username'] 
 
 export const accountSchema: z.ZodType<Account> = z.strictObject({
   id: z.number().positive(),
+  role: z.enum(Object.values(roles)),
   username: z.string().min(4),
   password: z.string().min(8),
   createdAt: z.date(),
@@ -18,6 +20,7 @@ export const accountSchema: z.ZodType<Account> = z.strictObject({
 })
 
 export const newAccountSchema: z.ZodType<NewAccount> = z.strictObject({
+  role: z.enum(Object.values(roles)),
   username: z.string(),
   password: z.string()
 })
