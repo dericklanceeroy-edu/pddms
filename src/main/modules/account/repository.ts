@@ -1,7 +1,7 @@
 import { db } from '@libs/db'
 import type { NewAccount, Account, AccountUpdate } from '@libs/db/tables'
 
-export async function insert(data: NewAccount): Promise<Account> {
+export async function insertOne(data: NewAccount): Promise<Account> {
   // prettier-ignore
   return await db
     .insertInto('accounts')
@@ -10,7 +10,7 @@ export async function insert(data: NewAccount): Promise<Account> {
     .executeTakeFirstOrThrow()
 }
 
-export async function findById(id: number): Promise<Account | null> {
+export async function findOneById(id: number): Promise<Account | null> {
   // prettier-ignore
   return (
     (await db
@@ -21,7 +21,7 @@ export async function findById(id: number): Promise<Account | null> {
   )
 }
 
-export async function findByUsername(username: string): Promise<Account | null> {
+export async function findOneByUsername(username: string): Promise<Account | null> {
   return (
     (await db
       .selectFrom('accounts')
@@ -31,7 +31,7 @@ export async function findByUsername(username: string): Promise<Account | null> 
   )
 }
 
-export async function updateById(id: number, data: AccountUpdate): Promise<void> {
+export async function updateOneById(id: number, data: AccountUpdate): Promise<void> {
   // prettier-ignore
   await db
     .updateTable('accounts')
@@ -40,7 +40,7 @@ export async function updateById(id: number, data: AccountUpdate): Promise<void>
     .executeTakeFirstOrThrow()
 }
 
-export async function deleteById(id: number): Promise<void> {
+export async function deleteOneById(id: number): Promise<void> {
   // prettier-ignore
   await db
     .deleteFrom('accounts')

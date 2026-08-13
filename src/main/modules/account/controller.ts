@@ -19,7 +19,7 @@ export function setupAccountHandlers(ctx: GlobalContext) {
 
       const data = validation.newAccountSchema.parse(payload)
 
-      const newAccount = await repository.insert({
+      const newAccount = await repository.insertOne({
         ...data,
         password: await hash(data.password)
       })
@@ -49,7 +49,7 @@ export function setupAccountHandlers(ctx: GlobalContext) {
         return { success: false }
       }
 
-      const account = await repository.findById(id)
+      const account = await repository.findOneById(id)
 
       return {
         success: true,
@@ -76,7 +76,7 @@ export function setupAccountHandlers(ctx: GlobalContext) {
         return { success: false }
       }
 
-      const account = await repository.findByUsername(username)
+      const account = await repository.findOneByUsername(username)
 
       return {
         success: true,
@@ -101,7 +101,7 @@ export function setupAccountHandlers(ctx: GlobalContext) {
 
       const data = validation.accountUpdateSchema.parse(payload)
 
-      await repository.updateById(id, data)
+      await repository.updateOneById(id, data)
 
       return { success: true }
     } catch (error) {
@@ -125,7 +125,7 @@ export function setupAccountHandlers(ctx: GlobalContext) {
         return { success: false }
       }
 
-      await repository.deleteById(id)
+      await repository.deleteOneById(id)
 
       return { success: true }
     } catch (error) {
