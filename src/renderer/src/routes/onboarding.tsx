@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { motion, MotionNodeAnimationOptions } from 'motion/react'
+import { motion, type MotionNodeAnimationOptions } from 'motion/react'
 import { useState } from 'react'
-import { BsEyeFill } from 'react-icons/bs'
+import { BsEyeFill, BsEyeSlashFill } from 'react-icons/bs'
 
 export const Route = createFileRoute('/onboarding')({
   component: OnboardingComponent
@@ -42,9 +42,9 @@ function Account({ onProceed }: { onProceed: () => void }) {
           <button
             type="button"
             onClick={() => setShowPassword((p) => !p)}
-            className="h-full cursor-pointer px-4"
+            className="h-full cursor-pointer px-4 text-neutral-500"
           >
-            <BsEyeFill className="text-neutral-500" />
+            {showPassword ? <BsEyeSlashFill /> : <BsEyeFill />}
           </button>
         </div>
         <button
