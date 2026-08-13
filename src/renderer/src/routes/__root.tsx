@@ -1,4 +1,4 @@
-import UserProvider from '@renderer/contexts/UserContext'
+import AccountProvider from '@renderer/contexts/AccountContext'
 import { createRootRoute, Outlet } from '@tanstack/react-router'
 import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
 
@@ -9,9 +9,9 @@ export const Route = createRootRoute({
 function RootComponent() {
   return (
     <>
-      <UserProvider>
+      <AccountProvider>
         <Outlet />
-      </UserProvider>
+      </AccountProvider>
       <TanStackRouterDevtools position="bottom-left" />
     </>
   )

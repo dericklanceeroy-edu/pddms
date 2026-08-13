@@ -2,8 +2,9 @@ import { Kysely, sql } from 'kysely'
 
 export async function up(db: Kysely<any>): Promise<void> {
   await sql`
-    CREATE TABLE users (
+    CREATE TABLE accounts (
         id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        role        TEXT NOT NULL,
         username    TEXT NOT NULL UNIQUE,
         password    TEXT NOT NULL,
         created_at  TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -12,8 +13,8 @@ export async function up(db: Kysely<any>): Promise<void> {
   `.execute(db)
 
   await sql`
-    CREATE TRIGGER trg_users_before_update_of_created_at
-    BEFORE UPDATE OF created_at ON users
+    CREATE TRIGGER trg_accounts_before_update_of_created_at
+    BEFORE UPDATE OF created_at ON accounts
     FOR EACH ROW
     BEGIN
         SELECT RAISE(ABORT, 'read-only');
@@ -21,12 +22,12 @@ export async function up(db: Kysely<any>): Promise<void> {
   `.execute(db)
 
   await sql`
-    CREATE TRIGGER trg_users_after_update
-    AFTER UPDATE ON users
+    CREATE TRIGGER trg_accounts_after_update
+    AFTER UPDATE ON accounts
     FOR EACH ROW
     WHEN OLD.updated_at = NEW.updated_at
     BEGIN
-        UPDATE users
+        UPDATE accounts
         SET updated_at = CURRENT_TIMESTAMP
         WHERE id = OLD.id;
     END;
@@ -34,5 +35,5 @@ export async function up(db: Kysely<any>): Promise<void> {
 }
 
 export async function down(db: Kysely<any>): Promise<void> {
-  await sql`DROP TABLE users;`.execute(db)
+  await sql`DROP TABLE accounts;`.execute(db)
 }

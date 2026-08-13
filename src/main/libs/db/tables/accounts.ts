@@ -1,16 +1,18 @@
+import type { Role } from '@libs/access-control'
 import type { ColumnType, Insertable, Selectable, Updateable } from 'kysely'
 import type { Id } from '..'
 
-export const USER_TABLE = 'users'
+export const ACCOUNT_TABLE = 'accounts'
 
-export interface Users {
+export interface Accounts {
   id: ColumnType<Id, Id | undefined, never>
+  role: Role
   username: string
   password: string
   createdAt: ColumnType<Date, string | undefined, never>
   updatedAt: ColumnType<Date, string | undefined, never>
 }
 
-export type User = Selectable<Users>
-export type NewUser = Insertable<Users>
-export type UserUpdate = Updateable<Users>
+export type Account = Selectable<Accounts>
+export type NewAccount = Insertable<Accounts>
+export type AccountUpdate = Updateable<Accounts>

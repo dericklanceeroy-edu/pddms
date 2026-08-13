@@ -1,3 +1,3 @@
-import type { User } from '@lib/db/tables'
+import type { Account } from '@libs/db/tables'
 
-export type UserWithoutPassword = Omit<User, 'password'>
+export type AccountWithoutPassword = Omit<Account, 'password'>

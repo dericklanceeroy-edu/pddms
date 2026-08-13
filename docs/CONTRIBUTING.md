@@ -27,7 +27,7 @@ return sum
 Separate variables that don't relate to one another.
 
 ```ts
-const user = {
+const account = {
   // ...
 }
 
@@ -47,10 +47,19 @@ while (i < 5) {
 }
 ```
 
+Use implicit return always, if possible.
+
+```ts
+const wrongFunction = () => {
+    return null
+}
+
+const correctFunction = () => null
+```
+
 For React, there should be no spaces between tags.
 
 ```tsx
-// ❌ Wrong
 function WrongComponent() {
     return (
         <div>
@@ -61,7 +70,6 @@ function WrongComponent() {
     )
 }
 
-// ✅ Correct
 function CorrectComponent(){
     return (
         <div>
@@ -70,6 +78,19 @@ function CorrectComponent(){
         </div>
     )
 }
+```
+
+When commenting, each line should only have 11 words including the comment tag.
+```ts
+// Note: The database connection string must be stored securely inside individual
+// local environment configuration files instead of hardcoding sensitive data directly into
+// the source code repository or any public file.
+```
+
+When using comment tags, use capitalized tags with dashes between words followed by a colon, and a capitalized sentence ending with a period.
+```ts
+// Note: Validate the payload before updating the account.
+// To-do: Add support for updating the account's username.
 ```
 
 Unless otherwise specified, follow the conventions of the technologies used.
@@ -87,7 +108,6 @@ Unless otherwise specified, follow the conventions of the technologies used.
 - Use present-tense verbs consistently.
 
 ### Format 🖊️
-- Prefix with the ticket code in brackets and then the ticket title, if applicable.
 - Wrap code-related identifiers in backticks.
 
 > [!NOTE]
