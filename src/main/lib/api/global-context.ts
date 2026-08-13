@@ -1,5 +1,5 @@
 import type { Role } from '@lib/access-control'
-import type { User } from '@lib/db/tables'
+import type { Account } from '@lib/db/tables'
 
 /**
  * Shared global singleton context by all handlers that is passed to
@@ -8,6 +8,6 @@ import type { User } from '@lib/db/tables'
 export interface GlobalSingletonContext {
   session?: {
     role: Role
-    user: User
+    account: Account
   }
 }

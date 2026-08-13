@@ -1,11 +1,11 @@
-import { Users, USER_TABLE } from './users'
+import { Accounts, ACCOUNT_TABLE } from './accounts'
 
 export const Tables = {
-  Users: USER_TABLE
+  Accounts: ACCOUNT_TABLE
 } as const
 
 export interface Database {
-  [USER_TABLE]: Users
+  [ACCOUNT_TABLE]: Accounts
 }
 
-export * from './users'
+export * from './accounts'

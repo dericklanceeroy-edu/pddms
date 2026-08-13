@@ -5,19 +5,19 @@ import { ipcMain } from 'electron'
 import { NoResultError } from 'kysely'
 import { ZodError } from 'zod'
 import { deleteById, findById, findByUsername, insert, updateById } from './repository'
-import { isUserId, isUserUsername, newUserSchema, userUpdateSchema } from './validation'
+import { isAccountId, isAccountUsername, newAccountSchema, accountUpdateSchema } from './validation'
 
-export function setupUserHandlers(_: GlobalSingletonContext) {
-  ipcMain.handle(channels.user.create, async (_, payload) => {
+export function setupAccountHandlers(_: GlobalSingletonContext) {
+  ipcMain.handle(channels.account.create, async (_, payload) => {
     try {
-      const data = newUserSchema.parse(payload)
+      const data = newAccountSchema.parse(payload)
 
-      const newUser = await insert({
+      const newAccount = await insert({
         ...data,
         password: await hash(data.password)
       })
 
-      return response.ok({ payload: newUser })
+      return response.ok({ payload: newAccount })
     } catch (error) {
       if (error instanceof ZodError) {
         return response.error({ message: 'Invalid payload' })
@@ -27,37 +27,37 @@ export function setupUserHandlers(_: GlobalSingletonContext) {
     }
   })
 
-  ipcMain.handle(channels.user.getById, async (_, id) => {
+  ipcMain.handle(channels.account.getById, async (_, id) => {
     try {
-      if (!isUserId(id)) {
+      if (!isAccountId(id)) {
         return response.error({ message: 'Invalid payload' })
       }
 
-      const user = await findById(id)
+      const account = await findById(id)
 
-      return response.ok({ payload: user })
+      return response.ok({ payload: account })
     } catch (error) {
       return response.error()
     }
   })
 
-  ipcMain.handle(channels.user.getByUsername, async (_, username) => {
+  ipcMain.handle(channels.account.getByUsername, async (_, username) => {
     try {
-      if (!isUserUsername(username)) {
+      if (!isAccountUsername(username)) {
         return response.error({ message: 'Invalid payload' })
       }
 
-      const user = await findByUsername(username)
+      const account = await findByUsername(username)
 
-      return response.ok({ payload: user })
+      return response.ok({ payload: account })
     } catch {
       return response.error()
     }
   })
 
-  ipcMain.handle(channels.user.updateById, async (_, id, payload) => {
+  ipcMain.handle(channels.account.updateById, async (_, id, payload) => {
     try {
-      const data = userUpdateSchema.parse(payload)
+      const data = accountUpdateSchema.parse(payload)
 
       await updateById(id, data)
 
@@ -68,23 +68,23 @@ export function setupUserHandlers(_: GlobalSingletonContext) {
       }
 
       if (error instanceof NoResultError) {
-        return response.error({ message: 'User not found' })
+        return response.error({ message: 'Account not found' })
       }
 
       return response.error()
     }
   })
 
-  ipcMain.handle(channels.user.deleteById, async (_, id) => {
+  ipcMain.handle(channels.account.deleteById, async (_, id) => {
     try {
-      if (!isUserId(id)) {
+      if (!isAccountId(id)) {
         return response.error({ message: 'Invalid payload' })
       }
 
       return response.ok({ payload: await deleteById(id) })
     } catch (error) {
       if (error instanceof NoResultError) {
-        return response.error({ message: 'User not found' })
+        return response.error({ message: 'Account not found' })
       }
 
       return response.error()

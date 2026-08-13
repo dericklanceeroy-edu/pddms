@@ -27,7 +27,7 @@ return sum
 Separate variables that don't relate to one another.
 
 ```ts
-const user = {
+const account = {
   // ...
 }
 

@@ -9,3 +9,20 @@ export const accessControl = new AccessControl(undefined, {
 
 export * from './constants'
 export * from './errors'
+
+accessControl.grant('staff').readOwn('account')
+
+const permission = accessControl
+  .can('staff')
+  .with({
+    user: {
+      id: 0
+    },
+    account: {
+      ownerId: 0,
+      data: null
+    }
+  })
+  .readOwn('account')
+
+console.log(permission.granted)

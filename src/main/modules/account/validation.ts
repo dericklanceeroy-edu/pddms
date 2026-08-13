@@ -1,15 +1,15 @@
-import type { NewUser, User, UserUpdate } from '@lib/db/tables'
+import type { NewAccount, Account, AccountUpdate } from '@lib/db/tables'
 import * as z from 'zod'
 
-export function isUserId(value: unknown): value is User['id'] {
+export function isAccountId(value: unknown): value is Account['id'] {
   return typeof value === 'number' && Number.isInteger(value) && value >= 1
 }
 
-export function isUserUsername(value: unknown): value is User['username'] {
+export function isAccountUsername(value: unknown): value is Account['username'] {
   return typeof value === 'string'
 }
 
-export const userSchema: z.ZodType<User> = z.strictObject({
+export const accountSchema: z.ZodType<Account> = z.strictObject({
   id: z.number().positive(),
   username: z.string().min(4),
   password: z.string().min(8),
@@ -17,12 +17,12 @@ export const userSchema: z.ZodType<User> = z.strictObject({
   updatedAt: z.date()
 })
 
-export const newUserSchema: z.ZodType<NewUser> = z.strictObject({
+export const newAccountSchema: z.ZodType<NewAccount> = z.strictObject({
   username: z.string(),
   password: z.string()
 })
 
-export const userUpdateSchema: z.ZodType<UserUpdate> = z.strictObject({
+export const accountUpdateSchema: z.ZodType<AccountUpdate> = z.strictObject({
   username: z.string().optional(),
   password: z.string().optional()
 })

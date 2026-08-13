@@ -1,9 +1,9 @@
 export const channels = {
-  user: {
-    create: 'users/create',
-    getById: 'users/getById',
-    getByUsername: 'users/username',
-    updateById: 'users/updateById',
-    deleteById: 'users/deleteById'
+  account: {
+    create: 'account.create',
+    getById: 'account.getById',
+    getByUsername: 'account.username',
+    updateById: 'account.updateById',
+    deleteById: 'account.deleteById'
   }
 } as const
