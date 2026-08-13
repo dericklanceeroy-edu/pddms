@@ -1,18 +1,18 @@
 import { createFileRoute } from '@tanstack/react-router'
-import React, { useState } from 'react'
+import { useState } from 'react'
 import { BsEyeFill } from 'react-icons/bs'
 
 export const Route = createFileRoute('/onboarding')({
   component: OnboardingComponent
 })
 
-export default function OnboardingComponent(): React.ReactElement {
+export default function OnboardingComponent() {
   const [completed, setCompleted] = useState(false)
 
   return completed ? <Completion /> : <Account onProceed={() => setCompleted(true)} />
 }
 
-function Account({ onProceed }: { onProceed: () => void }): React.ReactElement {
+function Account({ onProceed }: { onProceed: () => void }) {
   return (
     <div className="grid min-h-screen place-content-center gap-4">
       <div className="text-center">
@@ -44,7 +44,7 @@ function Account({ onProceed }: { onProceed: () => void }): React.ReactElement {
   )
 }
 
-function Completion(): React.ReactElement {
+function Completion() {
   return (
     <div className="grid min-h-screen place-content-center gap-4">
       <div className="text-center">
