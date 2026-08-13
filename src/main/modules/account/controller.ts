@@ -8,7 +8,7 @@ import * as repository from './repository'
 import * as validation from './validation'
 
 export function setupAccountHandlers(ctx: GlobalContext) {
-  ipcMain.handle(channels.account.create, async (_, payload) => {
+  ipcMain.handle(channels.account.createOne, async (_, payload) => {
     try {
       authGuard(ctx, (session) => accessControl.can(session.role).createAny(resources.account))
 
@@ -31,7 +31,7 @@ export function setupAccountHandlers(ctx: GlobalContext) {
     }
   })
 
-  ipcMain.handle(channels.account.getById, async (_, id) => {
+  ipcMain.handle(channels.account.getOneById, async (_, id) => {
     try {
       authGuard(ctx, (session) => accessControl.can(session.role).readAny(resources.account))
 
@@ -53,7 +53,7 @@ export function setupAccountHandlers(ctx: GlobalContext) {
     }
   })
 
-  ipcMain.handle(channels.account.getByUsername, async (_, username) => {
+  ipcMain.handle(channels.account.getOneByUsername, async (_, username) => {
     try {
       authGuard(ctx, (session) => accessControl.can(session.role).readAny(resources.account))
 
@@ -75,7 +75,7 @@ export function setupAccountHandlers(ctx: GlobalContext) {
     }
   })
 
-  ipcMain.handle(channels.account.updateById, async (_, id, payload) => {
+  ipcMain.handle(channels.account.updateOneById, async (_, id, payload) => {
     try {
       authGuard(ctx, (session) => accessControl.can(session.role).updateAny(resources.account))
 
@@ -92,7 +92,7 @@ export function setupAccountHandlers(ctx: GlobalContext) {
     }
   })
 
-  ipcMain.handle(channels.account.deleteById, async (_, id) => {
+  ipcMain.handle(channels.account.deleteOneById, async (_, id) => {
     try {
       authGuard(ctx, (session) => accessControl.can(session.role).deleteAny(resources.account))
 
