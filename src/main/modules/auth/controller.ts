@@ -4,7 +4,7 @@ import { IpcMainInvokeEvent } from 'electron'
 import * as accountRepository from '../account/repository'
 import * as validation from './validation'
 
-export function signIn(ctx: GlobalContext) {
+export function signIn(globalContext: GlobalContext) {
   return async (_: IpcMainInvokeEvent, payload: any) => {
     try {
       const data = validation.credentialsSchema.parse(payload)
@@ -21,7 +21,7 @@ export function signIn(ctx: GlobalContext) {
         return { success: false }
       }
 
-      ctx.session = { account }
+      globalContext.session = { account }
 
       return {
         success: true,
@@ -36,10 +36,10 @@ export function signIn(ctx: GlobalContext) {
   }
 }
 
-export function signOut(ctx: GlobalContext) {
+export function signOut(globalContext: GlobalContext) {
   return async (_: IpcMainInvokeEvent) => {
     try {
-      ctx.session = undefined
+      globalContext.session = undefined
 
       return { success: true }
     } catch (error) {
