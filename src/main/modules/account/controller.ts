@@ -1,7 +1,7 @@
 import { accessControl, isRole, resources, roles } from '@libs/access-control'
 import { type GlobalContext, authGuard } from '@libs/api'
 import { hash } from 'argon2'
-import { IpcMainInvokeEvent } from 'electron'
+import type { IpcMainInvokeEvent } from 'electron'
 import * as repository from './repository'
 import * as validation from './validation'
 
