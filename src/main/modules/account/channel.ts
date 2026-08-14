@@ -9,5 +9,5 @@ export function setupAccountChannels() {
   ipcMain.handle(channels.account.getOneByUsername, controllers.getOneByUsername(globalContext))
   ipcMain.handle(channels.account.updateOneById, controllers.updateOneById(globalContext))
   ipcMain.handle(channels.account.deleteOneById, controllers.deleteOneById(globalContext))
-  ipcMain.handle(channels.account.assignRole, controllers.assignRole(globalContext))
+  ipcMain.handle(channels.account.assignRoleById, controllers.assignRoleById(globalContext))
 }

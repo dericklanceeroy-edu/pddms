@@ -128,7 +128,7 @@ export function deleteOneById(globalContext: GlobalContext) {
   }
 }
 
-export function assignRole(globalContext: GlobalContext) {
+export function assignRoleById(globalContext: GlobalContext) {
   return async (_: IpcMainInvokeEvent, id: any, role: any) => {
     try {
       authGuard(globalContext, (session) =>
