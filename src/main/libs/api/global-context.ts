@@ -1,6 +1,12 @@
 import type { Account } from '@libs/db/tables'
 
 export interface GlobalContext {
+  database: {
+    /**
+     * Whether the database has been modified.
+     */
+    modified: boolean
+  }
   session?: {
     account: Account
   }
@@ -9,4 +15,8 @@ export interface GlobalContext {
 /**
  * Shared global context by all channel controllers.
  */
-export let globalContext: GlobalContext = {}
+export let globalContext: GlobalContext = {
+  database: {
+    modified: false
+  }
+}
