@@ -1,4 +1,4 @@
-import { env } from '@libs/environment-variable'
+import { env } from '@libs/env'
 import SQLite from 'better-sqlite3'
 import { CamelCasePlugin, Kysely, SqliteDialect } from 'kysely'
 import { Database } from './tables'
@@ -13,4 +13,4 @@ export const db = new Kysely<Database>({
 })
 
 export * from './types'
-export * from './validation'
+export * from './validators'

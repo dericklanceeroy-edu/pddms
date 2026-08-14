@@ -1,4 +1,4 @@
-import { env } from '@libs/environment-variable'
+import { env } from '@libs/env'
 import { drive } from '@libs/google/drive'
 import { createReadStream } from 'node:fs'
 import { join } from 'node:path'

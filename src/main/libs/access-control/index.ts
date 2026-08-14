@@ -8,4 +8,4 @@ export const accessControl = new AccessControl(undefined, {
 })
 
 export * from './constants'
-export * from './validation'
+export * from './validators'
