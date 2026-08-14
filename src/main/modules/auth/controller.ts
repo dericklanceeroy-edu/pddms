@@ -1,6 +1,6 @@
 import type { GlobalContext } from '@libs/api'
 import { verify } from 'argon2'
-import { IpcMainInvokeEvent } from 'electron'
+import type { IpcMainInvokeEvent } from 'electron'
 import * as accountRepository from '../account/repository'
 import * as validation from './validation'
 
