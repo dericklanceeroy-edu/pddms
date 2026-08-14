@@ -1,6 +1,5 @@
-import { UnauthorizedError } from '@libs/access-control'
 import type { Permission } from 'accesscontrol'
-import type { GlobalContext } from './global-context'
+import { type GlobalContext, UnauthorizedError } from '.'
 
 /**
  * Guards the controller by requiring an authenticated session and granted permission.
