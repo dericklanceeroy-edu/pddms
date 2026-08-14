@@ -1,5 +1,5 @@
 import type { ColumnType, Insertable, Selectable, Updateable } from 'kysely'
-import type { Id } from '../types'
+import type { Id } from '..'
 
 export const BATCH_TABLE = 'batches'
 
