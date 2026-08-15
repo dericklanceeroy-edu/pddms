@@ -1,4 +1,4 @@
-import { accessControl, isRole, resources, roles } from '@libs/access-control'
+import { accessControl, resources } from '@libs/access-control'
 import { type GlobalContext, authGuard } from '@libs/api'
 import { hash } from 'argon2'
 import type { IpcMainInvokeEvent } from 'electron'
@@ -93,6 +93,10 @@ export function updateOneById(globalContext: GlobalContext) {
 
       const data = validation.accountUpdateSchema.parse(payload)
 
+      if (data.role === 'root') {
+        return { success: false }
+      }
+
       await repository.updateOneById(id, data)
 
       return { success: true }
@@ -105,6 +109,7 @@ export function updateOneById(globalContext: GlobalContext) {
   }
 }
 
+// To-do: Turn this into a soft delete.
 export function deleteOneById(globalContext: GlobalContext) {
   return async (_: IpcMainInvokeEvent, id: any) => {
     try {
@@ -117,35 +122,6 @@ export function deleteOneById(globalContext: GlobalContext) {
       }
 
       await repository.deleteOneById(id)
-
-      return { success: true }
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : String(error)
-      }
-    }
-  }
-}
-
-export function assignRoleById(globalContext: GlobalContext) {
-  return async (_: IpcMainInvokeEvent, id: any, role: any) => {
-    try {
-      authGuard(globalContext, (session) =>
-        accessControl.can(session.account.role).updateAny(resources.account)
-      )
-
-      if (!validation.isAccountId(id) || !isRole(role)) {
-        return { success: false }
-      }
-
-      // Only one account is a root role, that is the account
-      // created at installation.
-      if (role === roles.root) {
-        return { success: false }
-      }
-
-      await repository.updateOneById(id, { role })
 
       return { success: true }
     } catch (error) {
