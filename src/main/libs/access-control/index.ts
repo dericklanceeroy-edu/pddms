@@ -1,4 +1,5 @@
 import { AccessControl } from 'accesscontrol'
+import { resources, roles } from './constants'
 
 export const accessControl = new AccessControl(undefined, {
   policy: {
@@ -6,6 +7,22 @@ export const accessControl = new AccessControl(undefined, {
     ownerField: 'accountId'
   }
 })
+
+accessControl
+  .grant(roles.root)
+  .createAny(resources.account)
+  .readAny(resources.account, ['!password'])
+  .updateOwn(resources.account, ['*'])
+  .updateAny(resources.account, ['!password'])
+  .deleteAny(resources.account)
+
+// prettier-ignore
+accessControl
+  .grant(roles.admin)
+  .readOwn(resources.account, ['*'])
+  .readAny(resources.account, ['!password'])
+  .updateOwn(resources.account, ['*'])
+  .updateAny(resources.account, ['!role', '!password'])
 
 export * from './constants'
 export * from './validators'
