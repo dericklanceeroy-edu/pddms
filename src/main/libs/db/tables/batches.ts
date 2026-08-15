@@ -7,7 +7,8 @@ export interface Batches {
   id: ColumnType<Id, Id | undefined, never>
   drugId: Id
   supplierId: Id
-  tag: string
+  physicalTag: string | null
+  isActive: boolean
   buyPrice: number
   sellPrice: number
   initialStock: number
