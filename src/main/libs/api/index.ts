@@ -3,9 +3,9 @@ import type { Account } from '@libs/db/tables'
 export interface GlobalContext {
   database: {
     /**
-     * Whether the database has been modified.
+     * Whether the database has been modified and is ready for backup.
      */
-    modified: boolean
+    stale: boolean
   }
   session?: {
     account: Account
@@ -17,7 +17,7 @@ export interface GlobalContext {
  */
 export let globalContext: GlobalContext = {
   database: {
-    modified: false
+    stale: false
   }
 }
 
