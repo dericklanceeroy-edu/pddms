@@ -3,7 +3,7 @@ import { sql, type Kysely } from 'kysely'
 export async function up(db: Kysely<any>): Promise<void> {
   await sql`
     CREATE TABLE suppliers (
-      id                INTEGER NOT NULL AUTOINCREMENT,
+      id                INTEGER PRIMARY KEY AUTOINCREMENT,
       organization      TEXT NOT NULL,
       contact_person    TEXT NOT NULL,
       phone_number      TEXT NOT NULL,
