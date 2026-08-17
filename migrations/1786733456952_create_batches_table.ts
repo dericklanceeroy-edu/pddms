@@ -12,7 +12,6 @@ export async function up(db: Kysely<any>): Promise<void> {
 			sell_price 		REAL NOT NULL,
 			initial_stock 	INTEGER NOT NULL,
 			current_stock 	INTEGER NOT NULL,
-			manufactured_at TEXT NOT NULL,
 			expires_at 		TEXT NOT NULL,
 
 			FOREIGN KEY (drug_id) REFERENCES drugs(id),

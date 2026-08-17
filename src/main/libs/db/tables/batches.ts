@@ -13,7 +13,6 @@ export interface Batches {
   sellPrice: number
   initialStock: number
   currentStock: number
-  manufacturedAt: Date
   expiresAt: Date
 }
 
