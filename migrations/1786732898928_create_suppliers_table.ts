@@ -5,15 +5,15 @@ export async function up(db: Kysely<any>): Promise<void> {
     CREATE TABLE suppliers (
       id              INTEGER NOT NULL AUTOINCREMENT,
       organization    TEXT NOT NULL,
-      contactPerson   TEXT NOT NULL,
-      phoneNumber     TEXT NOT NULL,
-      telephoneNumber TEXT,
-      emailAddress    TEXT,
+      contact_person   TEXT NOT NULL,
+      phone_number     TEXT NOT NULL,
+      telephone_number TEXT,
+      email_address    TEXT,
       street          TEXT NOT NULL,
       city            TEXT NOT NULL,
       province        TEXT NOT NULL,
       country         TEXT NOT NULL,
-      postalCode      TEXT NOT NULL
+      postal_code      TEXT NOT NULL
     );
   `.execute(db)
 }
