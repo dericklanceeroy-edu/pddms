@@ -6,10 +6,10 @@ export const SUPPLIER_TABLE = 'suppliers'
 export interface Suppliers {
   id: ColumnType<Id, Id | undefined, never>
   organization: string
-  contactPerson: string
-  phoneNumber: string
-  telephoneNumber: string | null
-  emailAddress: string | null
+  person: string
+  phone: string
+  telephone: string | null
+  email: string | null
   street: string
   city: string
   country: string
