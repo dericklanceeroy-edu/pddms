@@ -18,7 +18,7 @@ accessControl
 
 // prettier-ignore
 accessControl
-  .grant(roles.admin)
+  .grant(roles.manager)
   .readOwn(resources.account, ['*'])
   .readAny(resources.account, ['!password'])
   .updateOwn(resources.account, ['*'])
