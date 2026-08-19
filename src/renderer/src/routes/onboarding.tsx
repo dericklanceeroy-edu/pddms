@@ -1,9 +1,10 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { routes } from '@renderer/constants'
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { motion, type MotionNodeAnimationOptions } from 'motion/react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { BsEyeFill, BsEyeSlashFill } from 'react-icons/bs'
 
-export const Route = createFileRoute('/onboarding')({
+export const Route = createFileRoute(routes.onboarding)({
   component: OnboardingComponent
 })
 
@@ -61,6 +62,8 @@ function Account({ onProceed }: { onProceed: () => void }) {
 }
 
 function Completion() {
+  const navigate = useNavigate()
+
   // Options for sweeping background shared by the continue button and text
   // element.
   const { animate, transition }: MotionNodeAnimationOptions = {
@@ -72,6 +75,16 @@ function Completion() {
       ease: 'easeInOut'
     }
   }
+
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      navigate({ to: routes.index })
+    }, transition.duration! * 1000)
+
+    return () => {
+      clearTimeout(timeoutId)
+    }
+  }, [])
 
   return (
     <div className="grid min-h-screen place-content-center gap-4">
@@ -88,19 +101,21 @@ function Completion() {
         }}
         className="cursor-pointer rounded border-2 border-mauve-600 px-4 py-2 font-semibold text-white"
       >
-        <motion.p
-          animate={animate}
-          transition={transition}
-          style={{
-            backgroundImage: 'linear-gradient(to right, white 50%, var(--color-mauve-600) 50%)',
-            backgroundSize: '200% 100%',
-            backgroundClip: 'text',
-            WebkitBackgroundClip: 'text',
-            color: 'transparent'
-          }}
-        >
-          Continue
-        </motion.p>
+        <Link to={routes.index}>
+          <motion.p
+            animate={animate}
+            transition={transition}
+            style={{
+              backgroundImage: 'linear-gradient(to right, white 50%, var(--color-mauve-600) 50%)',
+              backgroundSize: '200% 100%',
+              backgroundClip: 'text',
+              WebkitBackgroundClip: 'text',
+              color: 'transparent'
+            }}
+          >
+            Continue
+          </motion.p>
+        </Link>
       </motion.button>
     </div>
   )
