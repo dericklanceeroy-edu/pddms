@@ -17,4 +17,6 @@ export function authGuard(
   if (!permission.granted) {
     throw new UnauthorizedError('Permission not granted')
   }
+
+  return permission
 }
