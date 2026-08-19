@@ -1,39 +1,17 @@
 import { Kysely, sql } from 'kysely'
 
 export async function up(db: Kysely<any>): Promise<void> {
-  await sql`
-    CREATE TABLE accounts (
-        id          INTEGER PRIMARY KEY AUTOINCREMENT,
-        role        TEXT NOT NULL,
-        username    TEXT NOT NULL UNIQUE,
-        password    TEXT NOT NULL,
-        created_at  TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        updated_at  TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    );
-  `.execute(db)
-
-  await sql`
-    CREATE TRIGGER trg_accounts_before_update_of_created_at
-    BEFORE UPDATE OF created_at ON accounts
-    FOR EACH ROW
-    BEGIN
-        SELECT RAISE(ABORT, 'read-only');
-    END;
-  `.execute(db)
-
-  await sql`
-    CREATE TRIGGER trg_accounts_after_update
-    AFTER UPDATE ON accounts
-    FOR EACH ROW
-    WHEN OLD.updated_at = NEW.updated_at
-    BEGIN
-        UPDATE accounts
-        SET updated_at = CURRENT_TIMESTAMP
-        WHERE id = OLD.id;
-    END;
-  `.execute(db)
+  await db.schema
+    .createTable('accounts')
+    .addColumn('id', 'integer', (col) => col.primaryKey().autoIncrement())
+    .addColumn('role', 'text', (col) => col.notNull())
+    .addColumn('username', 'text', (col) => col.notNull().unique())
+    .addColumn('password', 'text', (col) => col.notNull())
+    .addColumn('created_at', 'text', (col) => col.notNull().defaultTo(sql`CURRENT_TIMESTAMP`))
+    .addColumn('updated_at', 'text', (col) => col.notNull().defaultTo(sql`CURRENT_TIMESTAMP`))
+    .execute()
 }
 
 export async function down(db: Kysely<any>): Promise<void> {
-  await sql`DROP TABLE accounts;`.execute(db)
+  await db.schema.dropTable('accounts').execute()
 }

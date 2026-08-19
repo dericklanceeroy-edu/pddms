@@ -1,25 +1,21 @@
-import { sql, type Kysely } from 'kysely'
+import type { Kysely } from 'kysely'
 
 export async function up(db: Kysely<any>): Promise<void> {
-	await sql`
-		CREATE TABLE batches (
-			id 				INTEGER PRIMARY KEY AUTOINCREMENT,
-			drug_id 		INTEGER NOT NULL,
-			supplier_id 	INTEGER NOT NULL,
-			physical_tag	TEXT UNIQUE,
-			is_active		INTEGER NOT NULL,
-			buy_price 		REAL NOT NULL,
-			sell_price 		REAL NOT NULL,
-			initial_stock 	INTEGER NOT NULL,
-			current_stock 	INTEGER NOT NULL,
-			expires_at 		TEXT NOT NULL,
-
-			FOREIGN KEY (drug_id) REFERENCES drugs(id),
-			FOREIGN KEY (supplier_id) REFERENCES suppliers(id)
-		);
-	`.execute(db);
+  await db.schema
+    .createTable('batches')
+    .addColumn('id', 'integer', (col) => col.primaryKey().autoIncrement())
+    .addColumn('drug_id', 'integer', (col) => col.notNull().references('drugs.id'))
+    .addColumn('supplier_id', 'integer', (col) => col.notNull().references('suppliers.id'))
+    .addColumn('physical_tag', 'text', (col) => col.unique())
+    .addColumn('is_active', 'integer', (col) => col.notNull())
+    .addColumn('buy_price', 'real', (col) => col.notNull())
+    .addColumn('sell_price', 'real', (col) => col.notNull())
+    .addColumn('initial_stock', 'integer', (col) => col.notNull())
+    .addColumn('current_stock', 'integer', (col) => col.notNull())
+    .addColumn('expires_at', 'text', (col) => col.notNull())
+    .execute()
 }
 
 export async function down(db: Kysely<any>): Promise<void> {
-	await sql`DROP TABLE batches;`.execute(db)
+  await db.schema.dropTable('batches').execute()
 }
