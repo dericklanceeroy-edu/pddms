@@ -8,7 +8,6 @@ export interface Batches {
   drugId: Id
   supplierId: Id
   physicalTag: string | null
-  isActive: boolean
   buyPrice: number
   sellPrice: number
   initialStock: number
