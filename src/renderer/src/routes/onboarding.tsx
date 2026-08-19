@@ -63,9 +63,7 @@ function Account({ onProceed }: { onProceed: () => void }) {
 
 function Completion() {
   const navigate = useNavigate()
-
-  // Options for sweeping background shared by the continue button and text
-  // element.
+  
   const { animate, transition }: MotionNodeAnimationOptions = {
     animate: {
       backgroundPosition: ['100% 0%', '0% 0%']
