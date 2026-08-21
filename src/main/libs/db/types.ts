@@ -1,2 +1,4 @@
-/** Type of all ID-related columns */
+/**
+ * Type of all ID-related columns
+ */
 export type Id = number
