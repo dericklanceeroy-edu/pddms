@@ -20,7 +20,7 @@ function Account({ onProceed }: { onProceed: () => void }) {
   return (
     <div className="grid min-h-screen place-content-center gap-4">
       <div className="text-center">
-        <h1 className="text-xl font-semibold">Setup administrator account</h1>
+        <h1 className="text-xl font-semibold">Setup master account</h1>
         <p className="text-neutral-500">You can edit this at the settings.</p>
       </div>
       <form
@@ -54,7 +54,7 @@ function Account({ onProceed }: { onProceed: () => void }) {
           type="submit"
           className="cursor-pointer rounded bg-mauve-600 px-4 py-2 font-semibold text-white"
         >
-          Proceeed
+          Continue
         </button>
       </form>
     </div>
@@ -111,7 +111,7 @@ function Completion() {
               color: 'transparent'
             }}
           >
-            Continue
+            Finish
           </motion.p>
         </Link>
       </motion.button>
