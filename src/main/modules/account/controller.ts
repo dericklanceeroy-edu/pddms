@@ -1,134 +1,118 @@
-import { accessControl, resources } from '@libs/access-control'
-import { type GlobalContext, authGuard } from '@libs/api'
+import { accessControl, authorize, resources } from '@libs/access-control'
+import { isId } from '@libs/db'
+import { channels } from '@shared/constants'
 import { hash } from 'argon2'
-import type { IpcMainInvokeEvent } from 'electron'
+import { ipcMain } from 'electron'
 import * as repository from './repository'
 import * as validation from './validation'
 
-export function createOne(globalContext: GlobalContext) {
-  return async (_: IpcMainInvokeEvent, payload: any) => {
-    try {
-      authGuard(globalContext, (session) =>
-        accessControl.can(session.account.role).createAny(resources.account)
-      )
+ipcMain.handle(channels.account.createOne, async (_, payload: unknown) => {
+  try {
+    authorize((session) => accessControl.can(session.account.role).createAny(resources.account))
 
-      const data = validation.newAccountSchema.parse(payload)
+    const data = validation.newAccountSchema.parse(payload)
 
-      const newAccount = await repository.insertOne({
-        ...data,
-        password: await hash(data.password)
-      })
+    const newAccount = await repository.insertOne({
+      ...data,
+      password: await hash(data.password)
+    })
 
-      return {
-        success: true,
-        account: newAccount
-      }
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : String(error)
-      }
+    return {
+      success: true,
+      account: newAccount
+    }
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error)
     }
   }
-}
+})
 
-export function getOneById(globalContext: GlobalContext) {
-  return async (_: IpcMainInvokeEvent, id: any) => {
-    try {
-      authGuard(globalContext, (session) =>
-        accessControl.can(session.account.role).readAny(resources.account)
-      )
+ipcMain.handle(channels.account.getOneById, async (_, id: unknown) => {
+  try {
+    authorize((session) => accessControl.can(session.account.role).readAny(resources.account))
 
-      if (!validation.isAccountId(id)) {
-        return { success: false }
-      }
+    if (!validation.isAccountId(id)) {
+      return { success: false }
+    }
 
-      const account = await repository.findOneById(id)
+    const account = await repository.findOneById(id)
 
-      return {
-        success: true,
-        account
-      }
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : String(error)
-      }
+    return {
+      success: true,
+      account
+    }
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error)
     }
   }
-}
+})
 
-export function getOneByUsername(globalContext: GlobalContext) {
-  return async (_: IpcMainInvokeEvent, username: any) => {
-    try {
-      authGuard(globalContext, (session) =>
-        accessControl.can(session.account.role).readAny(resources.account)
-      )
+ipcMain.handle(channels.account.getOneByUsername, async (_, username: unknown) => {
+  try {
+    authorize((session) => accessControl.can(session.account.role).readAny(resources.account))
 
-      if (!validation.isAccountUsername(username)) {
-        return { success: false }
-      }
+    if (!validation.isAccountUsername(username)) {
+      return { success: false }
+    }
 
-      const account = await repository.findOneByUsername(username)
+    const account = await repository.findOneByUsername(username)
 
-      return {
-        success: true,
-        account
-      }
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : String(error)
-      }
+    return {
+      success: true,
+      account
+    }
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error)
     }
   }
-}
+})
 
-export function updateOneById(globalContext: GlobalContext) {
-  return async (_: IpcMainInvokeEvent, id: any, payload: any) => {
-    try {
-      authGuard(globalContext, (session) =>
-        accessControl.can(session.account.role).updateAny(resources.account)
-      )
+ipcMain.handle(channels.account.updateOneById, async (_, id: unknown, payload: unknown) => {
+  try {
+    if (!isId(id)) {
+      return { success: false }
+    }
 
-      const data = validation.accountUpdateSchema.parse(payload)
+    authorize((session) => accessControl.can(session.account.role).updateAny(resources.account))
 
-      if (data.role === 'master') {
-        return { success: false }
-      }
+    const data = validation.accountUpdateSchema.parse(payload)
 
-      await repository.updateOneById(id, data)
+    if (data.role === 'master') {
+      return { success: false }
+    }
 
-      return { success: true }
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : String(error)
-      }
+    await repository.updateOneById(id, data)
+
+    return { success: true }
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error)
     }
   }
-}
+})
 
-// To-do: Turn this into a soft delete.
-export function deleteOneById(globalContext: GlobalContext) {
-  return async (_: IpcMainInvokeEvent, id: any) => {
-    try {
-      authGuard(globalContext, (session) =>
-        accessControl.can(session.account.role).deleteAny(resources.account)
-      )
+ipcMain.handle(channels.account.deleteOneById, async (_, id: unknown) => {
+  try {
+    authorize((session) => accessControl.can(session.account.role).deleteAny(resources.account))
 
-      if (!validation.isAccountId(id)) {
-        return { success: false }
-      }
+    if (!validation.isAccountId(id)) {
+      return { success: false }
+    }
 
-      await repository.deleteOneById(id)
+    await repository.deleteOneById(id)
 
-      return { success: true }
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : String(error)
-      }
+    return { success: true }
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error)
     }
   }
-}
+})

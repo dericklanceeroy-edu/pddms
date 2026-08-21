@@ -1,11 +1,11 @@
-import { globalContext } from '@libs/api'
+import { state } from '@libs/api'
 import { backupDatabase } from './service'
 
 export function startDatabaseBackupJob() {
   const run = async () => {
-    if (globalContext.database.stale) {
+    if (state.database.stale) {
       await backupDatabase()
-      globalContext.database.stale = false
+      state.database.stale = false
     }
   }
 

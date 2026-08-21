@@ -25,4 +25,6 @@ accessControl
   .updateAny(resources.account, ['!role', '!password'])
 
 export * from './constants'
+export * from './errors'
+export * from './helpers'
 export * from './validators'
