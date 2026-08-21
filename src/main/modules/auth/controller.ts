@@ -35,7 +35,7 @@ ipcMain.handle(channels.auth.signIn, async (_, payload: unknown) => {
   }
 })
 
-ipcMain.handle(channels.auth.signOut, async (_) => {
+ipcMain.handle(channels.auth.signOut, async () => {
   try {
     state.session = undefined
 
