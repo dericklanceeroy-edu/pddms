@@ -9,7 +9,7 @@ export const accessControl = new AccessControl(undefined, {
 })
 
 accessControl
-  .grant(roles.root)
+  .grant(roles.master)
   .createAny(resources.account)
   .readAny(resources.account, ['!password'])
   .updateOwn(resources.account, ['*'])

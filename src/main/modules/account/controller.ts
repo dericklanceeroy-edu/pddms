@@ -93,7 +93,7 @@ export function updateOneById(globalContext: GlobalContext) {
 
       const data = validation.accountUpdateSchema.parse(payload)
 
-      if (data.role === 'root') {
+      if (data.role === 'master') {
         return { success: false }
       }
 

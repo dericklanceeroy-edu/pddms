@@ -1,7 +1,7 @@
 import type { ValueOf } from "type-fest"
 
 export const roles = {
-  root: 'root',
+  master: 'master',
   manager: 'manager',
 } as const
 
