@@ -1,4 +1,4 @@
-import { roles } from '@libs/access-control'
+import { roles } from '@shared/constants'
 import type { Account, AccountUpdate, NewAccount } from '@shared/types'
 import * as z from 'zod'
 
