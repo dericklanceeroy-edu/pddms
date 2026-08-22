@@ -1,4 +1,4 @@
-import type { Role } from '@libs/access-control'
+import type { Role } from '@shared/types'
 import type { ColumnType } from 'kysely'
 import type { Id } from '..'
 
