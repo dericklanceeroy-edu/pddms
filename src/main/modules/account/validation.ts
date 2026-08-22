@@ -1,5 +1,5 @@
 import { roles } from '@libs/access-control'
-import type { Account, AccountUpdate, NewAccount } from '@libs/db/tables'
+import type { Account, AccountUpdate, NewAccount } from '@shared/types'
 import * as z from 'zod'
 
 export function isAccountId(value: unknown): value is Account['id'] {

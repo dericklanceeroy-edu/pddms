@@ -1,4 +1,4 @@
-import type { ColumnType, Insertable, Selectable, Updateable } from 'kysely'
+import type { ColumnType } from 'kysely'
 import type { Id } from '..'
 
 export const BATCH_TABLE = 'batches'
@@ -14,7 +14,3 @@ export interface Batches {
   currentStock: number
   expiresAt: Date
 }
-
-export type Batch = Selectable<Batches>
-export type NewBatch = Insertable<Batches>
-export type BatchUpdate = Updateable<Batches>

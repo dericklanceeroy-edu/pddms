@@ -1,4 +1,4 @@
-import type { Account } from '@libs/db/tables'
+import type { Account } from "@shared/types"
 
 export interface State {
   database: {

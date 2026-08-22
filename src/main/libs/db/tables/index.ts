@@ -18,5 +18,6 @@ export interface Database {
 }
 
 export * from './accounts'
+export * from './batches'
 export * from './drugs'
 export * from './suppliers'
