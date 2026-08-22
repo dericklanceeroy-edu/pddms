@@ -16,7 +16,6 @@ accessControl
   .updateAny(resources.account, ['!password'])
   .deleteAny(resources.account)
 
-// prettier-ignore
 accessControl
   .grant(roles.manager)
   .readOwn(resources.account, ['*'])
