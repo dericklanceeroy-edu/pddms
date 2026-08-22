@@ -1,5 +1,5 @@
+import { resources, roles } from '@shared/constants'
 import { AccessControl } from 'accesscontrol'
-import { resources, roles } from './constants'
 
 export const accessControl = new AccessControl(undefined, {
   policy: {
@@ -23,7 +23,6 @@ accessControl
   .updateOwn(resources.account, ['*'])
   .updateAny(resources.account, ['!role', '!password'])
 
-export * from './constants'
 export * from './errors'
 export * from './helpers'
 export * from './validators'

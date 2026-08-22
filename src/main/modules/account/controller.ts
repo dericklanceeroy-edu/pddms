@@ -1,6 +1,6 @@
-import { accessControl, authorize, resources } from '@libs/access-control'
+import { accessControl, authorize } from '@libs/access-control'
 import { isId } from '@libs/db'
-import { channels } from '@shared/constants'
+import { channels, resources } from '@shared/constants'
 import { hash } from 'argon2'
 import { ipcMain } from 'electron'
 import * as repository from './repository'

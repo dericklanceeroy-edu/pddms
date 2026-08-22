@@ -11,3 +11,12 @@ export const channels = {
     signOut: 'auth.signOut'
   }
 } as const
+
+export const roles = {
+  master: 'master',
+  manager: 'manager'
+} as const
+
+export const resources = {
+  account: 'account'
+} as const

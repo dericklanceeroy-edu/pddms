@@ -1,5 +1,7 @@
 import type { Accounts, Batches, Drugs, Suppliers } from '@libs/db/tables'
 import type { Insertable, Selectable, Updateable } from 'kysely'
+import type { ValueOf } from 'type-fest'
+import { resources, roles } from './constants'
 
 export type Account = Selectable<Accounts>
 export type NewAccount = Insertable<Accounts>
@@ -17,3 +19,6 @@ export type DrugUpdate = Updateable<Drugs>
 export type Supplier = Selectable<Suppliers>
 export type NewSupplier = Insertable<Suppliers>
 export type SupplierUpdate = Updateable<Suppliers>
+
+export type Role = ValueOf<typeof roles>
+export type Resource = ValueOf<typeof resources>
