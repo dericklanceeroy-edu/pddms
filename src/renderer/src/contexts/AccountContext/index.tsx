@@ -1,6 +1,6 @@
 import type { AccountWithoutPassword } from '@shared/types'
 import { createContext, useContext } from 'react'
-import Provider from './Provider'
+import AccountProvider from './Provider'
 
 interface AccountContext {
   account: AccountWithoutPassword | null
@@ -12,10 +12,10 @@ export function useAccount() {
   const context = useContext(AccountContext)
 
   if (context === undefined) {
-    throw new Error(`${useAccount.name} must be used within a <${Provider.name}>`)
+    throw new Error(`${useAccount.name} must be used within a <${AccountProvider.name}>`)
   }
 
   return context
 }
 
-export default Provider
+export default AccountProvider
