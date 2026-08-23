@@ -1,7 +1,7 @@
-import type { Id } from '.'
+import { Id } from './types'
 
 /**
- * Checks if the value is of `Id` type.
+ * Checks if the value is of database `Id` type.
  */
 export function isId(value: unknown): value is Id {
   return typeof value === 'number'

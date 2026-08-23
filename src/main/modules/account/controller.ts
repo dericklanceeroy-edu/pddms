@@ -1,7 +1,7 @@
 import { accessControl, authorize } from '@libs/access-control'
-import { isId } from '@libs/db'
 import { channels, resources } from '@shared/constants'
 import { accountUpdateSchema, newAccountSchema } from '@shared/schemas'
+import { isId } from '@shared/validators'
 import { hash } from 'argon2'
 import { ipcMain } from 'electron'
 import {

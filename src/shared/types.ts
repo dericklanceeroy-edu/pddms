@@ -1,11 +1,67 @@
-import type { Accounts, Batches, Drugs, Suppliers } from '@libs/db/tables'
-import type { Insertable, Selectable, Updateable } from 'kysely'
+import type { ColumnType, Insertable, Selectable, Updateable } from 'kysely'
 import type { ValueOf } from 'type-fest'
 import { resources, roles } from './constants'
 
-export type Account = Selectable<Accounts>
-export type NewAccount = Insertable<Accounts>
-export type AccountUpdate = Updateable<Accounts>
+export interface Database {
+  accounts: AccountsTable
+  batches: BatchesTable
+  drugs: DrugsTable
+  suppliers: SuppliersTable
+}
+
+/**
+ * Type of all database ID columns.
+ */
+export type Id = number
+
+export interface AccountsTable {
+  id: ColumnType<Id, Id | undefined, never>
+  role: Role
+  username: string
+  password: string
+  createdAt: ColumnType<Date, string | undefined, never>
+  updatedAt: ColumnType<Date, string | undefined, never>
+}
+
+export interface BatchesTable {
+  id: ColumnType<Id, Id | undefined, never>
+  drugId: Id
+  supplierId: Id
+  physicalTag: string | null
+  buyPrice: number
+  sellPrice: number
+  initialStock: number
+  currentStock: number
+  expiresAt: Date
+}
+
+export interface DrugsTable {
+  id: ColumnType<Id, Id | undefined, never>
+  category: string
+  genericName: string
+  brandName: string
+  formulation: string
+  isPrescribed: boolean
+  isControlled: boolean
+}
+
+export interface SuppliersTable {
+  id: ColumnType<Id, Id | undefined, never>
+  organization: string
+  person: string
+  phone: string
+  telephone: string | null
+  email: string | null
+  street: string
+  city: string
+  country: string
+  province: string
+  postalCode: string
+}
+
+export type Account = Selectable<AccountsTable>
+export type NewAccount = Insertable<AccountsTable>
+export type AccountUpdate = Updateable<AccountsTable>
 export type AccountWithoutPassword = Omit<Account, 'password'>
 
 export interface Credentials {
@@ -13,17 +69,17 @@ export interface Credentials {
   password: Account['password']
 }
 
-export type Batch = Selectable<Batches>
-export type NewBatch = Insertable<Batches>
-export type BatchUpdate = Updateable<Batches>
+export type Batch = Selectable<BatchesTable>
+export type NewBatch = Insertable<BatchesTable>
+export type BatchUpdate = Updateable<BatchesTable>
 
-export type Drug = Selectable<Drugs>
-export type NewDrug = Insertable<Drugs>
-export type DrugUpdate = Updateable<Drugs>
+export type Drug = Selectable<DrugsTable>
+export type NewDrug = Insertable<DrugsTable>
+export type DrugUpdate = Updateable<DrugsTable>
 
-export type Supplier = Selectable<Suppliers>
-export type NewSupplier = Insertable<Suppliers>
-export type SupplierUpdate = Updateable<Suppliers>
+export type Supplier = Selectable<SuppliersTable>
+export type NewSupplier = Insertable<SuppliersTable>
+export type SupplierUpdate = Updateable<SuppliersTable>
 
 export type Role = ValueOf<typeof roles>
 export type Resource = ValueOf<typeof resources>
