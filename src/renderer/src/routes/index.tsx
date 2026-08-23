@@ -1,7 +1,6 @@
-import { routes } from '@renderer/constants'
 import { createFileRoute } from '@tanstack/react-router'
 
-export const Route = createFileRoute(routes.index)({
+export const Route = createFileRoute('/')({
   component: HomeComponent
 })
 

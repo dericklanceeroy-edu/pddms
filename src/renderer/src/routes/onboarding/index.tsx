@@ -1,14 +1,15 @@
-import { routes } from '@renderer/constants'
-import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
+import TypedLink from '@renderer/components/TypedLink'
+import { useDelay } from '@renderer/hooks/useDelay'
+import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { motion, type MotionNodeAnimationOptions } from 'motion/react'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { BsEyeFill, BsEyeSlashFill } from 'react-icons/bs'
 
-export const Route = createFileRoute(routes.onboarding)({
+export const Route = createFileRoute('/onboarding/')({
   component: OnboardingComponent
 })
 
-export default function OnboardingComponent() {
+function OnboardingComponent() {
   const [completed, setCompleted] = useState(false)
 
   return completed ? <Completion /> : <Account onProceed={() => setCompleted(true)} />
@@ -74,15 +75,9 @@ function Completion() {
     }
   }
 
-  useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      navigate({ to: routes.index })
-    }, transition.duration! * 1000)
-
-    return () => {
-      clearTimeout(timeoutId)
-    }
-  }, [navigate, transition.duration])
+  useDelay(() => {
+    navigate({ to: '/' })
+  }, transition.duration!)
 
   return (
     <div className="grid min-h-screen place-content-center gap-4">
@@ -99,7 +94,7 @@ function Completion() {
         }}
         className="cursor-pointer rounded border-2 border-mauve-600 px-4 py-2 font-semibold text-white"
       >
-        <Link to={routes.index}>
+        <TypedLink to={'/'}>
           <motion.p
             animate={animate}
             transition={transition}
@@ -113,7 +108,7 @@ function Completion() {
           >
             Finish
           </motion.p>
-        </Link>
+        </TypedLink>
       </motion.button>
     </div>
   )
