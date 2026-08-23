@@ -2,10 +2,11 @@ import {
   type ButtonHTMLAttributes,
   createContext,
   type InputHTMLAttributes,
-  useContext
+  type PropsWithChildren,
+  useContext,
+  useState
 } from 'react'
 import { BsEyeFill, BsEyeSlashFill } from 'react-icons/bs'
-import PasswordControlsProvider from './Provider'
 
 interface PasswordControlsContext {
   show: boolean
@@ -26,7 +27,22 @@ export function usePasswordControls() {
   return context
 }
 
-export default PasswordControlsProvider
+export function PasswordControlsProvider({ children }: PropsWithChildren) {
+  const [show, setShow] = useState(false)
+
+  return (
+    <PasswordControlsContext
+      value={{
+        show,
+        toggle: () => {
+          setShow((value) => !value)
+        }
+      }}
+    >
+      {children}
+    </PasswordControlsContext>
+  )
+}
 
 export function PasswordInput(attributes: InputHTMLAttributes<HTMLInputElement>) {
   const { show } = usePasswordControls()

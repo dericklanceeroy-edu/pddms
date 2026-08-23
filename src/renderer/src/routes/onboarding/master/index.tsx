@@ -1,7 +1,8 @@
-import PasswordControlsProvider, {
+import {
+  PasswordControlsProvider,
   PasswordInput,
   PasswordToggle
-} from '@renderer/contexts/PasswordControls'
+} from '@renderer/components/PasswordControls'
 import { createFileRoute } from '@tanstack/react-router'
 
 export const Route = createFileRoute('/onboarding/master/')({
