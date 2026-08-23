@@ -1,4 +1,4 @@
-import { FileRoutesByFullPath } from '@renderer/routeTree.gen'
+import type { FileRoutesByFullPath } from '@renderer/routeTree.gen'
 import { Link } from '@tanstack/react-router'
 import type { ComponentProps } from 'react'
 
