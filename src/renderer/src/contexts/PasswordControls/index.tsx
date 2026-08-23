@@ -11,7 +11,7 @@ export const PasswordControlsContext = createContext<PasswordControlsContext | n
 export function usePasswordControls() {
   const context = useContext(PasswordControlsContext)
 
-  if (context === undefined) {
+  if (context === null) {
     throw new Error(
       `${usePasswordControls.name} must be used within a <${PasswordControlsProvider.name}>`
     )
