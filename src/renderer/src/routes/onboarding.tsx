@@ -63,7 +63,7 @@ function Account({ onProceed }: { onProceed: () => void }) {
 
 function Completion() {
   const navigate = useNavigate()
-  
+
   const { animate, transition }: MotionNodeAnimationOptions = {
     animate: {
       backgroundPosition: ['100% 0%', '0% 0%']
@@ -82,7 +82,7 @@ function Completion() {
     return () => {
       clearTimeout(timeoutId)
     }
-  }, [])
+  }, [navigate, transition.duration])
 
   return (
     <div className="grid min-h-screen place-content-center gap-4">
