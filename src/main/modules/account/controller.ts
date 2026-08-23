@@ -1,18 +1,24 @@
 import { accessControl, authorize } from '@libs/access-control'
 import { isId } from '@libs/db'
 import { channels, resources } from '@shared/constants'
+import { accountUpdateSchema, newAccountSchema } from '@shared/schemas'
 import { hash } from 'argon2'
 import { ipcMain } from 'electron'
-import * as repository from './repository'
-import * as validation from './validation'
+import {
+  deleteOneById,
+  findOneById,
+  findOneByUsername,
+  insertOne,
+  updateOneById
+} from './repository'
 
 ipcMain.handle(channels.account.createOne, async (_, payload: unknown) => {
   try {
     authorize((session) => accessControl.can(session.account.role).createAny(resources.account))
 
-    const data = validation.newAccountSchema.parse(payload)
+    const data = newAccountSchema.parse(payload)
 
-    const newAccount = await repository.insertOne({
+    const newAccount = await insertOne({
       ...data,
       password: await hash(data.password)
     })
@@ -33,11 +39,11 @@ ipcMain.handle(channels.account.getOneById, async (_, id: unknown) => {
   try {
     authorize((session) => accessControl.can(session.account.role).readAny(resources.account))
 
-    if (!validation.isAccountId(id)) {
+    if (!isId(id)) {
       return { success: false }
     }
 
-    const account = await repository.findOneById(id)
+    const account = await findOneById(id)
 
     return {
       success: true,
@@ -55,11 +61,11 @@ ipcMain.handle(channels.account.getOneByUsername, async (_, username: unknown) =
   try {
     authorize((session) => accessControl.can(session.account.role).readAny(resources.account))
 
-    if (!validation.isAccountUsername(username)) {
+    if (typeof username !== 'string') {
       return { success: false }
     }
 
-    const account = await repository.findOneByUsername(username)
+    const account = await findOneByUsername(username)
 
     return {
       success: true,
@@ -81,13 +87,13 @@ ipcMain.handle(channels.account.updateOneById, async (_, id: unknown, payload: u
 
     authorize((session) => accessControl.can(session.account.role).updateAny(resources.account))
 
-    const data = validation.accountUpdateSchema.parse(payload)
+    const data = accountUpdateSchema.parse(payload)
 
     if (data.role === 'master') {
       return { success: false }
     }
 
-    await repository.updateOneById(id, data)
+    await updateOneById(id, data)
 
     return { success: true }
   } catch (error) {
@@ -102,11 +108,11 @@ ipcMain.handle(channels.account.deleteOneById, async (_, id: unknown) => {
   try {
     authorize((session) => accessControl.can(session.account.role).deleteAny(resources.account))
 
-    if (!validation.isAccountId(id)) {
+    if (!isId(id)) {
       return { success: false }
     }
 
-    await repository.deleteOneById(id)
+    await deleteOneById(id)
 
     return { success: true }
   } catch (error) {

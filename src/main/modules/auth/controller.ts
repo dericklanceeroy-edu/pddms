@@ -1,15 +1,15 @@
 import { state } from '@libs/api'
 import { channels } from '@shared/constants'
+import { credentialsSchema } from '@shared/schemas'
 import { verify } from 'argon2'
 import { ipcMain } from 'electron'
-import * as accountRepository from '../account/repository'
-import * as validation from './validation'
+import { findOneByUsername } from '../account/repository'
 
 ipcMain.handle(channels.auth.signIn, async (_, payload: unknown) => {
   try {
-    const data = validation.credentialsSchema.parse(payload)
+    const data = credentialsSchema.parse(payload)
 
-    const account = await accountRepository.findOneByUsername(data.username)
+    const account = await findOneByUsername(data.username)
 
     if (account === null) {
       return { success: false }

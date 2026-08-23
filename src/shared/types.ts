@@ -8,6 +8,11 @@ export type NewAccount = Insertable<Accounts>
 export type AccountUpdate = Updateable<Accounts>
 export type AccountWithoutPassword = Omit<Account, 'password'>
 
+export interface Credentials {
+  username: Account['username']
+  password: Account['password']
+}
+
 export type Batch = Selectable<Batches>
 export type NewBatch = Insertable<Batches>
 export type BatchUpdate = Updateable<Batches>
