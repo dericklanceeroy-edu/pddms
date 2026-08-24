@@ -11,8 +11,8 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as OnboardingIndexRouteImport } from './routes/onboarding/index'
+import { Route as OnboardingCompletionIndexRouteImport } from './routes/onboarding/completion/index'
 import { Route as OnboardingMasterIndexRouteImport } from './routes/onboarding/master/index'
-import { Route as OnboardingStaffIndexRouteImport } from './routes/onboarding/staff/index'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -24,54 +24,56 @@ const OnboardingIndexRoute = OnboardingIndexRouteImport.update({
   path: '/onboarding/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const OnboardingCompletionIndexRoute =
+  OnboardingCompletionIndexRouteImport.update({
+    id: '/onboarding/completion/',
+    path: '/onboarding/completion/',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const OnboardingMasterIndexRoute = OnboardingMasterIndexRouteImport.update({
   id: '/onboarding/master/',
   path: '/onboarding/master/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const OnboardingStaffIndexRoute = OnboardingStaffIndexRouteImport.update({
-  id: '/onboarding/staff/',
-  path: '/onboarding/staff/',
   getParentRoute: () => rootRouteImport,
 } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/onboarding/': typeof OnboardingIndexRoute
+  '/onboarding/completion/': typeof OnboardingCompletionIndexRoute
   '/onboarding/master/': typeof OnboardingMasterIndexRoute
-  '/onboarding/staff/': typeof OnboardingStaffIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/onboarding': typeof OnboardingIndexRoute
+  '/onboarding/completion': typeof OnboardingCompletionIndexRoute
   '/onboarding/master': typeof OnboardingMasterIndexRoute
-  '/onboarding/staff': typeof OnboardingStaffIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/onboarding/': typeof OnboardingIndexRoute
+  '/onboarding/completion/': typeof OnboardingCompletionIndexRoute
   '/onboarding/master/': typeof OnboardingMasterIndexRoute
-  '/onboarding/staff/': typeof OnboardingStaffIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/onboarding/' | '/onboarding/master/' | '/onboarding/staff/'
+  fullPaths:
+    '/' | '/onboarding/' | '/onboarding/completion/' | '/onboarding/master/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/onboarding' | '/onboarding/master' | '/onboarding/staff'
+  to: '/' | '/onboarding' | '/onboarding/completion' | '/onboarding/master'
   id:
     | '__root__'
     | '/'
     | '/onboarding/'
+    | '/onboarding/completion/'
     | '/onboarding/master/'
-    | '/onboarding/staff/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   OnboardingIndexRoute: typeof OnboardingIndexRoute
+  OnboardingCompletionIndexRoute: typeof OnboardingCompletionIndexRoute
   OnboardingMasterIndexRoute: typeof OnboardingMasterIndexRoute
-  OnboardingStaffIndexRoute: typeof OnboardingStaffIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -90,18 +92,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OnboardingIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/onboarding/completion/': {
+      id: '/onboarding/completion/'
+      path: '/onboarding/completion'
+      fullPath: '/onboarding/completion/'
+      preLoaderRoute: typeof OnboardingCompletionIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/onboarding/master/': {
       id: '/onboarding/master/'
       path: '/onboarding/master'
       fullPath: '/onboarding/master/'
       preLoaderRoute: typeof OnboardingMasterIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/onboarding/staff/': {
-      id: '/onboarding/staff/'
-      path: '/onboarding/staff'
-      fullPath: '/onboarding/staff/'
-      preLoaderRoute: typeof OnboardingStaffIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -110,8 +112,8 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   OnboardingIndexRoute: OnboardingIndexRoute,
+  OnboardingCompletionIndexRoute: OnboardingCompletionIndexRoute,
   OnboardingMasterIndexRoute: OnboardingMasterIndexRoute,
-  OnboardingStaffIndexRoute: OnboardingStaffIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

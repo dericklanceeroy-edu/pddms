@@ -3,7 +3,7 @@ import { useDelay } from '@renderer/hooks/useDelay'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { type MotionNodeAnimationOptions, motion } from 'motion/react'
 
-export const Route = createFileRoute('/onboarding/staff/')({
+export const Route = createFileRoute('/onboarding/completion/')({
   component: RouteComponent
 })
 
