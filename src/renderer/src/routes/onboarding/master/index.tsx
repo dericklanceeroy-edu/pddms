@@ -3,7 +3,9 @@ import {
   PasswordInput,
   PasswordToggle
 } from '@renderer/components/PasswordControls'
+import TypedLink from '@renderer/components/TypedLink'
 import { createFileRoute } from '@tanstack/react-router'
+import { Button } from 'flowbite-react'
 
 export const Route = createFileRoute('/onboarding/master/')({
   component: RouteComponent
@@ -32,12 +34,9 @@ function RouteComponent() {
             <PasswordToggle type="button" className="h-full cursor-pointer px-4 text-neutral-500" />
           </div>
         </PasswordControlsProvider>
-        <button
-          type="submit"
-          className="cursor-pointer rounded bg-mauve-600 px-4 py-2 text-white"
-        >
+        <Button as={TypedLink} to="/onboarding/completion/" color="primary">
           Continue
-        </button>
+        </Button>
       </form>
     </div>
   )

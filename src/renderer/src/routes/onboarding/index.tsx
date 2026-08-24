@@ -1,5 +1,6 @@
 import TypedLink from '@renderer/components/TypedLink'
 import { createFileRoute } from '@tanstack/react-router'
+import { Button } from 'flowbite-react'
 
 export const Route = createFileRoute('/onboarding/')({
   component: RouteComponent
@@ -12,12 +13,9 @@ function RouteComponent() {
         <h1 className="text-xl font-semibold">Successfully installed</h1>
         <p className="text-neutral-500">Setup your workspace to use it.</p>
       </div>
-      <TypedLink
-        to="/onboarding/master/"
-        className="cursor-pointer rounded bg-mauve-600 px-4 py-2 text-center text-white"
-      >
+      <Button as={TypedLink} to="/onboarding/master/" color="primary">
         Get started
-      </TypedLink>
+      </Button>
     </div>
   )
 }

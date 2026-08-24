@@ -1,6 +1,7 @@
 import TypedLink from '@renderer/components/TypedLink'
 import { useDelay } from '@renderer/hooks/useDelay'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { Button } from 'flowbite-react'
 import { type MotionNodeAnimationOptions, motion } from 'motion/react'
 
 export const Route = createFileRoute('/onboarding/completion/')({
@@ -30,17 +31,17 @@ function RouteComponent() {
         <h1 className="text-xl font-semibold">You're all set!</h1>
         <p className="text-neutral-500">You may now use the application.</p>
       </div>
-      <motion.button
-        animate={animate}
-        transition={transition}
-        style={{
-          background: 'linear-gradient(to right, var(--color-mauve-600) 50%, transparent 50%)',
-          backgroundSize: '200% 100%'
-        }}
-        className="cursor-pointer rounded border-2 border-mauve-600 px-4 py-2 text-white"
-      >
-        <TypedLink to={'/'}>
-          <motion.p
+      <Button as={TypedLink} to="/" className="bg-transparent! p-0 outline-none focus:ring-0">
+        <motion.div
+          animate={animate}
+          transition={transition}
+          style={{
+            background: 'linear-gradient(to right, var(--color-mauve-600) 50%, transparent 50%)',
+            backgroundSize: '200% 100%'
+          }}
+          className="h-full w-full cursor-pointer rounded border-2 border-mauve-600 text-white"
+        >
+          <motion.div
             animate={animate}
             transition={transition}
             style={{
@@ -50,11 +51,12 @@ function RouteComponent() {
               WebkitBackgroundClip: 'text',
               color: 'transparent'
             }}
+            className="grid h-full items-center"
           >
             Finish
-          </motion.p>
-        </TypedLink>
-      </motion.button>
+          </motion.div>
+        </motion.div>
+      </Button>
     </div>
   )
 }
