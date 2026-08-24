@@ -4,7 +4,7 @@ export const channels = {
     getOneById: 'account.getOneById',
     getOneByUsername: 'account.getOneByUsername',
     updateOneById: 'account.updateOneById',
-    deleteOneById: 'account.deleteOneById'
+    archiveOneById: 'account.archiveOneById'
   },
   auth: {
     signIn: 'auth.signIn',

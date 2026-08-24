@@ -40,10 +40,11 @@ export async function updateOneById(id: number, data: AccountUpdate): Promise<vo
     .executeTakeFirstOrThrow()
 }
 
-export async function deleteOneById(id: number): Promise<void> {
-  // prettier-ignore
+export async function archiveOneById(id: number): Promise<void> {
   await db
-    .deleteFrom('accounts')
+    .updateTable('accounts')
+    .set({ isArchived: 1 })
     .where('id', '=', id)
+    .where('isArchived', '==', 0)
     .executeTakeFirstOrThrow()
 }

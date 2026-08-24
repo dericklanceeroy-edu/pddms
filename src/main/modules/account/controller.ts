@@ -5,7 +5,7 @@ import { isId } from '@shared/validators'
 import { hash } from 'argon2'
 import { ipcMain } from 'electron'
 import {
-  deleteOneById,
+  archiveOneById,
   findOneById,
   findOneByUsername,
   insertOne,
@@ -104,15 +104,15 @@ ipcMain.handle(channels.account.updateOneById, async (_, id: unknown, payload: u
   }
 })
 
-ipcMain.handle(channels.account.deleteOneById, async (_, id: unknown) => {
+ipcMain.handle(channels.account.archiveOneById, async (_, id: unknown) => {
   try {
-    authorize((session) => accessControl.can(session.account.role).deleteAny(resources.account))
+    authorize((session) => accessControl.can(session.account.role).updateAny(resources.account))
 
     if (!isId(id)) {
       return { success: false }
     }
 
-    await deleteOneById(id)
+    await archiveOneById(id)
 
     return { success: true }
   } catch (error) {

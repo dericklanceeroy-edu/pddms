@@ -14,11 +14,17 @@ export interface Database {
  */
 export type Id = number
 
+/**
+ * Used to represent booleans for SQLite.
+ */
+export type ZeroOrOne = 0 | 1
+
 export interface AccountsTable {
   id: ColumnType<Id, Id | undefined, never>
   role: Role
   username: string
   password: string
+  isArchived: ColumnType<ZeroOrOne, never, ZeroOrOne>
   createdAt: ColumnType<Date, string | undefined, never>
   updatedAt: ColumnType<Date, string | undefined, never>
 }
