@@ -37,7 +37,7 @@ function RouteComponent() {
           background: 'linear-gradient(to right, var(--color-mauve-600) 50%, transparent 50%)',
           backgroundSize: '200% 100%'
         }}
-        className="cursor-pointer rounded border-2 border-mauve-600 px-4 py-2 font-semibold text-white"
+        className="cursor-pointer rounded border-2 border-mauve-600 px-4 py-2 text-white"
       >
         <TypedLink to={'/'}>
           <motion.p

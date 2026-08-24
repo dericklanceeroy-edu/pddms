@@ -34,7 +34,7 @@ function RouteComponent() {
         </PasswordControlsProvider>
         <button
           type="submit"
-          className="cursor-pointer rounded bg-mauve-600 px-4 py-2 font-semibold text-white"
+          className="cursor-pointer rounded bg-mauve-600 px-4 py-2 text-white"
         >
           Continue
         </button>
