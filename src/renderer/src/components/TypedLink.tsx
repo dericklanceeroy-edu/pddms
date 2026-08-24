@@ -11,5 +11,5 @@ export default function TypedLink({
   to,
   ...props
 }: Omit<ComponentProps<typeof Link>, 'to'> & { to: keyof FileRoutesByFullPath }) {
-  return <Link {...props}>{children}</Link>
+  return <Link {...props} to={to}>{children}</Link>
 }
