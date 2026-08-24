@@ -45,7 +45,7 @@ function RouteComponent() {
             animate={animate}
             transition={transition}
             style={{
-              backgroundImage: 'linear-gradient(to right, white 50%, var(--color-mauve-600) 50%)',
+              background: 'linear-gradient(to right, white 50%, var(--color-mauve-600) 50%)',
               backgroundSize: '200% 100%',
               backgroundClip: 'text',
               WebkitBackgroundClip: 'text',
