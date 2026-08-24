@@ -34,9 +34,7 @@ export function PasswordControlsProvider({ children }: PropsWithChildren) {
     <PasswordControlsContext
       value={{
         show,
-        toggle: () => {
-          setShow((value) => !value)
-        }
+        toggle: () => setShow((value) => !value)
       }}
     >
       {children}
