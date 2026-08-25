@@ -1,4 +1,4 @@
-import AccountProvider from '@renderer/contexts/Account'
+import AccountProvider from '@renderer/contexts/Account/Provider'
 import { createRootRoute, Outlet } from '@tanstack/react-router'
 import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
 
