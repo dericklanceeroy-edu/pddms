@@ -17,7 +17,7 @@ function RouteComponent() {
     <div className="mx-auto flex min-h-screen w-fit flex-col justify-center gap-4">
       <header className="text-center">
         <h1 className="text-xl font-semibold">Sign in to your account</h1>
-        <p className="max-w-prose text-neutral-500">
+        <p className="text-neutral-500">
           If you encounter any issues contact the{' '}
           <TypedLink to={'*' as any} className="text-sky-800 underline">
             master
@@ -31,11 +31,7 @@ function RouteComponent() {
         }}
         className="space-y-4"
       >
-        <Form.Text
-          name="username"
-          color="primary"
-          placeholder="Username"
-        />
+        <Form.Text name="username" color="primary" placeholder="Username" />
         <Form.Password
           name="password"
           color="primary"
