@@ -20,18 +20,38 @@ declare module '@tanstack/react-router' {
 
 const theme = createTheme({
   button: {
-    base: 'text-4xl rounded cursor-pointer font-normal',
+    base: 'cursor-pointer',
     color: {
-      primary: 'bg-mauve-600 text-white'
-    },
-    size: {
-      md: 'text-base'
+      primary: 'rounded bg-mauve-600 text-white'
+    }
+  },
+  textInput: {
+    addon: 'rounded-l',
+    field: {
+      input: {
+        sizes: {
+          md: 'px-4 py-2 text-base'
+        },
+        colors: {
+          primary: 'bg-neutral-100 border-none focus:ring-amber-500 focus:ring-2'
+        },
+        withAddon: {
+          on: 'rounded-r',
+          off: 'rounded'
+        }
+      }
     }
   }
 })
 
 declare module 'flowbite-react/components/Button' {
   interface ButtonColors {
+    primary: string
+  }
+}
+
+declare module 'flowbite-react/components/TextInput' {
+  interface TextInputColors {
     primary: string
   }
 }
