@@ -7,6 +7,7 @@ export const accountSchema = z.strictObject({
   role: z.enum(Object.values(roles)),
   username: z.string().min(4),
   password: z.string().min(8),
+  isArchived: z.union([z.literal(0), z.literal(1)]),
   createdAt: z.date(),
   updatedAt: z.date()
 }) satisfies z.ZodType<Account>
