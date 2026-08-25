@@ -25,12 +25,19 @@ const theme = createTheme({
       primary: 'rounded bg-mauve-600 text-white'
     }
   },
+  label: {
+    root: {
+      colors: {
+        primary: 'text-black'
+      }
+    }
+  },
   textInput: {
     addon: 'rounded-l',
     field: {
       input: {
         sizes: {
-          md: 'px-4 py-2 text-base'
+          md: 'px-4 py-2'
         },
         colors: {
           primary: 'bg-neutral-100 border-none focus:ring-amber-500 focus:ring-2'
@@ -46,6 +53,12 @@ const theme = createTheme({
 
 declare module 'flowbite-react/components/Button' {
   interface ButtonColors {
+    primary: string
+  }
+}
+
+declare module 'flowbite-react/components/Label' {
+  interface LabelColors {
     primary: string
   }
 }

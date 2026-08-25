@@ -26,7 +26,7 @@ function RouteComponent() {
   }, transition.duration!)
 
   return (
-    <div className="grid min-h-screen place-content-center gap-4">
+    <div className="space-y-4">
       <div className="text-center">
         <h1 className="text-xl font-semibold">You're all set!</h1>
         <p className="text-neutral-500">You may now use the application.</p>

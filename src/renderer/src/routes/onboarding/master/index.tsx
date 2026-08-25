@@ -1,7 +1,11 @@
+import { zodResolver } from '@hookform/resolvers/zod'
 import TypedForm from '@renderer/components/TypedForm'
-import { createFileRoute } from '@tanstack/react-router'
-import { Button, TextInput, TextInputProps } from 'flowbite-react'
+import { newAccountSchema } from '@shared/schemas'
+import type { NewAccount } from '@shared/types'
+import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { Button, HelperText, Label, TextInput, type TextInputProps } from 'flowbite-react'
 import { type ComponentType, type SVGProps, useState } from 'react'
+import { useForm } from 'react-hook-form'
 import { BsEyeFill, BsEyeSlashFill } from 'react-icons/bs'
 
 export const Route = createFileRoute('/onboarding/master/')({
@@ -54,11 +58,53 @@ function PasswordInput({
 }
 
 function MasterForm() {
+  const navigate = useNavigate()
+  const {
+    handleSubmit,
+    register,
+    formState: { errors }
+  } = useForm<NewAccount>({
+    defaultValues: {
+      role: 'master',
+      username: '',
+      password: ''
+    },
+    resolver: zodResolver(newAccountSchema)
+  })
+
   return (
-    <TypedForm action="/onboarding/completion/" className="flex flex-col gap-4">
-      <TextInput type="text" color="primary" placeholder="Username" required />
-      <PasswordInput color="primary" placeholder="Password" required />
-      <Button color="primary" type="submit">
+    <TypedForm
+      className="flex flex-col gap-2 [&>div>*:nth-child(2)]:mt-2"
+      onSubmit={handleSubmit(() => {
+        navigate({ to: '/onboarding/completion' })
+      })}
+    >
+      <div>
+        <Label htmlFor="username" color={errors.username ? 'failure' : 'primary'}>
+          Username
+        </Label>
+        <TextInput
+          {...register('username')}
+          id="username"
+          type="text"
+          color={errors.username ? 'failure' : 'primary'}
+          placeholder="Enter username"
+        />
+        {errors.username && <HelperText>{errors.username.message}</HelperText>}
+      </div>
+      <div>
+        <Label htmlFor="password" color={errors.password ? 'failure' : 'primary'}>
+          Password
+        </Label>
+        <PasswordInput
+          {...register('password')}
+          id="password"
+          color={errors.password ? 'failure' : 'primary'}
+          placeholder="Enter password"
+        />
+        {errors.password && <HelperText>{errors.password.message}</HelperText>}
+      </div>
+      <Button type="submit" color="primary" className="mt-4">
         Continue
       </Button>
     </TypedForm>
@@ -67,7 +113,7 @@ function MasterForm() {
 
 function RouteComponent() {
   return (
-    <div className="grid min-h-screen place-content-center gap-4">
+    <div className="w-[20rem] space-y-4">
       <div className="text-center">
         <h1 className="text-xl font-semibold">Setup master account</h1>
         <p className="text-neutral-500">You can edit this at the settings.</p>
