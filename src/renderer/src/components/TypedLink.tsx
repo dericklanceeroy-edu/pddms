@@ -5,8 +5,8 @@ import type { ComponentProps } from 'react'
 /**
  * TanStack Router's `<Link>` but the `to` field is typed with the
  * route paths.
- *
- * @todo Move to personal library for reusability.
+ * 
+ * @note Is there a TanStack Router native way of doing this?
  */
 export default function TypedLink({
   children,

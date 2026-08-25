@@ -26,9 +26,7 @@ function PasswordIcon({
 }
 
 /**
- * @todo Turn this into a Flowbite custom component and move to
- * personal library for reusability. We can also optionally create a feature
- * request for Flowbite.
+ * @note Is there a Flowbite native way of doing this?
  */
 function PasswordInput({
   show = BsEyeFill,
