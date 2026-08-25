@@ -2,7 +2,7 @@ import type { AccountWithoutPassword } from '@shared/types'
 import { createContext, useContext } from 'react'
 import AccountProvider from './Provider'
 
-interface AccountContext {
+export interface AccountContext {
   account: AccountWithoutPassword | null
 }
 
@@ -17,5 +17,3 @@ export function useAccount() {
 
   return context
 }
-
-export default AccountProvider
