@@ -12,10 +12,10 @@ function RouteComponent() {
 
   return (
     <div className="w-[20rem] space-y-4">
-      <div className="text-center">
+      <header className="text-center">
         <h1 className="text-xl font-semibold">Setup master account</h1>
         <p className="text-neutral-500">You can edit this at the settings.</p>
-      </div>
+      </header>
       <Form<NewAccount>
         onSubmit={() => {
           navigate({ to: '/onboarding/completion' })

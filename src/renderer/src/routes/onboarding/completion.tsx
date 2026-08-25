@@ -27,10 +27,10 @@ function RouteComponent() {
 
   return (
     <div className="space-y-4">
-      <div className="text-center">
+      <header className="text-center">
         <h1 className="text-xl font-semibold">You're all set!</h1>
         <p className="text-neutral-500">You may now use the application.</p>
-      </div>
+      </header>
       <Button as={TypedLink} to="/" className="bg-transparent! p-0 outline-none focus:ring-0">
         <motion.div
           animate={animate}
