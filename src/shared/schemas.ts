@@ -12,10 +12,12 @@ export const accountSchema = z.strictObject({
   updatedAt: z.date()
 }) satisfies z.ZodType<Account>
 
+const usernameMin = 4
+const passwordMin = 8
 export const newAccountSchema = z.strictObject({
   role: z.enum(Object.values(roles)),
-  username: z.string().min(4),
-  password: z.string().min(8)
+  username: z.string().min(usernameMin, `Username must have at least ${usernameMin} characters.`),
+  password: z.string().min(passwordMin, `Password must have at least ${passwordMin} characters`)
 }) satisfies z.ZodType<NewAccount>
 
 export const accountUpdateSchema = z.strictObject({
