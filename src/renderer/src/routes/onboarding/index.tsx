@@ -8,7 +8,7 @@ export const Route = createFileRoute('/onboarding/')({
 
 function RouteComponent() {
   return (
-    <div className='space-y-4'>
+    <div className="space-y-4">
       <div className="text-center">
         <h1 className="text-xl font-semibold">Successfully installed</h1>
         <p className="text-neutral-500">Setup your workspace to use it.</p>
