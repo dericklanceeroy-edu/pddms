@@ -13,7 +13,7 @@ function RouteComponent() {
         <h1 className="text-xl font-semibold">Successfully installed</h1>
         <p className="text-neutral-500">Setup your workspace to use it.</p>
       </div>
-      <Button as={TypedLink} to="/onboarding/master/" color="primary">
+      <Button as={TypedLink} to="/onboarding/master" color="primary">
         Get started
       </Button>
     </div>

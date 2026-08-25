@@ -3,7 +3,7 @@ import type { NewAccount } from '@shared/types'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { BsEyeFill, BsEyeSlashFill } from 'react-icons/bs'
 
-export const Route = createFileRoute('/onboarding/master/')({
+export const Route = createFileRoute('/onboarding/master')({
   component: RouteComponent
 })
 
@@ -22,11 +22,7 @@ function RouteComponent() {
         }}
         className="space-y-4"
       >
-        <Form.Text
-          name="username"
-          color="primary"
-          placeholder="Username"
-        />
+        <Form.Text name="username" color="primary" placeholder="Username" />
         <Form.Password
           name="password"
           color="primary"
