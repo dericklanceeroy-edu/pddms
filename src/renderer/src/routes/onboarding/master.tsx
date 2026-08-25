@@ -1,6 +1,7 @@
 import Form from '@renderer/components/Form/Form'
 import type { NewAccount } from '@shared/types'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { Button } from 'flowbite-react'
 import { BsEyeFill, BsEyeSlashFill } from 'react-icons/bs'
 
 export const Route = createFileRoute('/onboarding/master')({
@@ -30,7 +31,9 @@ function RouteComponent() {
           show={BsEyeFill}
           hide={BsEyeSlashFill}
         />
-        <Form.Submit>Continue</Form.Submit>
+        <Button type="submit" color="primary" className="w-full">
+          Continue
+        </Button>
       </Form>
     </div>
   )

@@ -2,6 +2,7 @@ import Form from '@renderer/components/Form/Form'
 import TypedLink from '@renderer/components/TypedLink'
 import { Credentials } from '@shared/types'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { Button } from 'flowbite-react'
 import { BsEyeFill, BsEyeSlashFill } from 'react-icons/bs'
 
 export const Route = createFileRoute('/signIn')({
@@ -39,7 +40,9 @@ function RouteComponent() {
           show={BsEyeFill}
           hide={BsEyeSlashFill}
         />
-        <Form.Submit>Continue</Form.Submit>
+        <Button type="submit" color="primary" className="w-full">
+          Continue
+        </Button>
       </Form>
     </div>
   )
