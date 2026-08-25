@@ -1,3 +1,4 @@
+import TypedForm from '@renderer/components/TypedForm'
 import { createFileRoute } from '@tanstack/react-router'
 import { Button, TextInput, TextInputProps } from 'flowbite-react'
 import { type ComponentType, type SVGProps, useState } from 'react'
@@ -54,6 +55,18 @@ function PasswordInput({
   )
 }
 
+function MasterForm() {
+  return (
+    <TypedForm action="/onboarding/completion/" className="flex flex-col gap-4">
+      <TextInput type="text" color="primary" placeholder="Username" required />
+      <PasswordInput color="primary" placeholder="Password" required />
+      <Button color="primary" type="submit">
+        Continue
+      </Button>
+    </TypedForm>
+  )
+}
+
 function RouteComponent() {
   return (
     <div className="grid min-h-screen place-content-center gap-4">
@@ -61,13 +74,7 @@ function RouteComponent() {
         <h1 className="text-xl font-semibold">Setup master account</h1>
         <p className="text-neutral-500">You can edit this at the settings.</p>
       </div>
-      <form className="flex flex-col gap-4">
-        <TextInput type="text" color="primary" placeholder="Username" required />
-        <PasswordInput color="primary" placeholder="Password" required />
-        <Button color="primary" type="submit">
-          Continue
-        </Button>
-      </form>
+      <MasterForm />
     </div>
   )
 }
