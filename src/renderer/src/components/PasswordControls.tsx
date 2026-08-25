@@ -52,7 +52,7 @@ export function PasswordToggle(attributes: ButtonHTMLAttributes<HTMLButtonElemen
   const { show, toggle } = usePasswordControls()
 
   return (
-    <button {...attributes} onClick={toggle}>
+    <button type="button" {...attributes} onClick={toggle}>
       {show ? <BsEyeSlashFill /> : <BsEyeFill />}
     </button>
   )
