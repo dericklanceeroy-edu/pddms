@@ -3,10 +3,10 @@ import {
   createContext,
   type InputHTMLAttributes,
   type PropsWithChildren,
+  ReactNode,
   useContext,
   useState
 } from 'react'
-import { BsEyeFill, BsEyeSlashFill } from 'react-icons/bs'
 
 interface PasswordControlsContext {
   show: boolean
@@ -48,12 +48,16 @@ export function PasswordInput(attributes: InputHTMLAttributes<HTMLInputElement>)
   return <input {...attributes} type={show ? 'text' : 'password'} />
 }
 
-export function PasswordToggle(attributes: ButtonHTMLAttributes<HTMLButtonElement>) {
+export function PasswordToggle({
+  showIcon,
+  hideIcon,
+  ...attributes
+}: { showIcon: ReactNode; hideIcon: ReactNode } & ButtonHTMLAttributes<HTMLButtonElement>) {
   const { show, toggle } = usePasswordControls()
 
   return (
     <button type="button" {...attributes} onClick={toggle}>
-      {show ? <BsEyeSlashFill /> : <BsEyeFill />}
+      {show ? hideIcon : showIcon}
     </button>
   )
 }
