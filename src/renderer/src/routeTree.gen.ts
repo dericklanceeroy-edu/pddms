@@ -11,9 +11,10 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as OnboardingRouteRouteImport } from './routes/onboarding/route'
+import { Route as SignInRouteImport } from './routes/signIn'
 import { Route as OnboardingIndexRouteImport } from './routes/onboarding/index'
-import { Route as OnboardingCompletionIndexRouteImport } from './routes/onboarding/completion/index'
-import { Route as OnboardingMasterIndexRouteImport } from './routes/onboarding/master/index'
+import { Route as OnboardingCompletionRouteImport } from './routes/onboarding/completion'
+import { Route as OnboardingMasterRouteImport } from './routes/onboarding/master'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -25,66 +26,81 @@ const OnboardingRouteRoute = OnboardingRouteRouteImport.update({
   path: '/onboarding',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SignInRoute = SignInRouteImport.update({
+  id: '/signIn',
+  path: '/signIn',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const OnboardingIndexRoute = OnboardingIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => OnboardingRouteRoute,
 } as any)
-const OnboardingCompletionIndexRoute =
-  OnboardingCompletionIndexRouteImport.update({
-    id: '/completion/',
-    path: '/completion/',
-    getParentRoute: () => OnboardingRouteRoute,
-  } as any)
-const OnboardingMasterIndexRoute = OnboardingMasterIndexRouteImport.update({
-  id: '/master/',
-  path: '/master/',
+const OnboardingCompletionRoute = OnboardingCompletionRouteImport.update({
+  id: '/completion',
+  path: '/completion',
+  getParentRoute: () => OnboardingRouteRoute,
+} as any)
+const OnboardingMasterRoute = OnboardingMasterRouteImport.update({
+  id: '/master',
+  path: '/master',
   getParentRoute: () => OnboardingRouteRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/onboarding': typeof OnboardingRouteRouteWithChildren
+  '/signIn': typeof SignInRoute
+  '/onboarding/completion': typeof OnboardingCompletionRoute
+  '/onboarding/master': typeof OnboardingMasterRoute
   '/onboarding/': typeof OnboardingIndexRoute
-  '/onboarding/completion/': typeof OnboardingCompletionIndexRoute
-  '/onboarding/master/': typeof OnboardingMasterIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/signIn': typeof SignInRoute
+  '/onboarding/completion': typeof OnboardingCompletionRoute
+  '/onboarding/master': typeof OnboardingMasterRoute
   '/onboarding': typeof OnboardingIndexRoute
-  '/onboarding/completion': typeof OnboardingCompletionIndexRoute
-  '/onboarding/master': typeof OnboardingMasterIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/onboarding': typeof OnboardingRouteRouteWithChildren
+  '/signIn': typeof SignInRoute
+  '/onboarding/completion': typeof OnboardingCompletionRoute
+  '/onboarding/master': typeof OnboardingMasterRoute
   '/onboarding/': typeof OnboardingIndexRoute
-  '/onboarding/completion/': typeof OnboardingCompletionIndexRoute
-  '/onboarding/master/': typeof OnboardingMasterIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
     | '/onboarding'
+    | '/signIn'
+    | '/onboarding/completion'
+    | '/onboarding/master'
     | '/onboarding/'
-    | '/onboarding/completion/'
-    | '/onboarding/master/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/onboarding' | '/onboarding/completion' | '/onboarding/master'
+  to:
+    | '/'
+    | '/signIn'
+    | '/onboarding/completion'
+    | '/onboarding/master'
+    | '/onboarding'
   id:
     | '__root__'
     | '/'
     | '/onboarding'
+    | '/signIn'
+    | '/onboarding/completion'
+    | '/onboarding/master'
     | '/onboarding/'
-    | '/onboarding/completion/'
-    | '/onboarding/master/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   OnboardingRouteRoute: typeof OnboardingRouteRouteWithChildren
+  SignInRoute: typeof SignInRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -103,6 +119,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OnboardingRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/signIn': {
+      id: '/signIn'
+      path: '/signIn'
+      fullPath: '/signIn'
+      preLoaderRoute: typeof SignInRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/onboarding/': {
       id: '/onboarding/'
       path: '/'
@@ -110,33 +133,33 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OnboardingIndexRouteImport
       parentRoute: typeof OnboardingRouteRoute
     }
-    '/onboarding/completion/': {
-      id: '/onboarding/completion/'
+    '/onboarding/completion': {
+      id: '/onboarding/completion'
       path: '/completion'
-      fullPath: '/onboarding/completion/'
-      preLoaderRoute: typeof OnboardingCompletionIndexRouteImport
+      fullPath: '/onboarding/completion'
+      preLoaderRoute: typeof OnboardingCompletionRouteImport
       parentRoute: typeof OnboardingRouteRoute
     }
-    '/onboarding/master/': {
-      id: '/onboarding/master/'
+    '/onboarding/master': {
+      id: '/onboarding/master'
       path: '/master'
-      fullPath: '/onboarding/master/'
-      preLoaderRoute: typeof OnboardingMasterIndexRouteImport
+      fullPath: '/onboarding/master'
+      preLoaderRoute: typeof OnboardingMasterRouteImport
       parentRoute: typeof OnboardingRouteRoute
     }
   }
 }
 
 interface OnboardingRouteRouteChildren {
+  OnboardingCompletionRoute: typeof OnboardingCompletionRoute
+  OnboardingMasterRoute: typeof OnboardingMasterRoute
   OnboardingIndexRoute: typeof OnboardingIndexRoute
-  OnboardingCompletionIndexRoute: typeof OnboardingCompletionIndexRoute
-  OnboardingMasterIndexRoute: typeof OnboardingMasterIndexRoute
 }
 
 const OnboardingRouteRouteChildren: OnboardingRouteRouteChildren = {
+  OnboardingCompletionRoute: OnboardingCompletionRoute,
+  OnboardingMasterRoute: OnboardingMasterRoute,
   OnboardingIndexRoute: OnboardingIndexRoute,
-  OnboardingCompletionIndexRoute: OnboardingCompletionIndexRoute,
-  OnboardingMasterIndexRoute: OnboardingMasterIndexRoute,
 }
 
 const OnboardingRouteRouteWithChildren = OnboardingRouteRoute._addFileChildren(
@@ -146,6 +169,7 @@ const OnboardingRouteRouteWithChildren = OnboardingRouteRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   OnboardingRouteRoute: OnboardingRouteRouteWithChildren,
+  SignInRoute: SignInRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
