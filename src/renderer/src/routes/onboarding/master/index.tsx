@@ -26,9 +26,7 @@ function PasswordIcon({
   return <Icon onClick={toggle} className="pointer-events-auto cursor-pointer text-neutral-500" />
 }
 
-/**
- * @note Is there a Flowbite native way of doing this?
- */
+// Note: Is there a Flowbite native way of doing this?
 function PasswordInput({
   show = BsEyeFill,
   hide = BsEyeSlashFill,
