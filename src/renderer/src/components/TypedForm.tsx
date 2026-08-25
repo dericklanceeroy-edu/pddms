@@ -1,4 +1,4 @@
-import type { FileRoutesByFullPath } from '@renderer/routeTree.gen'
+import type { Routes } from '@renderer/types'
 import type { ComponentProps } from 'react'
 
 /**
@@ -9,7 +9,7 @@ export default function TypedForm({
   children,
   action,
   ...props
-}: Omit<ComponentProps<'form'>, 'action'> & { action?: keyof FileRoutesByFullPath }) {
+}: Omit<ComponentProps<'form'>, 'action'> & { action?: Routes }) {
   return (
     <form {...props} action={action}>
       {children}

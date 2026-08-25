@@ -1,4 +1,4 @@
-import type { FileRoutesByFullPath } from '@renderer/routeTree.gen'
+import type { Routes } from '@renderer/types'
 import { Link } from '@tanstack/react-router'
 import type { ComponentProps } from 'react'
 
@@ -11,7 +11,7 @@ export default function TypedLink({
   children,
   to,
   ...props
-}: Omit<ComponentProps<typeof Link>, 'to'> & { to: keyof FileRoutesByFullPath }) {
+}: Omit<ComponentProps<typeof Link>, 'to'> & { to: Routes }) {
   return (
     <Link {...props} to={to}>
       {children}
