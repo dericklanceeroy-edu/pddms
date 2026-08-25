@@ -6,7 +6,7 @@ export const Route = createFileRoute('/onboarding')({
 
 function RouteComponent() {
   return (
-    <div className="grid min-h-screen place-content-center gap-4">
+    <div className="flex min-h-screen items-center justify-center gap-4">
       <Outlet />
     </div>
   )
