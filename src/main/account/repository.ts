@@ -1,4 +1,4 @@
-import { db } from '@libs/db'
+import { db } from '@main/db'
 import type { Account, AccountUpdate, NewAccount } from '@shared/types'
 
 export async function insertOne(data: NewAccount): Promise<Account> {
