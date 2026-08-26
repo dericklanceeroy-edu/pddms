@@ -1,6 +1,5 @@
-import TypedLink from '@renderer/components/TypedLink'
 import { useDelay } from '@renderer/hooks/useDelay'
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { Button } from 'flowbite-react'
 import { type MotionNodeAnimationOptions, motion } from 'motion/react'
 
@@ -31,7 +30,7 @@ function RouteComponent() {
         <h1 className="text-xl font-semibold">You're all set!</h1>
         <p className="text-neutral-500">You may now use the application.</p>
       </header>
-      <Button as={TypedLink} to="/" className="bg-transparent! p-0 outline-none focus:ring-0">
+      <Button as={Link} to="/" className="bg-transparent! p-0 outline-none focus:ring-0">
         <motion.div
           animate={animate}
           transition={transition}
