@@ -4,7 +4,7 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { Button } from 'flowbite-react'
 import { type MotionNodeAnimationOptions, motion } from 'motion/react'
 
-export const Route = createFileRoute('/onboarding/completion')({
+export const Route = createFileRoute('/new/completion')({
   component: RouteComponent
 })
 

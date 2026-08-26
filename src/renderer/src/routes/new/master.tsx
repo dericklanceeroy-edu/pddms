@@ -4,7 +4,7 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { Button } from 'flowbite-react'
 import { BsEyeFill, BsEyeSlashFill } from 'react-icons/bs'
 
-export const Route = createFileRoute('/onboarding/master')({
+export const Route = createFileRoute('/new/master')({
   component: RouteComponent
 })
 
@@ -19,7 +19,7 @@ function RouteComponent() {
       </header>
       <Form<NewAccount>
         onSubmit={() => {
-          navigate({ to: '/onboarding/completion' })
+          navigate({ to: '/new/completion' })
         }}
         className="space-y-4"
       >

@@ -29,9 +29,9 @@ const createStaffAccountSlice: StateCreator<StaffAccountsSlice> = (set) => ({
     }))
 })
 
-type OnboardingStore = MasterAccountSlice & StaffAccountsSlice
+type newStore = MasterAccountSlice & StaffAccountsSlice
 
-export const useOnboardingStore = create<OnboardingStore>((...parameters) => ({
+export const useSetupStore = create<newStore>((...parameters) => ({
   ...createMasterAccountSlice(...parameters),
   ...createStaffAccountSlice(...parameters)
 }))
