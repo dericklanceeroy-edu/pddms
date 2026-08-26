@@ -9,8 +9,6 @@ export const Route = createFileRoute('/signIn')({
   component: RouteComponent
 })
 
-// To-do: Create a master contact page and set its route to
-// the '<TypedLink>'.
 function RouteComponent() {
   const navigate = useNavigate()
 
