@@ -1,4 +1,4 @@
-import { state, type State } from '@libs/api'
+import { state, type State } from '@main/api'
 import type { Permission } from 'accesscontrol'
 import { UnauthorizedError } from '.'
 

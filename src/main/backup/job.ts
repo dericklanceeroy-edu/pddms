@@ -1,4 +1,4 @@
-import { state } from '@libs/api'
+import { state } from '@main/api'
 import { backupDatabase } from './service'
 
 export function startDatabaseBackupJob() {

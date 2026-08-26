@@ -1,5 +1,5 @@
-import { env } from '@libs/env'
-import { drive } from '@libs/google/drive'
+import { env } from '@main/env'
+import { drive } from '@main/google/drive'
 import { createReadStream } from 'node:fs'
 import { join } from 'node:path'
 

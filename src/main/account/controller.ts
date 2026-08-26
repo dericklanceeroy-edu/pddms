@@ -1,4 +1,4 @@
-import { accessControl, authorize } from '@libs/access-control'
+import { accessControl, authorize } from '@main/access-control'
 import { channels, resources } from '@shared/constants'
 import { accountUpdateSchema, newAccountSchema } from '@shared/schemas'
 import { isId } from '@shared/validators'

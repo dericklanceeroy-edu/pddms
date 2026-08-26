@@ -1,4 +1,4 @@
-import { env } from '@libs/env'
+import { env } from '@main/env'
 import type { Database } from '@shared/types'
 import SQLite from 'better-sqlite3'
 import { CamelCasePlugin, Kysely, SqliteDialect } from 'kysely'

@@ -6,7 +6,7 @@
     "types": ["electron-vite/node"],
     "paths": {
       "@shared/*": ["./src/shared/*"],
-      "@libs/*": ["./src/main/libs/*"]
+      "@main/*": ["./src/main/*"]
     }
   }
 }

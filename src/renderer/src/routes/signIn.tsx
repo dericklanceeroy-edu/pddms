@@ -1,7 +1,6 @@
 import Form from '@renderer/components/Form/Form'
-import TypedLink from '@renderer/components/TypedLink'
 import { Credentials } from '@shared/types'
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { Button } from 'flowbite-react'
 import { BsEyeFill, BsEyeSlashFill } from 'react-icons/bs'
 
@@ -9,8 +8,6 @@ export const Route = createFileRoute('/signIn')({
   component: RouteComponent
 })
 
-// To-do: Create a master contact page and set its route to
-// the '<TypedLink>'.
 function RouteComponent() {
   const navigate = useNavigate()
 
@@ -20,9 +17,9 @@ function RouteComponent() {
         <h1 className="text-xl font-semibold">Sign in to your account</h1>
         <p className="text-neutral-500">
           If you encounter any issues contact the{' '}
-          <TypedLink to={'*' as any} className="text-sky-800 underline">
+          <Link to={'*' as any} className="text-sky-800 underline">
             master
-          </TypedLink>{' '}
+          </Link>{' '}
           account.
         </p>
       </header>

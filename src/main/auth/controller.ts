@@ -1,4 +1,4 @@
-import { state } from '@libs/api'
+import { state } from '@main/api'
 import { channels } from '@shared/constants'
 import { credentialsSchema } from '@shared/schemas'
 import { verify } from 'argon2'
