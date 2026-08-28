@@ -1,0 +1,290 @@
+import type { DashboardSourceMetadata } from '@renderer/data/adminDashboard'
+import {
+  useEffect,
+  useRef,
+  useState,
+  type PropsWithChildren,
+  type ReactElement,
+  type RefObject
+} from 'react'
+import type { IconType } from 'react-icons'
+import { FiArchive, FiGrid, FiMenu, FiRefreshCw, FiShoppingBag, FiTruck, FiX } from 'react-icons/fi'
+
+const navigation: Array<{ label: string; href: string; icon: IconType }> = [
+  { label: 'Overview', href: '#overview', icon: FiGrid },
+  { label: 'Inventory alerts', href: '#inventory-alerts', icon: FiArchive },
+  { label: 'Sales activity', href: '#sales-activity', icon: FiShoppingBag },
+  { label: 'Operations', href: '#operations', icon: FiTruck }
+]
+
+const dateFormatter = new Intl.DateTimeFormat('en-PH', {
+  weekday: 'long',
+  month: 'long',
+  day: 'numeric',
+  year: 'numeric'
+})
+
+const timeFormatter = new Intl.DateTimeFormat('en-PH', {
+  hour: 'numeric',
+  minute: '2-digit'
+})
+
+interface DashboardShellProps extends PropsWithChildren {
+  source: DashboardSourceMetadata | null
+  isRefreshing: boolean
+  onRefresh: VoidFunction
+}
+
+function Sidebar({
+  activeHref,
+  onNavigate,
+  onClose,
+  closeButtonRef
+}: {
+  activeHref: string
+  onNavigate: (href: string) => void
+  onClose?: VoidFunction
+  closeButtonRef?: RefObject<HTMLButtonElement | null>
+}): ReactElement {
+  return (
+    <div className="flex h-full flex-col bg-slate-950 text-slate-300">
+      <div className="flex h-20 items-center justify-between gap-3 border-b border-white/10 px-5">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-blue-600 text-2xl font-semibold text-white shadow-lg shadow-blue-950/40">
+            +
+          </div>
+          <div className="min-w-0">
+            <p className="truncate font-semibold tracking-tight text-white">Med Prix</p>
+            <p className="truncate text-xs text-slate-400">Pharmacy management</p>
+          </div>
+        </div>
+        {onClose && (
+          <button
+            ref={closeButtonRef}
+            type="button"
+            aria-label="Close navigation"
+            onClick={onClose}
+            className="grid size-9 shrink-0 place-items-center rounded-lg text-slate-400 transition hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:outline-none"
+          >
+            <FiX aria-hidden="true" />
+          </button>
+        )}
+      </div>
+      <nav className="flex-1 space-y-1 px-3 py-6" aria-label="Dashboard sections">
+        <p className="px-3 pb-2 text-[0.65rem] font-semibold tracking-[0.18em] text-slate-500 uppercase">
+          Workspace
+        </p>
+        {navigation.map(({ label, href, icon: Icon }) => {
+          const isActive = activeHref === href
+
+          return (
+            <a
+              key={href}
+              href={href}
+              aria-current={isActive ? 'location' : undefined}
+              onClick={() => onNavigate(href)}
+              className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
+                isActive
+                  ? 'bg-blue-600 text-white shadow-lg shadow-blue-950/30'
+                  : 'hover:bg-white/10 hover:text-white'
+              }`}
+            >
+              <Icon className="size-4.5 shrink-0" aria-hidden="true" />
+              <span>{label}</span>
+            </a>
+          )
+        })}
+      </nav>
+      <div className="border-t border-white/10 p-4">
+        <div className="rounded-xl bg-white/5 p-3">
+          <div className="flex items-center gap-3">
+            <div className="grid size-9 place-items-center rounded-full bg-slate-800 text-xs font-semibold text-white">
+              AD
+            </div>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-medium text-white">Admin workspace</p>
+              <p className="text-xs text-slate-400">Preview session</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export default function DashboardShell({
+  children,
+  source,
+  isRefreshing,
+  onRefresh
+}: DashboardShellProps): ReactElement {
+  const [isNavigationOpen, setIsNavigationOpen] = useState(false)
+  const [activeHref, setActiveHref] = useState(navigation[0].href)
+  const navigationButtonRef = useRef<HTMLButtonElement>(null)
+  const closeButtonRef = useRef<HTMLButtonElement>(null)
+  const mobileNavigationRef = useRef<HTMLElement>(null)
+  const generatedAt = source ? new Date(source.generatedAt) : new Date()
+
+  const closeNavigation = (): void => setIsNavigationOpen(false)
+  const navigateFromDrawer = (href: string): void => {
+    setActiveHref(href)
+    setIsNavigationOpen(false)
+  }
+
+  useEffect(() => {
+    const sections = navigation
+      .map(({ href }) => document.querySelector(href))
+      .filter((section): section is Element => section !== null)
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visibleEntry = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((first, second) => second.intersectionRatio - first.intersectionRatio)[0]
+
+        if (visibleEntry?.target.id) {
+          setActiveHref(`#${visibleEntry.target.id}`)
+        }
+      },
+      { rootMargin: '-20% 0px -65% 0px', threshold: [0, 0.25, 0.5] }
+    )
+
+    sections.forEach((section) => observer.observe(section))
+
+    return () => observer.disconnect()
+  }, [source])
+
+  useEffect(() => {
+    if (!isNavigationOpen) {
+      return
+    }
+
+    const previousOverflow = document.body.style.overflow
+    const navigationButton = navigationButtonRef.current
+    const focusFrame = window.requestAnimationFrame(() => closeButtonRef.current?.focus())
+    const handleDrawerKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') {
+        setIsNavigationOpen(false)
+        return
+      }
+
+      if (event.key !== 'Tab') {
+        return
+      }
+
+      const focusableElements = mobileNavigationRef.current?.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled])'
+      )
+      const firstElement = focusableElements?.[0]
+      const lastElement = focusableElements?.[focusableElements.length - 1]
+
+      if (!firstElement || !lastElement) {
+        return
+      }
+
+      if (event.shiftKey && document.activeElement === firstElement) {
+        event.preventDefault()
+        lastElement.focus()
+      } else if (!event.shiftKey && document.activeElement === lastElement) {
+        event.preventDefault()
+        firstElement.focus()
+      }
+    }
+
+    document.body.style.overflow = 'hidden'
+    window.addEventListener('keydown', handleDrawerKeyDown)
+
+    return () => {
+      window.cancelAnimationFrame(focusFrame)
+      document.body.style.overflow = previousOverflow
+      window.removeEventListener('keydown', handleDrawerKeyDown)
+      navigationButton?.focus()
+    }
+  }, [isNavigationOpen])
+
+  return (
+    <div className="admin-dashboard min-h-screen bg-slate-50 font-sans text-slate-950">
+      {isNavigationOpen && (
+        <>
+          <button
+            type="button"
+            aria-label="Close navigation"
+            className="fixed inset-0 z-40 bg-slate-950/50 backdrop-blur-[2px] xl:hidden"
+            onClick={closeNavigation}
+          />
+          <aside
+            ref={mobileNavigationRef}
+            id="dashboard-mobile-navigation"
+            role="dialog"
+            aria-label="Dashboard navigation"
+            aria-modal="true"
+            className="fixed inset-y-0 left-0 z-50 w-64 shadow-2xl xl:hidden"
+          >
+            <Sidebar
+              activeHref={activeHref}
+              onNavigate={navigateFromDrawer}
+              onClose={closeNavigation}
+              closeButtonRef={closeButtonRef}
+            />
+          </aside>
+        </>
+      )}
+      <aside className="fixed inset-y-0 left-0 z-50 hidden w-64 shadow-2xl xl:block">
+        <Sidebar activeHref={activeHref} onNavigate={setActiveHref} />
+      </aside>
+      <div className="min-w-0 xl:pl-64">
+        <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/90 backdrop-blur-xl">
+          <div className="flex h-20 items-center justify-between gap-4 px-4 sm:px-6 xl:px-8">
+            <div className="flex min-w-0 items-center gap-3">
+              <button
+                ref={navigationButtonRef}
+                type="button"
+                aria-label="Open navigation"
+                aria-controls="dashboard-mobile-navigation"
+                aria-expanded={isNavigationOpen}
+                onClick={() => setIsNavigationOpen(true)}
+                className="grid size-10 shrink-0 place-items-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:border-slate-300 hover:text-slate-950 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none xl:hidden"
+              >
+                <FiMenu aria-hidden="true" />
+              </button>
+              <div className="min-w-0">
+                <h1 className="truncate text-base font-semibold tracking-tight sm:text-lg">
+                  Admin dashboard
+                </h1>
+                <p className="hidden truncate text-xs text-slate-500 sm:block">
+                  {dateFormatter.format(generatedAt)}
+                </p>
+              </div>
+            </div>
+            <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+              {source && (
+                <span className="hidden items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-800 ring-1 ring-amber-200 sm:inline-flex">
+                  <span className="size-1.5 rounded-full bg-amber-500" aria-hidden="true" />
+                  {source.label}
+                </span>
+              )}
+              <span className="hidden text-xs text-slate-500 md:inline">
+                {source
+                  ? `Sample generated ${timeFormatter.format(generatedAt)}`
+                  : 'Preparing preview'}
+              </span>
+              <button
+                type="button"
+                aria-label="Refresh demo dashboard data"
+                onClick={onRefresh}
+                disabled={isRefreshing}
+                className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none disabled:cursor-wait disabled:opacity-60"
+              >
+                <FiRefreshCw
+                  className={`size-4 ${isRefreshing ? 'animate-spin' : ''}`}
+                  aria-hidden="true"
+                />
+                <span className="hidden sm:inline">Refresh sample</span>
+              </button>
+            </div>
+          </div>
+        </header>
+        <main className="mx-auto w-full max-w-[100rem] p-4 sm:p-6 xl:p-8">{children}</main>
+      </div>
+    </div>
+  )
+}
