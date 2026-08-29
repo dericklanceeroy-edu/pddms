@@ -20,9 +20,9 @@ declare module '@tanstack/react-router' {
 
 const theme = createTheme({
   button: {
-    base: 'cursor-pointer',
+    base: 'cursor-pointer transition-colors focus:ring-2 focus:ring-mauve-200',
     color: {
-      primary: 'rounded bg-mauve-600 text-white'
+      primary: 'rounded-xl bg-mauve-700 text-white hover:bg-mauve-800'
     }
   },
   label: {
@@ -40,11 +40,11 @@ const theme = createTheme({
           md: 'px-4 py-2'
         },
         colors: {
-          primary: 'bg-neutral-100 border-none focus:ring-amber-500 focus:ring-2'
+          primary: 'bg-neutral-100 border-none focus:ring-mauve-300 focus:ring-2'
         },
         withAddon: {
-          on: 'rounded-r',
-          off: 'rounded'
+          on: 'rounded-r-xl',
+          off: 'rounded-xl'
         }
       }
     }

@@ -1,4 +1,5 @@
 import Form from '@renderer/components/Form/Form'
+import { CenteredPage, CenteredPageHeader } from '@renderer/components/layout/CenteredPage'
 import { Credentials } from '@shared/types'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { Button } from 'flowbite-react'
@@ -12,17 +13,18 @@ function RouteComponent() {
   const navigate = useNavigate()
 
   return (
-    <div className="mx-auto flex min-h-screen w-fit flex-col justify-center gap-4">
-      <header className="text-center">
-        <h1 className="text-xl font-semibold">Sign in to your account</h1>
-        <p className="text-neutral-500">
-          If you encounter any issues contact the{' '}
-          <Link to={'*' as any} className="text-sky-800 underline">
-            master
-          </Link>{' '}
-          account.
-        </p>
-      </header>
+    <CenteredPage>
+      <CenteredPageHeader
+        title="Sign in to your account"
+        description="Use your assigned pharmacy account."
+      />
+      <p className="mb-5 text-center text-sm text-neutral-500">
+        If you encounter any issues contact the{' '}
+        <Link to="/users" className="font-medium text-mauve-700 underline">
+          master
+        </Link>{' '}
+        account.
+      </p>
       <Form<Credentials>
         onSubmit={() => {
           navigate({ to: '/' })
@@ -41,6 +43,6 @@ function RouteComponent() {
           Continue
         </Button>
       </Form>
-    </div>
+    </CenteredPage>
   )
 }

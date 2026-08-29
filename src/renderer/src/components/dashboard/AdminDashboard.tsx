@@ -18,11 +18,11 @@ function SectionHeading({
 }): ReactElement {
   return (
     <div>
-      <p className="text-[0.68rem] font-semibold tracking-[0.17em] text-blue-700 uppercase">
+      <p className="text-[0.68rem] font-semibold tracking-[0.17em] text-mauve-700 uppercase">
         {eyebrow}
       </p>
-      <h2 className="mt-1 text-xl font-semibold tracking-tight text-slate-950">{title}</h2>
-      <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">{description}</p>
+      <h2 className="mt-1 text-xl font-semibold tracking-tight text-neutral-950">{title}</h2>
+      <p className="mt-1 max-w-2xl text-sm leading-6 text-neutral-500">{description}</p>
     </div>
   )
 }
@@ -32,20 +32,20 @@ function DashboardLoading(): ReactElement {
     <div aria-busy="true" aria-label="Loading dashboard" className="animate-pulse space-y-8">
       <span className="sr-only">Loading dashboard data.</span>
       <div className="space-y-3">
-        <div className="h-3 w-28 rounded bg-slate-200" />
-        <div className="h-8 w-72 max-w-full rounded-lg bg-slate-200" />
-        <div className="h-4 w-[32rem] max-w-full rounded bg-slate-200" />
+        <div className="h-3 w-28 rounded bg-neutral-200" />
+        <div className="h-8 w-72 max-w-full rounded-lg bg-neutral-200" />
+        <div className="h-4 w-[32rem] max-w-full rounded bg-neutral-200" />
       </div>
-      <div className="h-16 rounded-2xl bg-slate-200/80" />
+      <div className="h-16 rounded-2xl bg-neutral-200/80" />
       <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
         {Array.from({ length: 4 }, (_, index) => (
-          <div key={index} className="h-48 rounded-2xl bg-slate-200/80" />
+          <div key={index} className="h-48 rounded-2xl bg-neutral-200/80" />
         ))}
       </div>
       <div className="grid gap-5 min-[1500px]:grid-cols-2 min-[1840px]:grid-cols-3">
-        <div className="h-96 rounded-2xl bg-slate-200/80" />
-        <div className="h-96 rounded-2xl bg-slate-200/80" />
-        <div className="h-96 rounded-2xl bg-slate-200/80 min-[1500px]:col-span-2 min-[1840px]:col-span-1" />
+        <div className="h-96 rounded-2xl bg-neutral-200/80" />
+        <div className="h-96 rounded-2xl bg-neutral-200/80" />
+        <div className="h-96 rounded-2xl bg-neutral-200/80 min-[1500px]:col-span-2 min-[1840px]:col-span-1" />
       </div>
     </div>
   )
@@ -67,12 +67,12 @@ function DashboardError({
         <div className="mx-auto grid size-12 place-items-center rounded-full bg-rose-50 text-rose-600">
           <FiAlertCircle className="size-5" aria-hidden="true" />
         </div>
-        <h2 className="mt-4 text-lg font-semibold text-slate-950">Dashboard unavailable</h2>
-        <p className="mt-2 text-sm leading-6 text-slate-500">{message}</p>
+        <h2 className="mt-4 text-lg font-semibold text-neutral-950">Dashboard unavailable</h2>
+        <p className="mt-2 text-sm leading-6 text-neutral-500">{message}</p>
         <button
           type="button"
           onClick={retry}
-          className="mt-5 inline-flex h-10 items-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:outline-none"
+          className="mt-5 inline-flex h-10 items-center gap-2 rounded-xl bg-mauve-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-mauve-700 focus-visible:ring-2 focus-visible:ring-mauve-500 focus-visible:ring-offset-2 focus-visible:outline-none"
         >
           <FiRefreshCw aria-hidden="true" />
           Try again
@@ -111,30 +111,19 @@ export default function AdminDashboard(): ReactElement {
           <section id="overview" className="scroll-mt-28 space-y-6">
             <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
               <div>
-                <p className="text-[0.68rem] font-semibold tracking-[0.17em] text-blue-700 uppercase">
-                  Sample overview
-                </p>
-                <h2 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">
-                  Med Prix dashboard preview
+                <h2 className="mt-1 text-2xl font-semibold tracking-tight text-neutral-950 sm:text-3xl">
+                  Dashboard
                 </h2>
-                <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-                  Monitor sales performance, inventory risk, and operational work from one view.
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-neutral-500">
+                  Lorem ipsum dolor sit amet, consectetur adipiscing elit.
                 </p>
               </div>
-              <div className="inline-flex w-fit items-center gap-2 rounded-full bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 ring-1 ring-blue-100">
-                <span className="size-2 rounded-full bg-blue-500" aria-hidden="true" />
+              <div className="inline-flex w-fit items-center gap-2 rounded-full bg-mauve-50 px-3 py-1.5 text-xs font-medium text-mauve-700 ring-1 ring-mauve-100">
+                <span className="size-2 rounded-full bg-mauve-500" aria-hidden="true" />
                 Demo snapshot loaded
               </div>
             </div>
-            <div
-              role="note"
-              className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm text-amber-900"
-            >
-              <FiInfo className="mt-0.5 shrink-0" aria-hidden="true" />
-              <p className="leading-6">
-                <span className="font-semibold">Preview mode.</span> {data.source.message}
-              </p>
-            </div>
+
             <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
               {data.summaryMetrics.map((metric) => (
                 <SummaryCard key={metric.id} metric={metric} />
@@ -142,11 +131,6 @@ export default function AdminDashboard(): ReactElement {
             </div>
           </section>
           <section id="inventory-alerts" className="scroll-mt-28 space-y-5">
-            <SectionHeading
-              eyebrow="Inventory health"
-              title="Act before stock becomes a loss"
-              description="Prioritize short-dated batches and products that have crossed their reorder level."
-            />
             <div className="grid gap-5 min-[1500px]:grid-cols-2 min-[1840px]:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(17rem,0.78fr)]">
               <ExpiryWatchlist alerts={data.expiryAlerts} />
               <LowStockWatchlist alerts={data.lowStockAlerts} />
@@ -156,19 +140,9 @@ export default function AdminDashboard(): ReactElement {
             </div>
           </section>
           <section id="sales-activity" className="scroll-mt-28 space-y-5">
-            <SectionHeading
-              eyebrow="Sales activity"
-              title="Recent transaction preview"
-              description="Inspect the sample receipt totals, customer discounts, and cashier activity layout."
-            />
             <RecentTransactions transactions={data.recentTransactions} />
           </section>
           <section id="operations" className="scroll-mt-28 space-y-5 pb-2">
-            <SectionHeading
-              eyebrow="Operations"
-              title="Work that needs management attention"
-              description="Preview procurement deadlines, stock valuation, and open inventory alerts."
-            />
             <OperationsPulse items={data.operationsPulse} />
           </section>
         </div>

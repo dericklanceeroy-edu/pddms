@@ -27,7 +27,7 @@ const timeFormatter = new Intl.DateTimeFormat('en-PH', {
 const severityStyles: Record<DashboardAlertSeverity, string> = {
   critical: 'bg-rose-50 text-rose-700 ring-rose-100',
   warning: 'bg-amber-50 text-amber-700 ring-amber-100',
-  watch: 'bg-blue-50 text-blue-700 ring-blue-100'
+  watch: 'bg-mauve-50 text-mauve-700 ring-mauve-100'
 }
 
 const severityLabels: Record<DashboardAlertSeverity, string> = {
@@ -52,19 +52,19 @@ function PanelHeader({
   tone: string
 }): ReactElement {
   return (
-    <header className="flex items-start justify-between gap-4 border-b border-slate-100 px-5 py-5 sm:px-6">
+    <header className="flex items-start justify-between gap-4 border-b border-neutral-100 px-5 py-5 sm:px-6">
       <div className="flex min-w-0 gap-3">
         <div className={`grid size-10 shrink-0 place-items-center rounded-xl ${tone}`}>
           <Icon className="size-4.5" aria-hidden="true" />
         </div>
         <div className="min-w-0">
-          <h3 id={headingId} className="font-semibold tracking-tight text-slate-950">
+          <h3 id={headingId} className="font-semibold tracking-tight text-neutral-950">
             {title}
           </h3>
-          <p className="mt-0.5 text-xs leading-5 text-slate-500">{description}</p>
+          <p className="mt-0.5 text-xs leading-5 text-neutral-500">{description}</p>
         </div>
       </div>
-      <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
+      <span className="rounded-full bg-neutral-100 px-2.5 py-1 text-xs font-semibold text-neutral-600">
         {count}
       </span>
     </header>
@@ -78,8 +78,8 @@ function EmptyTable({ colSpan, label }: { colSpan: number; label: string }): Rea
         <div className="mx-auto grid size-10 place-items-center rounded-full bg-emerald-50 text-emerald-600">
           <FiClock className="size-4" aria-hidden="true" />
         </div>
-        <p className="mt-3 text-sm font-medium text-slate-700">{label}</p>
-        <p className="mt-1 text-xs text-slate-500">New records will appear here automatically.</p>
+        <p className="mt-3 text-sm font-medium text-neutral-700">{label}</p>
+        <p className="mt-1 text-xs text-neutral-500">New records will appear here automatically.</p>
       </td>
     </tr>
   )
@@ -97,7 +97,7 @@ function SeverityPill({ severity }: { severity: DashboardAlertSeverity }): React
 
 export function ExpiryWatchlist({ alerts }: { alerts: DashboardExpiryAlert[] }): ReactElement {
   return (
-    <article className="min-w-0 overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
+    <article className="min-w-0 overflow-hidden rounded-2xl border border-neutral-200/80 bg-white shadow-sm">
       <PanelHeader
         title="Expiry watchlist"
         description="Sample batches within the next 90 days"
@@ -111,7 +111,7 @@ export function ExpiryWatchlist({ alerts }: { alerts: DashboardExpiryAlert[] }):
           aria-labelledby="expiry-watchlist-title"
           className="w-full min-w-[35rem] text-left text-sm"
         >
-          <thead className="bg-slate-50/80 text-[0.68rem] tracking-wide text-slate-500 uppercase">
+          <thead className="bg-neutral-50/80 text-[0.68rem] tracking-wide text-neutral-500 uppercase">
             <tr>
               <th scope="col" className="px-5 py-3 font-semibold sm:px-6">
                 Product
@@ -130,22 +130,22 @@ export function ExpiryWatchlist({ alerts }: { alerts: DashboardExpiryAlert[] }):
               </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody className="divide-y divide-neutral-100">
             {alerts.length === 0 ? (
               <EmptyTable colSpan={5} label="No batches are nearing expiry." />
             ) : (
               alerts.map((alert) => (
-                <tr key={alert.id} className="transition-colors hover:bg-slate-50/70">
-                  <th scope="row" className="px-5 py-4 font-medium text-slate-800 sm:px-6">
+                <tr key={alert.id} className="transition-colors hover:bg-neutral-50/70">
+                  <th scope="row" className="px-5 py-4 font-medium text-neutral-800 sm:px-6">
                     {alert.productName}
                   </th>
-                  <td className="px-4 py-4 font-mono text-xs text-slate-500">
+                  <td className="px-4 py-4 font-mono text-xs text-neutral-500">
                     {alert.batchNumber}
                   </td>
-                  <td className="px-4 py-4 text-right font-medium text-slate-700 tabular-nums">
+                  <td className="px-4 py-4 text-right font-medium text-neutral-700 tabular-nums">
                     {alert.stockRemaining}
                   </td>
-                  <td className="px-4 py-4 whitespace-nowrap text-slate-600">
+                  <td className="px-4 py-4 whitespace-nowrap text-neutral-600">
                     {dateFormatter.format(new Date(alert.expiresAt))}
                   </td>
                   <td className="px-5 py-4 text-right sm:px-6">
@@ -163,7 +163,7 @@ export function ExpiryWatchlist({ alerts }: { alerts: DashboardExpiryAlert[] }):
 
 export function LowStockWatchlist({ alerts }: { alerts: DashboardLowStockAlert[] }): ReactElement {
   return (
-    <article className="min-w-0 overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
+    <article className="min-w-0 overflow-hidden rounded-2xl border border-neutral-200/80 bg-white shadow-sm">
       <PanelHeader
         title="Low-stock alert"
         description="Sample products below their reorder level"
@@ -177,7 +177,7 @@ export function LowStockWatchlist({ alerts }: { alerts: DashboardLowStockAlert[]
           aria-labelledby="low-stock-watchlist-title"
           className="w-full min-w-[34rem] text-left text-sm"
         >
-          <thead className="bg-slate-50/80 text-[0.68rem] tracking-wide text-slate-500 uppercase">
+          <thead className="bg-neutral-50/80 text-[0.68rem] tracking-wide text-neutral-500 uppercase">
             <tr>
               <th scope="col" className="px-5 py-3 font-semibold sm:px-6">
                 Product
@@ -196,13 +196,13 @@ export function LowStockWatchlist({ alerts }: { alerts: DashboardLowStockAlert[]
               </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody className="divide-y divide-neutral-100">
             {alerts.length === 0 ? (
               <EmptyTable colSpan={5} label="Every product is above its reorder level." />
             ) : (
               alerts.map((alert) => (
-                <tr key={alert.id} className="transition-colors hover:bg-slate-50/70">
-                  <th scope="row" className="px-5 py-4 font-medium text-slate-800 sm:px-6">
+                <tr key={alert.id} className="transition-colors hover:bg-neutral-50/70">
+                  <th scope="row" className="px-5 py-4 font-medium text-neutral-800 sm:px-6">
                     {alert.productName}
                   </th>
                   <td className="px-4 py-4 text-right">
@@ -210,10 +210,10 @@ export function LowStockWatchlist({ alerts }: { alerts: DashboardLowStockAlert[]
                       {alert.stockRemaining}
                     </span>
                   </td>
-                  <td className="px-4 py-4 text-right font-medium text-slate-700 tabular-nums">
+                  <td className="px-4 py-4 text-right font-medium text-neutral-700 tabular-nums">
                     {alert.reorderLevel}
                   </td>
-                  <td className="px-4 py-4 whitespace-nowrap text-slate-600">
+                  <td className="px-4 py-4 whitespace-nowrap text-neutral-600">
                     {dateFormatter.format(new Date(alert.lastRestockedAt))}
                   </td>
                   <td className="px-5 py-4 text-right sm:px-6">
@@ -235,21 +235,21 @@ export function RecentTransactions({
   transactions: DashboardRecentTransaction[]
 }): ReactElement {
   return (
-    <article className="min-w-0 overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
+    <article className="min-w-0 overflow-hidden rounded-2xl border border-neutral-200/80 bg-white shadow-sm">
       <PanelHeader
         title="Recent transactions"
         description="Sample completed pharmacy sales"
         headingId="recent-transactions-title"
         count={transactions.length}
         icon={FiShoppingBag}
-        tone="bg-blue-50 text-blue-700"
+        tone="bg-mauve-50 text-mauve-700"
       />
       <div className="overflow-x-auto">
         <table
           aria-labelledby="recent-transactions-title"
           className="w-full min-w-[58rem] text-left text-sm"
         >
-          <thead className="bg-slate-50/80 text-[0.68rem] tracking-wide text-slate-500 uppercase">
+          <thead className="bg-neutral-50/80 text-[0.68rem] tracking-wide text-neutral-500 uppercase">
             <tr>
               <th scope="col" className="px-5 py-3 font-semibold sm:px-6">
                 Receipt
@@ -274,7 +274,7 @@ export function RecentTransactions({
               </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody className="divide-y divide-neutral-100">
             {transactions.length === 0 ? (
               <EmptyTable colSpan={7} label="No transactions have been recorded yet." />
             ) : (
@@ -282,27 +282,27 @@ export function RecentTransactions({
                 const occurredAt = new Date(transaction.occurredAt)
 
                 return (
-                  <tr key={transaction.id} className="transition-colors hover:bg-slate-50/70">
-                    <th scope="row" className="px-5 py-4 font-semibold text-blue-700 sm:px-6">
+                  <tr key={transaction.id} className="transition-colors hover:bg-neutral-50/70">
+                    <th scope="row" className="px-5 py-4 font-semibold text-mauve-700 sm:px-6">
                       {transaction.id}
                     </th>
                     <td className="px-4 py-4 whitespace-nowrap">
-                      <p className="font-medium text-slate-700">
+                      <p className="font-medium text-neutral-700">
                         {dateFormatter.format(occurredAt)}
                       </p>
-                      <p className="mt-0.5 text-xs text-slate-500">
+                      <p className="mt-0.5 text-xs text-neutral-500">
                         {timeFormatter.format(occurredAt)}
                       </p>
                     </td>
-                    <td className="px-4 py-4 text-slate-600">{transaction.cashierName}</td>
-                    <td className="px-4 py-4 text-right font-medium text-slate-700 tabular-nums">
+                    <td className="px-4 py-4 text-neutral-600">{transaction.cashierName}</td>
+                    <td className="px-4 py-4 text-right font-medium text-neutral-700 tabular-nums">
                       {transaction.itemCount}
                     </td>
                     <td className="px-4 py-4">
                       <span
                         className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${
                           transaction.discountType === 'None'
-                            ? 'bg-slate-100 text-slate-600'
+                            ? 'bg-neutral-100 text-neutral-600'
                             : 'bg-emerald-50 text-emerald-700'
                         }`}
                       >
@@ -314,7 +314,7 @@ export function RecentTransactions({
                         {transaction.paymentMethod}
                       </span>
                     </td>
-                    <td className="px-5 py-4 text-right font-semibold whitespace-nowrap text-slate-900 tabular-nums sm:px-6">
+                    <td className="px-5 py-4 text-right font-semibold whitespace-nowrap text-neutral-900 tabular-nums sm:px-6">
                       {currencyFormatter.format(transaction.amount)}
                     </td>
                   </tr>

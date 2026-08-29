@@ -35,7 +35,7 @@ const presentation: Record<
   'daily-sales': {
     icon: FiDollarSign,
     color: '#2563eb',
-    iconClassName: 'bg-blue-50 text-blue-600 ring-blue-100',
+    iconClassName: 'bg-mauve-50 text-mauve-600 ring-mauve-100',
     positiveDirection: 'up'
   },
   'items-sold': {
@@ -109,13 +109,13 @@ export default function SummaryCard({ metric }: { metric: DashboardSummaryMetric
   const isPositive = config.positiveDirection === metric.trend.direction
   const trendClassName =
     metric.trend.direction === 'flat'
-      ? 'bg-slate-100 text-slate-600'
+      ? 'bg-neutral-100 text-neutral-600'
       : isPositive
         ? 'bg-emerald-50 text-emerald-700'
         : 'bg-rose-50 text-rose-700'
 
   return (
-    <article className="group min-w-0 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-slate-200/60">
+    <article className="group hover:-translate-y-0.5 min-w-0 rounded-2xl border border-neutral-200/80 bg-white p-5 shadow-sm transition duration-200 hover:shadow-lg hover:shadow-neutral-200/60">
       <div className="flex items-start justify-between gap-3">
         <div
           className={`grid size-10 place-items-center rounded-xl ring-1 ${config.iconClassName}`}
@@ -125,8 +125,8 @@ export default function SummaryCard({ metric }: { metric: DashboardSummaryMetric
         <Sparkline values={metric.sparkline} color={config.color} />
       </div>
       <div className="mt-4">
-        <p className="text-sm font-medium text-slate-500">{metric.label}</p>
-        <p className="mt-1 text-2xl font-semibold tracking-tight text-slate-950 sm:text-[1.7rem]">
+        <p className="text-sm font-medium text-neutral-500">{metric.label}</p>
+        <p className="mt-1 text-2xl font-semibold tracking-tight text-neutral-950 sm:text-[1.7rem]">
           {formatMetric(metric)}
         </p>
       </div>
@@ -137,7 +137,7 @@ export default function SummaryCard({ metric }: { metric: DashboardSummaryMetric
           <TrendIcon className="size-3" aria-hidden="true" />
           {metric.trend.direction === 'flat' ? 'Stable' : `${metric.trend.percentage}%`}
         </span>
-        <span className="truncate text-slate-500">{metric.trend.label}</span>
+        <span className="truncate text-neutral-500">{metric.trend.label}</span>
       </div>
     </article>
   )

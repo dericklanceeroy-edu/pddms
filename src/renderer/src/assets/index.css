@@ -1,3 +1,46 @@
 @import 'tailwindcss';
 @import 'flowbite-react/plugin/tailwindcss';
 @source '../../../../.flowbite-react/class-list.json';
+
+@theme {
+  --font-sans: Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+@layer base {
+  body {
+    @apply m-0 bg-neutral-50 text-neutral-950 antialiased;
+  }
+
+  button,
+  a,
+  input,
+  select {
+    @apply focus-visible:outline-none;
+  }
+}
+
+@layer components {
+  .panel {
+    @apply rounded-2xl border border-neutral-200 bg-white shadow-sm;
+  }
+
+  .field {
+    @apply mt-2 w-full rounded-xl border border-neutral-200 bg-neutral-100 px-3.5 py-2.5 text-sm transition outline-none focus:border-mauve-400 focus:bg-white focus:ring-2 focus:ring-mauve-200;
+  }
+
+  .eyebrow {
+    @apply text-[0.68rem] font-semibold tracking-[0.17em] text-mauve-700 uppercase;
+  }
+
+  .primary-button {
+    @apply inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-mauve-700 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-mauve-800 focus-visible:ring-2 focus-visible:ring-mauve-300 focus-visible:ring-offset-2;
+  }
+
+  .secondary-button {
+    @apply rounded-xl border border-neutral-200 bg-white px-3 py-2 font-medium text-neutral-600 transition hover:bg-neutral-100 focus-visible:ring-2 focus-visible:ring-mauve-200;
+  }
+
+  .icon-button {
+    @apply grid size-9 place-items-center rounded-xl border border-neutral-200 bg-white text-neutral-600 transition hover:bg-neutral-100 focus-visible:ring-2 focus-visible:ring-mauve-200;
+  }
+}

@@ -1,3 +1,4 @@
+import { CenteredPageHeader } from '@renderer/components/layout/CenteredPage'
 import { useDelay } from '@renderer/hooks/useDelay'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { Button } from 'flowbite-react'
@@ -25,12 +26,9 @@ function RouteComponent() {
   }, transition.duration!)
 
   return (
-    <div className="space-y-4">
-      <header className="text-center">
-        <h1 className="text-xl font-semibold">You're all set!</h1>
-        <p className="text-neutral-500">You may now use the application.</p>
-      </header>
-      <Button as={Link} to="/" className="bg-transparent! p-0 outline-none focus:ring-0">
+    <div>
+      <CenteredPageHeader title="You're all set!" description="You may now use the application." />
+      <Button as={Link} to="/" className="w-full bg-transparent! p-0 outline-none focus:ring-0">
         <motion.div
           animate={animate}
           transition={transition}
