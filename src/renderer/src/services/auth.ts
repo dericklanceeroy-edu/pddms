@@ -1,5 +1,5 @@
 import { channels } from '@shared/constants'
-import type { Account, AccountWithoutPassword, Credentials } from '@shared/types'
+import type { AccountWithoutPassword, Credentials } from '@shared/types'
 
 export interface AuthActionResult {
   success: boolean
@@ -9,7 +9,14 @@ export interface AuthActionResult {
 
 interface SignInResponse {
   success: boolean
-  account?: Account
+  account?: AccountWithoutPassword
+  error?: string
+}
+
+interface AuthStatusResponse {
+  success: boolean
+  hasAccounts?: boolean
+  account?: AccountWithoutPassword | null
   error?: string
 }
 
@@ -18,14 +25,23 @@ interface SignOutResponse {
   error?: string
 }
 
-const getPublicAccount = (account: Account): AccountWithoutPassword => ({
-  id: account.id,
-  role: account.role,
-  username: account.username,
-  isArchived: account.isArchived,
-  createdAt: account.createdAt,
-  updatedAt: account.updatedAt
-})
+export interface AuthStatusResult extends AuthActionResult {
+  hasAccounts?: boolean
+}
+
+export async function getAuthStatus(): Promise<AuthStatusResult> {
+  try {
+    const response = (await window.electron.ipcRenderer.invoke(
+      channels.auth.getStatus
+    )) as AuthStatusResponse
+
+    return response.success
+      ? { success: true, hasAccounts: response.hasAccounts, account: response.account ?? undefined }
+      : { success: false, error: response.error }
+  } catch {
+    return { success: false, error: 'Unable to check the authentication service.' }
+  }
+}
 
 export async function signIn(credentials: Credentials): Promise<AuthActionResult> {
   try {
@@ -38,7 +54,7 @@ export async function signIn(credentials: Credentials): Promise<AuthActionResult
       return { success: false, error: response.error }
     }
 
-    return { success: true, account: getPublicAccount(response.account) }
+    return { success: true, account: response.account }
   } catch {
     return {
       success: false,
