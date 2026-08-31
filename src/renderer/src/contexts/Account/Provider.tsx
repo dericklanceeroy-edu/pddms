@@ -10,26 +10,26 @@ import { AccountContext } from './Context'
 
 export default function AccountProvider({ children }: PropsWithChildren): ReactElement {
   const [account, setAccount] = useState<AccountWithoutPassword | null>(null)
-  const [hasAccounts, setHasAccounts] = useState<boolean | null>(null)
+  const [isInitializing, setIsInitializing] = useState(true)
   const [statusError, setStatusError] = useState('')
   const path = useRouterState({ select: (state) => state.location.pathname })
 
   useEffect(() => {
     void getAuthStatus().then((result) => {
-      if (!result.success || result.hasAccounts === undefined) {
+      if (!result.success) {
         setStatusError(result.error ?? 'Unable to initialize authentication.')
+        setIsInitializing(false)
         return
       }
 
-      setHasAccounts(result.hasAccounts)
       setAccount(result.account ?? null)
+      setIsInitializing(false)
     })
   }, [])
 
   const value = useMemo(
     () => ({
       account,
-      completeSetup: () => setHasAccounts(true),
       signIn: async (credentials: Credentials) => {
         const result = await requestSignIn(credentials)
         if (result.success && result.account) setAccount(result.account)
@@ -57,7 +57,7 @@ export default function AccountProvider({ children }: PropsWithChildren): ReactE
     )
   }
 
-  if (hasAccounts === null) {
+  if (isInitializing) {
     return (
       <main className="grid min-h-screen place-items-center bg-neutral-50 text-sm text-neutral-500">
         Starting Med Prix…
@@ -67,12 +67,9 @@ export default function AccountProvider({ children }: PropsWithChildren): ReactE
 
   const isSetupRoute = path === '/new' || path.startsWith('/new/')
 
-  if (!hasAccounts && !isSetupRoute) return <Navigate to="/new" replace />
-  if (hasAccounts && !account && isSetupRoute && path !== '/new/completion')
-    return <Navigate to="/signIn" replace />
-  if (hasAccounts && !account && path !== '/signIn' && path !== '/new/completion')
-    return <Navigate to="/signIn" replace />
-  if (account && (path === '/signIn' || isSetupRoute)) return <Navigate to="/" replace />
+  if (isSetupRoute) return <Navigate to={account ? '/' : '/signIn'} replace />
+  if (!account && path !== '/signIn') return <Navigate to="/signIn" replace />
+  if (account && path === '/signIn') return <Navigate to="/" replace />
 
   return <AccountContext value={value}>{children}</AccountContext>
 }
