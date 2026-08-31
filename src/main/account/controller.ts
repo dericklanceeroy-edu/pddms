@@ -1,11 +1,12 @@
 import { accessControl, authorize } from '@main/access-control'
-import { channels, resources } from '@shared/constants'
+import { channels, resources, roles } from '@shared/constants'
 import { accountUpdateSchema, newAccountSchema } from '@shared/schemas'
 import { isId } from '@shared/validators'
 import { hash } from 'argon2'
 import { ipcMain } from 'electron'
 import {
   archiveOneById,
+  countAll,
   findOneById,
   findOneByUsername,
   insertOne,
@@ -14,9 +15,14 @@ import {
 
 ipcMain.handle(channels.account.createOne, async (_, payload: unknown) => {
   try {
-    authorize((session) => accessControl.can(session.account.role).createAny(resources.account))
-
     const data = newAccountSchema.parse(payload)
+    const isFirstAccount = (await countAll()) === 0
+
+    if (isFirstAccount) {
+      if (data.role !== roles.master) return { success: false }
+    } else {
+      authorize((session) => accessControl.can(session.account.role).createAny(resources.account))
+    }
 
     const newAccount = await insertOne({
       ...data,
