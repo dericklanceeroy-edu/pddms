@@ -7,6 +7,7 @@ export const channels = {
     archiveOneById: 'account.archiveOneById'
   },
   auth: {
+    getStatus: 'auth.getStatus',
     signIn: 'auth.signIn',
     signOut: 'auth.signOut'
   }
