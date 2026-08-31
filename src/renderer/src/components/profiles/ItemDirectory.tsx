@@ -3,7 +3,7 @@ import { getItemStock, getStockStatus } from '@renderer/data/profiles'
 import { useProfileStore } from '@renderer/stores/useProfileStore'
 import { Link } from '@tanstack/react-router'
 import { useMemo, useState, type ReactElement } from 'react'
-import { FiArchive, FiChevronRight, FiSearch } from 'react-icons/fi'
+import { FiArchive, FiChevronRight, FiPlus, FiSearch } from 'react-icons/fi'
 
 const statusLabels = {
   'in-stock': 'In stock',
@@ -26,14 +26,19 @@ export default function ItemDirectory(): ReactElement {
   return (
     <DashboardShell pageTitle="Inventory">
       <div className="space-y-6">
-        <section>
-          <p className="eyebrow">Item profiles</p>
-          <h2 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">
-            Medicine catalog
-          </h2>
-          <p className="mt-2 text-sm text-neutral-500">
-            Review product details, generic equivalents, stock batches, pricing, and expiry dates.
-          </p>
+        <section className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+          <div>
+            <p className="eyebrow">Item profiles</p>
+            <h2 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">
+              Medicine catalog
+            </h2>
+            <p className="mt-2 text-sm text-neutral-500">
+              Review product details, generic equivalents, stock batches, pricing, and expiry dates.
+            </p>
+          </div>
+          <Link to="/items/$itemId" params={{ itemId: 'new' }} className="primary-button">
+            <FiPlus /> Add product
+          </Link>
         </section>
         <section className="panel overflow-hidden">
           <div className="border-b border-neutral-200 p-4">
