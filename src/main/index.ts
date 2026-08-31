@@ -1,8 +1,8 @@
 import { electronApp, is, optimizer } from '@electron-toolkit/utils'
 import { app, BrowserWindow, ipcMain, shell } from 'electron'
-import { join } from 'path'
+import { copyFileSync, existsSync, mkdirSync } from 'fs'
+import { dirname, isAbsolute, join, resolve } from 'path'
 import icon from '../../resources/icon.png?asset'
-import './auth/controller'
 
 function createWindow(): void {
   // Create the browser window.
@@ -39,7 +39,31 @@ function createWindow(): void {
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  const appDataPath = app.getPath('userData')
+  const databasePath = process.env.DATABASE ?? 'pddms.db'
+  const backupPath = process.env.DATABASE_BACKUP ?? 'pddms-backup.db'
+  const runtimeDatabasePath = isAbsolute(databasePath)
+    ? databasePath
+    : join(appDataPath, databasePath)
+
+  if (!isAbsolute(databasePath)) {
+    const legacyDatabasePath = resolve(databasePath)
+
+    if (!existsSync(runtimeDatabasePath) && existsSync(legacyDatabasePath)) {
+      mkdirSync(dirname(runtimeDatabasePath), { recursive: true })
+      copyFileSync(legacyDatabasePath, runtimeDatabasePath)
+    }
+  }
+
+  process.env.DATABASE = runtimeDatabasePath
+  process.env.DATABASE_BACKUP = isAbsolute(backupPath) ? backupPath : join(appDataPath, backupPath)
+
+  const { migrateDatabase } = await import('./migrations')
+  await migrateDatabase()
+  await import('./auth/controller')
+  await import('./account/controller')
+
   // Set app user model id for windows
   electronApp.setAppUserModelId('com.electron')
 
