@@ -1,26 +1,184 @@
 import DashboardShell from '@renderer/components/dashboard/DashboardShell'
 import { getItemStock, getStockStatus, type ItemProfile } from '@renderer/data/profiles'
 import { useProfileStore } from '@renderer/stores/useProfileStore'
-import { Link } from '@tanstack/react-router'
+import { Link, useNavigate } from '@tanstack/react-router'
 import { useState, type FormEvent, type ReactElement } from 'react'
-import { FiArrowLeft, FiEdit2, FiPackage } from 'react-icons/fi'
+import { FiArrowLeft, FiPackage, FiTrash2 } from 'react-icons/fi'
 
 const currency = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' })
 const date = new Intl.DateTimeFormat('en-PH', { dateStyle: 'medium' })
 
-export default function ItemProfileView({ item }: { item: ItemProfile }): ReactElement {
+const emptyItem: ItemProfile = {
+  id: 0,
+  genericName: '',
+  brandName: '',
+  category: '',
+  formulation: '',
+  prescriptionRequired: false,
+  controlled: false,
+  reorderLevel: 0,
+  genericEquivalentIds: [],
+  batches: []
+}
+
+export default function ItemProfileView({ item }: { item: ItemProfile | null }): ReactElement {
   const items = useProfileStore((state) => state.items)
-  const updateItem = useProfileStore((state) => state.updateItem)
-  const [draft, setDraft] = useState(item)
-  const [editing, setEditing] = useState(false)
+  const addItem = useProfileStore((state) => state.addItem)
+  const removeItem = useProfileStore((state) => state.removeItem)
+  const navigate = useNavigate()
+  const isNew = item === null
+  const [draft, setDraft] = useState<ItemProfile>(() =>
+    item ? item : { ...emptyItem, id: Date.now() }
+  )
+  const [error, setError] = useState('')
+  const [isSaving, setIsSaving] = useState(false)
+  const [confirmRemove, setConfirmRemove] = useState(false)
+  const [isRemoving, setIsRemoving] = useState(false)
+
+  if (isNew) {
+    const save = (event: FormEvent<HTMLFormElement>): void => {
+      event.preventDefault()
+      const genericName = draft.genericName.trim()
+      const brandName = draft.brandName.trim()
+      const category = draft.category.trim()
+      const formulation = draft.formulation.trim()
+
+      if (!genericName || !brandName || !category || !formulation) {
+        setError('Complete all required product details.')
+        return
+      }
+      if (
+        items.some(
+          (value) =>
+            value.brandName.toLowerCase() === brandName.toLowerCase() &&
+            value.formulation.toLowerCase() === formulation.toLowerCase()
+        )
+      ) {
+        setError('A product with this brand and formulation already exists.')
+        return
+      }
+
+      setIsSaving(true)
+      addItem({ ...draft, genericName, brandName, category, formulation })
+      void navigate({ to: '/items/$itemId', params: { itemId: String(draft.id) } })
+    }
+
+    return (
+      <DashboardShell pageTitle="New product">
+        <div className="space-y-6">
+          <Link
+            to="/inventory"
+            className="inline-flex items-center gap-2 text-sm font-medium text-neutral-500 hover:text-mauve-700"
+          >
+            <FiArrowLeft /> Back to inventory
+          </Link>
+          <form onSubmit={save} className="panel mx-auto max-w-3xl space-y-5 p-6">
+            <div>
+              <p className="eyebrow">Item details</p>
+              <h2 className="mt-1 text-2xl font-semibold">Add new product</h2>
+              <p className="mt-2 text-sm text-neutral-500">
+                Create the product profile. Stock is recorded separately through inventory batches.
+              </p>
+            </div>
+            <div className="grid gap-5 sm:grid-cols-2">
+              <Field label="Brand name">
+                <input
+                  required
+                  className="field"
+                  value={draft.brandName}
+                  onChange={(event) => setDraft({ ...draft, brandName: event.target.value })}
+                />
+              </Field>
+              <Field label="Generic name">
+                <input
+                  required
+                  className="field"
+                  value={draft.genericName}
+                  onChange={(event) => setDraft({ ...draft, genericName: event.target.value })}
+                />
+              </Field>
+              <Field label="Category">
+                <input
+                  required
+                  className="field"
+                  value={draft.category}
+                  onChange={(event) => setDraft({ ...draft, category: event.target.value })}
+                />
+              </Field>
+              <Field label="Formulation">
+                <input
+                  required
+                  className="field"
+                  placeholder="e.g. 500 mg tablet"
+                  value={draft.formulation}
+                  onChange={(event) => setDraft({ ...draft, formulation: event.target.value })}
+                />
+              </Field>
+              <Field label="Reorder level">
+                <input
+                  required
+                  type="number"
+                  min="0"
+                  step="1"
+                  className="field"
+                  value={draft.reorderLevel}
+                  onChange={(event) =>
+                    setDraft({ ...draft, reorderLevel: Number(event.target.value) })
+                  }
+                />
+              </Field>
+              <div className="flex flex-col justify-end gap-3 pb-2">
+                <label className="flex items-center gap-3 text-sm text-neutral-700">
+                  <input
+                    type="checkbox"
+                    checked={draft.prescriptionRequired}
+                    onChange={(event) =>
+                      setDraft({ ...draft, prescriptionRequired: event.target.checked })
+                    }
+                    className="size-4 rounded border-neutral-300 text-mauve-700"
+                  />
+                  Prescription required
+                </label>
+                <label className="flex items-center gap-3 text-sm text-neutral-700">
+                  <input
+                    type="checkbox"
+                    checked={draft.controlled}
+                    onChange={(event) => setDraft({ ...draft, controlled: event.target.checked })}
+                    className="size-4 rounded border-neutral-300 text-mauve-700"
+                  />
+                  Controlled medicine
+                </label>
+              </div>
+            </div>
+            {error && (
+              <p role="alert" className="rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                {error}
+              </p>
+            )}
+            <div className="flex justify-end gap-2 border-t border-neutral-100 pt-5">
+              <Link to="/inventory" className="secondary-button">
+                Cancel
+              </Link>
+              <button
+                disabled={isSaving}
+                className="primary-button disabled:cursor-wait disabled:opacity-60"
+              >
+                {isSaving ? 'Adding product…' : 'Add product'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </DashboardShell>
+    )
+  }
+
   const equivalents = items.filter((value) => item.genericEquivalentIds.includes(value.id))
   const stock = getItemStock(item)
   const status = getStockStatus(item)
-
-  const save = (event: FormEvent): void => {
-    event.preventDefault()
-    updateItem(draft)
-    setEditing(false)
+  const remove = (): void => {
+    setIsRemoving(true)
+    removeItem(item.id)
+    void navigate({ to: '/inventory' })
   }
 
   return (
@@ -38,7 +196,7 @@ export default function ItemProfileView({ item }: { item: ItemProfile }): ReactE
               <div className="flex flex-wrap items-center gap-2">
                 <p className="eyebrow">{item.category}</p>
                 <span
-                  className={`rounded-full px-2.5 py-1 text-xs font-medium ${status === 'in-stock' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}
+                  className={`rounded-full px-2.5 py-1 text-xs font-medium ${status === 'in-stock' ? 'bg-emerald-50 text-emerald-700' : status === 'low-stock' ? 'bg-amber-50 text-amber-700' : 'bg-rose-50 text-rose-700'}`}
                 >
                   {status.replaceAll('-', ' ')}
                 </span>
@@ -61,10 +219,10 @@ export default function ItemProfileView({ item }: { item: ItemProfile }): ReactE
               </div>
             </div>
             <button
-              onClick={() => setEditing(true)}
-              className="secondary-button inline-flex h-fit items-center gap-2"
+              onClick={() => setConfirmRemove(true)}
+              className="inline-flex h-fit items-center gap-2 rounded-xl border border-rose-200 bg-white px-3 py-2 font-medium text-rose-700 transition hover:bg-rose-50 focus-visible:ring-2 focus-visible:ring-rose-200"
             >
-              <FiEdit2 /> Edit profile
+              <FiTrash2 /> Remove product
             </button>
           </div>
         </section>
@@ -139,59 +297,72 @@ export default function ItemProfileView({ item }: { item: ItemProfile }): ReactE
           </div>
         </section>
       </div>
-      {editing && (
-        <div className="fixed inset-0 z-[70] grid place-items-center bg-neutral-950/55 p-4">
-          <form
-            onSubmit={save}
-            className="w-full max-w-lg space-y-4 rounded-2xl bg-white p-6 shadow-2xl"
-          >
-            <h2 className="text-xl font-semibold">Edit item profile</h2>
-            <label className="block text-sm font-medium">
-              Brand name
-              <input
-                className="field"
-                value={draft.brandName}
-                onChange={(event) => setDraft({ ...draft, brandName: event.target.value })}
-              />
-            </label>
-            <label className="block text-sm font-medium">
-              Generic name
-              <input
-                className="field"
-                value={draft.genericName}
-                onChange={(event) => setDraft({ ...draft, genericName: event.target.value })}
-              />
-            </label>
-            <label className="block text-sm font-medium">
-              Formulation
-              <input
-                className="field"
-                value={draft.formulation}
-                onChange={(event) => setDraft({ ...draft, formulation: event.target.value })}
-              />
-            </label>
-            <label className="block text-sm font-medium">
-              Reorder level
-              <input
-                type="number"
-                min="0"
-                className="field"
-                value={draft.reorderLevel}
-                onChange={(event) =>
-                  setDraft({ ...draft, reorderLevel: Number(event.target.value) })
-                }
-              />
-            </label>
-            <div className="flex justify-end gap-2 pt-3">
-              <button type="button" onClick={() => setEditing(false)} className="secondary-button">
-                Cancel
-              </button>
-              <button className="primary-button">Save changes</button>
-            </div>
-          </form>
-        </div>
+      {confirmRemove && (
+        <ConfirmationDialog
+          title="Remove product?"
+          description={`${item.brandName} will be removed from the product list. This action cannot be undone in this session.`}
+          confirmLabel={isRemoving ? 'Removing…' : 'Remove product'}
+          disabled={isRemoving}
+          close={() => setConfirmRemove(false)}
+          confirm={remove}
+        />
       )}
     </DashboardShell>
+  )
+}
+
+function Field({ label, children }: { label: string; children: ReactElement }): ReactElement {
+  return (
+    <label className="block text-sm font-medium text-neutral-700">
+      {label}
+      {children}
+    </label>
+  )
+}
+
+function ConfirmationDialog({
+  title,
+  description,
+  confirmLabel,
+  disabled,
+  close,
+  confirm
+}: {
+  title: string
+  description: string
+  confirmLabel: string
+  disabled: boolean
+  close: VoidFunction
+  confirm: VoidFunction
+}): ReactElement {
+  return (
+    <div className="fixed inset-0 z-[70] grid place-items-center bg-neutral-950/55 p-4 backdrop-blur-sm">
+      <button className="absolute inset-0" aria-label="Cancel removal" onClick={close} />
+      <section
+        role="alertdialog"
+        aria-modal="true"
+        className="relative z-10 w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
+      >
+        <h2 className="text-xl font-semibold">{title}</h2>
+        <p className="mt-2 text-sm leading-6 text-neutral-500">{description}</p>
+        <div className="mt-6 flex justify-end gap-2">
+          <button
+            disabled={disabled}
+            onClick={close}
+            className="secondary-button disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            disabled={disabled}
+            onClick={confirm}
+            className="rounded-xl bg-rose-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-rose-800 disabled:cursor-wait disabled:opacity-60"
+          >
+            {confirmLabel}
+          </button>
+        </div>
+      </section>
+    </div>
   )
 }
 
@@ -203,6 +374,7 @@ function Metric({ label, value }: { label: string; value: string }): ReactElemen
     </div>
   )
 }
+
 function Header({ title, description }: { title: string; description: string }): ReactElement {
   return (
     <header className="border-b border-neutral-200 p-5">
