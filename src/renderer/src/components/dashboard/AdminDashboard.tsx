@@ -1,31 +1,11 @@
 import { useAdminDashboard } from '@renderer/hooks/useAdminDashboard'
 import type { ReactElement } from 'react'
-import { FiAlertCircle, FiInfo, FiRefreshCw } from 'react-icons/fi'
+import { FiAlertCircle, FiRefreshCw } from 'react-icons/fi'
 import DashboardShell from './DashboardShell'
 import { ExpiryWatchlist, LowStockWatchlist, RecentTransactions } from './DashboardTables'
 import OperationsPulse from './OperationsPulse'
 import SalesCategoryChart from './SalesCategoryChart'
 import SummaryCard from './SummaryCard'
-
-function SectionHeading({
-  eyebrow,
-  title,
-  description
-}: {
-  eyebrow: string
-  title: string
-  description: string
-}): ReactElement {
-  return (
-    <div>
-      <p className="text-[0.68rem] font-semibold tracking-[0.17em] text-mauve-700 uppercase">
-        {eyebrow}
-      </p>
-      <h2 className="mt-1 text-xl font-semibold tracking-tight text-neutral-950">{title}</h2>
-      <p className="mt-1 max-w-2xl text-sm leading-6 text-neutral-500">{description}</p>
-    </div>
-  )
-}
 
 function DashboardLoading(): ReactElement {
   return (
