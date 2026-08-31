@@ -3,7 +3,27 @@ import { channels } from '@shared/constants'
 import { credentialsSchema } from '@shared/schemas'
 import { verify } from 'argon2'
 import { ipcMain } from 'electron'
-import { findOneByUsername } from '../account/repository'
+import { countAll, findOneByUsername } from '../account/repository'
+
+const getPublicAccount = ({
+  password: _,
+  ...account
+}: NonNullable<typeof state.session>['account']) => account
+
+ipcMain.handle(channels.auth.getStatus, async () => {
+  try {
+    return {
+      success: true,
+      hasAccounts: (await countAll()) > 0,
+      account: state.session ? getPublicAccount(state.session.account) : null
+    }
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error)
+    }
+  }
+})
 
 ipcMain.handle(channels.auth.signIn, async (_, payload: unknown) => {
   try {
@@ -11,7 +31,7 @@ ipcMain.handle(channels.auth.signIn, async (_, payload: unknown) => {
 
     const account = await findOneByUsername(data.username)
 
-    if (account === null) {
+    if (account === null || account.isArchived === 1) {
       return { success: false }
     }
 
@@ -25,7 +45,7 @@ ipcMain.handle(channels.auth.signIn, async (_, payload: unknown) => {
 
     return {
       success: true,
-      account
+      account: getPublicAccount(account)
     }
   } catch (error) {
     return {
