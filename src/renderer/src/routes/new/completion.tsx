@@ -22,17 +22,13 @@ function RouteComponent() {
   }
 
   useDelay(() => {
-    navigate({ to: '/signIn' })
+    navigate({ to: '/' })
   }, transition.duration!)
 
   return (
     <div>
       <CenteredPageHeader title="You're all set!" description="You may now use the application." />
-      <Button
-        as={Link}
-        to="/signIn"
-        className="w-full bg-transparent! p-0 outline-none focus:ring-0"
-      >
+      <Button as={Link} to="/" className="w-full bg-transparent! p-0 outline-none focus:ring-0">
         <motion.div
           animate={animate}
           transition={transition}
