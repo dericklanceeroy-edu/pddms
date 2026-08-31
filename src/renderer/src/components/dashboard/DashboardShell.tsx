@@ -1,4 +1,5 @@
 import type { DashboardSourceMetadata } from '@renderer/data/adminDashboard'
+import { useAccount } from '@renderer/hooks/useAccount'
 import { Link, useRouterState } from '@tanstack/react-router'
 import {
   useEffect,
@@ -13,6 +14,7 @@ import {
   FiArchive,
   FiBarChart2,
   FiGrid,
+  FiLogOut,
   FiMenu,
   FiRefreshCw,
   FiShoppingBag,
@@ -60,6 +62,21 @@ function Sidebar({
   onClose?: VoidFunction
   closeButtonRef?: RefObject<HTMLButtonElement | null>
 }): ReactElement {
+  const { account, signOut } = useAccount()
+  const [isSigningOut, setIsSigningOut] = useState(false)
+  const [signOutError, setSignOutError] = useState('')
+
+  const logout = async (): Promise<void> => {
+    setIsSigningOut(true)
+    setSignOutError('')
+
+    const result = await signOut()
+    if (!result.success) {
+      setSignOutError(result.error ?? 'Unable to sign out.')
+      setIsSigningOut(false)
+    }
+  }
+
   return (
     <div className="flex h-full flex-col bg-neutral-950 text-neutral-300">
       <div className="flex h-20 items-center justify-between gap-3 border-b border-white/10 px-5">
@@ -113,13 +130,30 @@ function Sidebar({
         <div className="rounded-xl bg-white/5 p-3">
           <div className="flex items-center gap-3">
             <div className="grid size-9 place-items-center rounded-full bg-neutral-800 text-xs font-semibold text-white">
-              AD
+              {account?.username.slice(0, 2).toUpperCase() ?? '—'}
             </div>
             <div className="min-w-0">
-              <p className="truncate text-sm font-medium text-white">Admin workspace</p>
-              <p className="text-xs text-neutral-400">Preview session</p>
+              <p className="truncate text-sm font-medium text-white">
+                {account?.username ?? 'Unknown account'}
+              </p>
+              <p className="text-xs text-neutral-400">
+                {account?.role === 'master' ? 'Master account' : 'Manager account'}
+              </p>
             </div>
           </div>
+          <button
+            type="button"
+            onClick={logout}
+            disabled={isSigningOut}
+            className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-xs font-medium text-neutral-300 transition hover:bg-white/10 hover:text-white disabled:cursor-wait disabled:opacity-60"
+          >
+            <FiLogOut /> {isSigningOut ? 'Signing out…' : 'Sign out'}
+          </button>
+          {signOutError && (
+            <p role="alert" className="mt-2 text-xs leading-5 text-rose-300">
+              {signOutError}
+            </p>
+          )}
         </div>
       </div>
     </div>
