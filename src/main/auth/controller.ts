@@ -1,29 +1,17 @@
 import { state } from '@main/api'
 import { channels } from '@shared/constants'
 import { credentialsSchema } from '@shared/schemas'
+import type { Account, AccountWithoutPassword } from '@shared/types'
 import { verify } from 'argon2'
 import { ipcMain } from 'electron'
-import { countAll, findOneByUsername } from '../account/repository'
+import { findOneByUsername } from '../account/repository'
 
-const getPublicAccount = ({
-  password: _,
-  ...account
-}: NonNullable<typeof state.session>['account']) => account
+const getPublicAccount = ({ password: _, ...account }: Account): AccountWithoutPassword => account
 
-ipcMain.handle(channels.auth.getStatus, async () => {
-  try {
-    return {
-      success: true,
-      hasAccounts: (await countAll()) > 0,
-      account: state.session ? getPublicAccount(state.session.account) : null
-    }
-  } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : String(error)
-    }
-  }
-})
+ipcMain.handle(channels.auth.getStatus, () => ({
+  success: true,
+  account: state.session ? getPublicAccount(state.session.account) : null
+}))
 
 ipcMain.handle(channels.auth.signIn, async (_, payload: unknown) => {
   try {
@@ -32,13 +20,13 @@ ipcMain.handle(channels.auth.signIn, async (_, payload: unknown) => {
     const account = await findOneByUsername(data.username)
 
     if (account === null || account.isArchived === 1) {
-      return { success: false }
+      return { success: false, error: 'The username or password is incorrect.' }
     }
 
     const isPasswordCorrect = await verify(account.password, data.password)
 
     if (!isPasswordCorrect) {
-      return { success: false }
+      return { success: false, error: 'The username or password is incorrect.' }
     }
 
     state.session = { account }
@@ -48,22 +36,17 @@ ipcMain.handle(channels.auth.signIn, async (_, payload: unknown) => {
       account: getPublicAccount(account)
     }
   } catch (error) {
+    console.error('Authentication failed:', error)
+
     return {
       success: false,
-      error: error instanceof Error ? error.message : String(error)
+      error: 'Unable to authenticate. Please try again.'
     }
   }
 })
 
-ipcMain.handle(channels.auth.signOut, async () => {
-  try {
-    state.session = undefined
+ipcMain.handle(channels.auth.signOut, () => {
+  state.session = undefined
 
-    return { success: true }
-  } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : String(error)
-    }
-  }
+  return { success: true }
 })
