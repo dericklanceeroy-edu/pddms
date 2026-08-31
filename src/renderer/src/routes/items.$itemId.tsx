@@ -8,5 +8,6 @@ export const Route = createFileRoute('/items/$itemId')({ component: RouteCompone
 function RouteComponent(): ReactElement {
   const { itemId } = Route.useParams()
   const item = useProfileStore((state) => state.items.find((value) => value.id === Number(itemId)))
+  if (itemId === 'new') return <ItemProfileView item={null} />
   return item ? <ItemProfileView item={item} key={item.id} /> : <Navigate to="/inventory" />
 }
