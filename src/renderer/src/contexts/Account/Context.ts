@@ -4,7 +4,6 @@ import { createContext } from 'react'
 
 export interface AccountContext {
   account: AccountWithoutPassword | null
-  completeSetup: VoidFunction
   signIn: (credentials: Credentials) => Promise<AuthActionResult>
   signOut: () => Promise<AuthActionResult>
 }
