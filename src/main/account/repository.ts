@@ -10,6 +10,15 @@ export async function insertOne(data: NewAccount): Promise<Account> {
     .executeTakeFirstOrThrow()
 }
 
+export async function countAll(): Promise<number> {
+  const result = await db
+    .selectFrom('accounts')
+    .select((expression) => expression.fn.countAll<number>().as('count'))
+    .executeTakeFirstOrThrow()
+
+  return Number(result.count)
+}
+
 export async function findOneById(id: number): Promise<Account | null> {
   // prettier-ignore
   return (
