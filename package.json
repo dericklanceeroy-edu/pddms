@@ -9,6 +9,10 @@
   "scripts": {
     "format": "prettier --write .",
     "lint": "eslint --cache .",
+    "db:migrate": "kysely migrate latest",
+    "db:seed:dev": "kysely seed run",
+    "setup:dev": "npm run db:migrate && npm run db:seed:dev",
+    "predev": "npm run setup:dev",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
