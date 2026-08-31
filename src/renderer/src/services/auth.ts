@@ -15,7 +15,6 @@ interface SignInResponse {
 
 interface AuthStatusResponse {
   success: boolean
-  hasAccounts?: boolean
   account?: AccountWithoutPassword | null
   error?: string
 }
@@ -25,18 +24,14 @@ interface SignOutResponse {
   error?: string
 }
 
-export interface AuthStatusResult extends AuthActionResult {
-  hasAccounts?: boolean
-}
-
-export async function getAuthStatus(): Promise<AuthStatusResult> {
+export async function getAuthStatus(): Promise<AuthActionResult> {
   try {
     const response = (await window.electron.ipcRenderer.invoke(
       channels.auth.getStatus
     )) as AuthStatusResponse
 
     return response.success
-      ? { success: true, hasAccounts: response.hasAccounts, account: response.account ?? undefined }
+      ? { success: true, account: response.account ?? undefined }
       : { success: false, error: response.error }
   } catch {
     return { success: false, error: 'Unable to check the authentication service.' }
