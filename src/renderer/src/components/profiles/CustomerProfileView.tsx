@@ -3,7 +3,7 @@ import { type CustomerDiscount, type CustomerProfile } from '@renderer/data/prof
 import { useProfileStore } from '@renderer/stores/useProfileStore'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { useState, type FormEvent, type ReactElement } from 'react'
-import { FiArrowLeft, FiEdit2, FiUser } from 'react-icons/fi'
+import { FiArrowLeft, FiCheckCircle, FiEdit2, FiTrash2, FiUser } from 'react-icons/fi'
 
 const currency = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' })
 const date = new Intl.DateTimeFormat('en-PH', { dateStyle: 'medium' })
@@ -27,17 +27,54 @@ export default function CustomerProfileView({
   customer: CustomerProfile | null
 }): ReactElement {
   const saveCustomer = useProfileStore((state) => state.saveCustomer)
+  const removeCustomer = useProfileStore((state) => state.removeCustomer)
   const navigate = useNavigate()
   const isNew = customer === null
   const [draft, setDraft] = useState(customer ?? { ...emptyCustomer, id: Date.now() })
   const [editing, setEditing] = useState(isNew)
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
+  const [isSaving, setIsSaving] = useState(false)
+  const [confirmRemove, setConfirmRemove] = useState(false)
+  const [isRemoving, setIsRemoving] = useState(false)
 
   const save = (event: FormEvent): void => {
     event.preventDefault()
-    saveCustomer(draft)
+    const fullName = draft.fullName.trim()
+    const phone = draft.phone.trim()
+    const email = draft.email.trim()
+    const discountId = draft.discountId.trim()
+
+    if (fullName.length < 2 || phone.length < 7) {
+      setError('Enter a full name and a valid contact number.')
+      return
+    }
+    if (draft.discountType !== 'none' && !discountId) {
+      setError('A discount ID is required for Senior Citizen and PWD profiles.')
+      return
+    }
+
+    setIsSaving(true)
+    setError('')
+    saveCustomer({
+      ...draft,
+      fullName,
+      phone,
+      email,
+      discountId: draft.discountType === 'none' ? '' : discountId,
+      discountExpiresAt: draft.discountType === 'none' ? null : draft.discountExpiresAt
+    })
     setEditing(false)
+    setIsSaving(false)
+    setSuccess(isNew ? 'Customer profile added.' : 'Customer information updated.')
     if (isNew)
       void navigate({ to: '/customers/$customerId', params: { customerId: String(draft.id) } })
+  }
+
+  const remove = (): void => {
+    setIsRemoving(true)
+    removeCustomer(draft.id)
+    void navigate({ to: '/customers' })
   }
 
   return (
@@ -49,6 +86,14 @@ export default function CustomerProfileView({
         >
           <FiArrowLeft /> Back to customers
         </Link>
+        {success && (
+          <div
+            role="status"
+            className="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800"
+          >
+            <FiCheckCircle /> {success}
+          </div>
+        )}
         {editing ? (
           <form onSubmit={save} className="panel mx-auto max-w-3xl space-y-5 p-6">
             <div>
@@ -127,17 +172,31 @@ export default function CustomerProfileView({
                 </>
               )}
             </div>
+            {error && (
+              <p role="alert" className="rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                {error}
+              </p>
+            )}
             <div className="flex justify-end gap-2 border-t border-neutral-100 pt-5">
               {!isNew && (
                 <button
                   type="button"
-                  onClick={() => setEditing(false)}
+                  onClick={() => {
+                    setDraft(customer)
+                    setError('')
+                    setEditing(false)
+                  }}
                   className="secondary-button"
                 >
                   Cancel
                 </button>
               )}
-              <button className="primary-button">Save profile</button>
+              <button
+                disabled={isSaving}
+                className="primary-button disabled:cursor-wait disabled:opacity-60"
+              >
+                {isSaving ? 'Saving…' : 'Save profile'}
+              </button>
             </div>
           </form>
         ) : (
@@ -159,12 +218,23 @@ export default function CustomerProfileView({
                     </p>
                   </div>
                 </div>
-                <button
-                  onClick={() => setEditing(true)}
-                  className="secondary-button inline-flex h-fit items-center gap-2"
-                >
-                  <FiEdit2 /> Edit profile
-                </button>
+                <div className="flex h-fit flex-wrap gap-2">
+                  <button
+                    onClick={() => {
+                      setSuccess('')
+                      setEditing(true)
+                    }}
+                    className="secondary-button inline-flex items-center gap-2"
+                  >
+                    <FiEdit2 /> Edit profile
+                  </button>
+                  <button
+                    onClick={() => setConfirmRemove(true)}
+                    className="inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-white px-3 py-2 font-medium text-rose-700 transition hover:bg-rose-50 focus-visible:ring-2 focus-visible:ring-rose-200"
+                  >
+                    <FiTrash2 /> Remove customer
+                  </button>
+                </div>
               </div>
             </section>
             <section className="grid gap-5 md:grid-cols-2">
@@ -226,6 +296,45 @@ export default function CustomerProfileView({
           </>
         )}
       </div>
+      {confirmRemove && (
+        <div className="fixed inset-0 z-[70] grid place-items-center bg-neutral-950/55 p-4 backdrop-blur-sm">
+          <button
+            className="absolute inset-0"
+            aria-label="Cancel customer removal"
+            onClick={() => setConfirmRemove(false)}
+          />
+          <section
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="remove-customer-title"
+            className="relative z-10 w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
+          >
+            <h2 id="remove-customer-title" className="text-xl font-semibold">
+              Remove customer?
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-neutral-500">
+              {draft.fullName} will be removed from the customer list. This action cannot be undone
+              in this session.
+            </p>
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                disabled={isRemoving}
+                onClick={() => setConfirmRemove(false)}
+                className="secondary-button disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                disabled={isRemoving}
+                onClick={remove}
+                className="rounded-xl bg-rose-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-rose-800 disabled:cursor-wait disabled:opacity-60"
+              >
+                {isRemoving ? 'Removing…' : 'Remove customer'}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
     </DashboardShell>
   )
 }
