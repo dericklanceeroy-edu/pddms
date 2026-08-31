@@ -1,5 +1,5 @@
 import SQLite from 'better-sqlite3'
-import { SqliteDialect } from 'kysely'
+import { CamelCasePlugin, SqliteDialect } from 'kysely'
 import { defineConfig } from 'kysely-ctl'
 import { env } from './src/main/env'
 
@@ -9,7 +9,11 @@ export default defineConfig({
   dialect: new SqliteDialect({
     database: new SQLite(env.DATABASE)
   }),
+  plugins: [new CamelCasePlugin()],
   migrations: {
     migrationFolder: './migrations'
+  },
+  seeds: {
+    seedFolder: './seeds'
   }
 })
