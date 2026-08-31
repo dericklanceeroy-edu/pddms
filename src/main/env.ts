@@ -2,8 +2,8 @@ import 'dotenv/config'
 import * as z from 'zod'
 
 const envSchema = z.strictObject({
-  DATABASE: z.string().nonempty().default('./pddms.db'),
-  DATABASE_BACKUP: z.string().nonempty().default('pddms-backup.db')
+  DATABASE: z.string().nonempty(),
+  DATABASE_BACKUP: z.string().nonempty()
 })
 
 export type Env = z.infer<typeof envSchema>
