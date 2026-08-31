@@ -14,6 +14,7 @@ import {
   FiCheck,
   FiDatabase,
   FiEdit2,
+  FiEye,
   FiPlus,
   FiSearch,
   FiShield,
@@ -175,12 +176,131 @@ function Field({ label, children }: { label: string; children: ReactElement }): 
   )
 }
 
+function UserDetailsDialog({
+  user,
+  close,
+  edit
+}: {
+  user: ManagedUser
+  close: VoidFunction
+  edit: VoidFunction
+}): ReactElement {
+  return (
+    <div className="fixed inset-0 z-[70] grid place-items-center bg-neutral-950/55 p-4 backdrop-blur-sm">
+      <button className="absolute inset-0" aria-label="Close user details" onClick={close} />
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="user-details-title"
+        className="relative z-10 w-full max-w-lg rounded-2xl bg-white shadow-2xl"
+      >
+        <div className="flex items-start justify-between border-b border-neutral-200 px-6 py-5">
+          <div>
+            <p className="eyebrow">Account profile</p>
+            <h2 id="user-details-title" className="mt-1 text-2xl font-semibold">
+              {user.fullName}
+            </h2>
+            <p className="mt-1 text-sm text-neutral-500">@{user.username}</p>
+          </div>
+          <button aria-label="Close user details" onClick={close} className="icon-button">
+            <FiX />
+          </button>
+        </div>
+        <dl className="grid gap-5 p-6 sm:grid-cols-2">
+          <div>
+            <dt className="text-xs font-medium tracking-wide text-neutral-500 uppercase">Role</dt>
+            <dd className="mt-1 font-semibold">{roleLabels[user.role]}</dd>
+          </div>
+          <div>
+            <dt className="text-xs font-medium tracking-wide text-neutral-500 uppercase">Status</dt>
+            <dd
+              className={
+                user.status === 'active'
+                  ? 'mt-1 font-semibold text-emerald-700'
+                  : 'mt-1 font-semibold text-neutral-600'
+              }
+            >
+              {user.status === 'active' ? 'Active' : 'Blocked'}
+            </dd>
+          </div>
+          <div className="sm:col-span-2">
+            <dt className="text-xs font-medium tracking-wide text-neutral-500 uppercase">
+              Last active
+            </dt>
+            <dd className="mt-1 font-medium">
+              {user.lastActiveAt ? dateFormatter.format(new Date(user.lastActiveAt)) : 'Never'}
+            </dd>
+          </div>
+        </dl>
+        <div className="flex justify-end gap-2 border-t border-neutral-100 px-6 py-4">
+          <button onClick={close} className="secondary-button">
+            Close
+          </button>
+          <button onClick={edit} className="primary-button">
+            <FiEdit2 /> Edit account
+          </button>
+        </div>
+      </section>
+    </div>
+  )
+}
+
+function StatusConfirmation({
+  user,
+  close,
+  confirm
+}: {
+  user: ManagedUser
+  close: VoidFunction
+  confirm: VoidFunction
+}): ReactElement {
+  const blocksUser = user.status === 'active'
+  return (
+    <div className="fixed inset-0 z-[70] grid place-items-center bg-neutral-950/55 p-4 backdrop-blur-sm">
+      <button className="absolute inset-0" aria-label="Cancel status change" onClick={close} />
+      <section
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="status-confirmation-title"
+        className="relative z-10 w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
+      >
+        <h2 id="status-confirmation-title" className="text-xl font-semibold">
+          {blocksUser ? 'Block user?' : 'Unblock user?'}
+        </h2>
+        <p className="mt-2 text-sm leading-6 text-neutral-500">
+          {blocksUser
+            ? `${user.fullName} will no longer have active access.`
+            : `${user.fullName} will regain active access.`}
+        </p>
+        <div className="mt-6 flex justify-end gap-2">
+          <button onClick={close} className="secondary-button">
+            Cancel
+          </button>
+          <button
+            onClick={confirm}
+            className={
+              blocksUser
+                ? 'rounded-xl bg-rose-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-rose-800'
+                : 'primary-button'
+            }
+          >
+            {blocksUser ? 'Block user' : 'Unblock user'}
+          </button>
+        </div>
+      </section>
+    </div>
+  )
+}
+
 export default function UserManagement(): ReactElement {
   const management = useUserManagement()
   const [activeTab, setActiveTab] = useState<ManagementTab>('users')
   const [query, setQuery] = useState('')
   const [roleFilter, setRoleFilter] = useState<UserRole | 'all'>('all')
   const [dialogUser, setDialogUser] = useState<ManagedUser | null | undefined>()
+  const [viewUser, setViewUser] = useState<ManagedUser | null>(null)
+  const [statusUser, setStatusUser] = useState<ManagedUser | null>(null)
+  const [feedback, setFeedback] = useState('')
   const [confirmRestore, setConfirmRestore] = useState(false)
   const filteredUsers = useMemo(() => {
     const search = query.trim().toLowerCase()
@@ -192,8 +312,10 @@ export default function UserManagement(): ReactElement {
   }, [management.users, query, roleFilter])
 
   const save = (values: UserFormValues): void => {
+    const wasEditing = dialogUser !== null && dialogUser !== undefined
     management.saveUser(values, dialogUser ?? null)
     setDialogUser(undefined)
+    setFeedback(wasEditing ? 'User account updated.' : 'User account created.')
   }
 
   return (
@@ -226,6 +348,14 @@ export default function UserManagement(): ReactElement {
             icon={FiShield}
           />
         </section>
+        {feedback && (
+          <p
+            role="status"
+            className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800"
+          >
+            {feedback}
+          </p>
+        )}
         <div className="overflow-x-auto border-b border-neutral-200">
           <div className="flex min-w-max gap-1">
             {tabs.map(({ id, label, icon: Icon }) => (
@@ -247,8 +377,9 @@ export default function UserManagement(): ReactElement {
             roleFilter={roleFilter}
             setQuery={setQuery}
             setRoleFilter={setRoleFilter}
+            view={setViewUser}
             edit={setDialogUser}
-            toggle={management.toggleStatus}
+            toggle={setStatusUser}
           />
         )}
         {activeTab === 'permissions' && <Permissions />}
@@ -300,6 +431,29 @@ export default function UserManagement(): ReactElement {
           save={save}
         />
       )}
+      {viewUser && (
+        <UserDetailsDialog
+          user={viewUser}
+          close={() => setViewUser(null)}
+          edit={() => {
+            setDialogUser(viewUser)
+            setViewUser(null)
+          }}
+        />
+      )}
+      {statusUser && (
+        <StatusConfirmation
+          user={statusUser}
+          close={() => setStatusUser(null)}
+          confirm={() => {
+            management.toggleStatus(statusUser)
+            setFeedback(
+              statusUser.status === 'active' ? 'User account blocked.' : 'User account unblocked.'
+            )
+            setStatusUser(null)
+          }}
+        />
+      )}
     </DashboardShell>
   )
 }
@@ -339,6 +493,7 @@ function UsersTable({
   roleFilter,
   setQuery,
   setRoleFilter,
+  view,
   edit,
   toggle
 }: {
@@ -347,6 +502,7 @@ function UsersTable({
   roleFilter: UserRole | 'all'
   setQuery: (value: string) => void
   setRoleFilter: (value: UserRole | 'all') => void
+  view: (user: ManagedUser) => void
   edit: (user: ManagedUser) => void
   toggle: (user: ManagedUser) => void
 }): ReactElement {
@@ -413,6 +569,13 @@ function UsersTable({
                 <td className="px-5 py-4">
                   <div className="flex justify-end gap-2">
                     <button
+                      onClick={() => view(user)}
+                      aria-label={`View ${user.fullName}`}
+                      className="icon-button"
+                    >
+                      <FiEye />
+                    </button>
+                    <button
                       onClick={() => edit(user)}
                       aria-label={`Edit ${user.fullName}`}
                       className="icon-button"
@@ -424,7 +587,7 @@ function UsersTable({
                       onClick={() => toggle(user)}
                       className="secondary-button text-xs disabled:opacity-40"
                     >
-                      {user.status === 'active' ? 'Deactivate' : 'Activate'}
+                      {user.status === 'active' ? 'Block' : 'Unblock'}
                     </button>
                   </div>
                 </td>
