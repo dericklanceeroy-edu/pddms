@@ -1,16 +1,33 @@
 import Form from '@renderer/components/Form/Form'
 import { CenteredPage, CenteredPageHeader } from '@renderer/components/layout/CenteredPage'
-import { Credentials } from '@shared/types'
-import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
+import { useAccount } from '@renderer/hooks/useAccount'
+import type { Credentials } from '@shared/types'
+import { createFileRoute } from '@tanstack/react-router'
 import { Button } from 'flowbite-react'
+import { useState, type ReactElement } from 'react'
 import { BsEyeFill, BsEyeSlashFill } from 'react-icons/bs'
 
 export const Route = createFileRoute('/signIn')({
   component: RouteComponent
 })
 
-function RouteComponent() {
-  const navigate = useNavigate()
+function RouteComponent(): ReactElement {
+  const { signIn } = useAccount()
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [error, setError] = useState('')
+
+  const submit = async (credentials: Credentials): Promise<void> => {
+    setIsSubmitting(true)
+    setError('')
+
+    const result = await signIn(credentials)
+
+    if (!result.success) {
+      setError(result.error ?? 'The username or password is incorrect.')
+      setIsSubmitting(false)
+      return
+    }
+  }
 
   return (
     <CenteredPage>
@@ -19,28 +36,36 @@ function RouteComponent() {
         description="Use your assigned pharmacy account."
       />
       <p className="mb-5 text-center text-sm text-neutral-500">
-        If you encounter any issues contact the{' '}
-        <Link to="/users" className="font-medium text-mauve-700 underline">
-          master
-        </Link>{' '}
-        account.
+        If you encounter any issues, contact the master account holder.
       </p>
-      <Form<Credentials>
-        onSubmit={() => {
-          navigate({ to: '/' })
-        }}
-        className="space-y-4"
-      >
-        <Form.Text name="username" color="primary" placeholder="Username" />
+      <Form<Credentials> onSubmit={submit} className="space-y-4">
+        <Form.Text
+          name="username"
+          color="primary"
+          placeholder="Username"
+          autoComplete="username"
+          required
+          minLength={4}
+          disabled={isSubmitting}
+        />
         <Form.Password
           name="password"
           color="primary"
           placeholder="Password"
+          autoComplete="current-password"
+          required
+          minLength={8}
+          disabled={isSubmitting}
           show={BsEyeFill}
           hide={BsEyeSlashFill}
         />
-        <Button type="submit" color="primary" className="w-full">
-          Continue
+        {error && (
+          <p role="alert" className="rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700">
+            {error}
+          </p>
+        )}
+        <Button type="submit" color="primary" disabled={isSubmitting} className="w-full">
+          {isSubmitting ? 'Signing in…' : 'Continue'}
         </Button>
       </Form>
     </CenteredPage>
