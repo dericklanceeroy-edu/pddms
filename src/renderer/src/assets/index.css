@@ -1,9 +1,16 @@
 @import 'tailwindcss';
-@import 'flowbite-react/plugin/tailwindcss';
-@source '../../../../.flowbite-react/class-list.json';
-
 @theme {
   --font-sans: Inter, ui-sans-serif, system-ui, sans-serif;
+  --color-mauve-50: #faf5ff;
+  --color-mauve-100: #f3e8ff;
+  --color-mauve-200: #e9d5ff;
+  --color-mauve-300: #d8b4fe;
+  --color-mauve-400: #c084fc;
+  --color-mauve-500: #a855f7;
+  --color-mauve-600: #9333ea;
+  --color-mauve-700: #7e22ce;
+  --color-mauve-800: #6b21a8;
+  --color-mauve-950: #3b0764;
 }
 
 @layer base {
@@ -25,7 +32,7 @@
   }
 
   .field {
-    @apply mt-2 w-full rounded-xl border border-neutral-200 bg-neutral-100 px-3.5 py-2.5 text-sm transition outline-none focus:border-mauve-400 focus:bg-white focus:ring-2 focus:ring-mauve-200;
+    @apply w-full rounded-xl border border-neutral-200 bg-neutral-100 px-3.5 py-2.5 text-sm transition outline-none focus:border-mauve-400 focus:bg-white focus:ring-2 focus:ring-mauve-200 disabled:cursor-not-allowed disabled:opacity-60;
   }
 
   .eyebrow {
@@ -33,7 +40,7 @@
   }
 
   .primary-button {
-    @apply inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-mauve-700 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-mauve-800 focus-visible:ring-2 focus-visible:ring-mauve-300 focus-visible:ring-offset-2;
+    @apply inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-mauve-700 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-mauve-800 focus-visible:ring-2 focus-visible:ring-mauve-300 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60;
   }
 
   .secondary-button {

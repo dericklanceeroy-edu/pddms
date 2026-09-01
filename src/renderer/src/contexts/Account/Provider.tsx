@@ -3,6 +3,7 @@ import {
   signIn as requestSignIn,
   signOut as requestSignOut
 } from '@renderer/services/auth'
+import { getSetupStatus } from '@renderer/services/setup'
 import type { AccountWithoutPassword, Credentials } from '@shared/types'
 import { Navigate, useRouterState } from '@tanstack/react-router'
 import { useEffect, useMemo, useState, type PropsWithChildren, type ReactElement } from 'react'
@@ -11,18 +12,20 @@ import { AccountContext } from './Context'
 export default function AccountProvider({ children }: PropsWithChildren): ReactElement {
   const [account, setAccount] = useState<AccountWithoutPassword | null>(null)
   const [isInitializing, setIsInitializing] = useState(true)
+  const [requiresSetup, setRequiresSetup] = useState(false)
   const [statusError, setStatusError] = useState('')
   const path = useRouterState({ select: (state) => state.location.pathname })
 
   useEffect(() => {
-    void getAuthStatus().then((result) => {
-      if (!result.success) {
-        setStatusError(result.error ?? 'Unable to initialize authentication.')
+    void Promise.all([getAuthStatus(), getSetupStatus()]).then(([auth, setup]) => {
+      if (!auth.success || !setup.success || setup.requiresSetup === undefined) {
+        setStatusError(auth.error ?? setup.error ?? 'Unable to initialize the application.')
         setIsInitializing(false)
         return
       }
 
-      setAccount(result.account ?? null)
+      setAccount(auth.account ?? null)
+      setRequiresSetup(setup.requiresSetup)
       setIsInitializing(false)
     })
   }, [])
@@ -39,6 +42,10 @@ export default function AccountProvider({ children }: PropsWithChildren): ReactE
         const result = await requestSignOut()
         if (result.success) setAccount(null)
         return result
+      },
+      completeSetup: (createdAccount: AccountWithoutPassword) => {
+        setAccount(createdAccount)
+        setRequiresSetup(false)
       }
     }),
     [account]
@@ -67,7 +74,12 @@ export default function AccountProvider({ children }: PropsWithChildren): ReactE
 
   const isSetupRoute = path === '/new' || path.startsWith('/new/')
 
-  if (isSetupRoute) return <Navigate to={account ? '/' : '/signIn'} replace />
+  if (requiresSetup && !isSetupRoute) return <Navigate to="/new" replace />
+  if (!requiresSetup && account && path === '/new/completion') {
+    return <AccountContext value={value}>{children}</AccountContext>
+  }
+  if (!requiresSetup && isSetupRoute) return <Navigate to={account ? '/' : '/signIn'} replace />
+  if (requiresSetup) return <AccountContext value={value}>{children}</AccountContext>
   if (!account && path !== '/signIn') return <Navigate to="/signIn" replace />
   if (account && path === '/signIn') return <Navigate to="/" replace />
 

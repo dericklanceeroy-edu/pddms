@@ -31,6 +31,15 @@ export async function findOneByUsername(username: string): Promise<Account | nul
   )
 }
 
+export async function countAll(): Promise<number> {
+  const result = await db
+    .selectFrom('accounts')
+    .select(({ fn }) => fn.count<number>('id').as('count'))
+    .executeTakeFirstOrThrow()
+
+  return Number(result.count)
+}
+
 export async function updateOneById(id: number, data: AccountUpdate): Promise<void> {
   // prettier-ignore
   await db

@@ -1,4 +1,4 @@
-import { type ComponentProps, type PropsWithChildren } from 'react'
+import { type ComponentProps, type PropsWithChildren, type ReactElement } from 'react'
 import { type FieldValues, FormProvider, useForm } from 'react-hook-form'
 import type { Merge } from 'type-fest'
 import TypedForm from '../TypedForm'
@@ -10,7 +10,9 @@ export default function Form<T extends FieldValues>({
   children,
   onSubmit,
   ...props
-}: PropsWithChildren<Merge<ComponentProps<typeof TypedForm>, { onSubmit: (data: T) => void }>>) {
+}: PropsWithChildren<
+  Merge<ComponentProps<typeof TypedForm>, { onSubmit: (data: T) => void }>
+>): ReactElement {
   const methods = useForm<T>()
 
   return (

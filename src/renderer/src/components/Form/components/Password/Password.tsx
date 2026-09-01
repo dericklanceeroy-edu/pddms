@@ -1,38 +1,39 @@
-import { TextInput, type TextInputProps } from 'flowbite-react'
+import type { ComponentProps, ReactElement } from 'react'
 import { useState } from 'react'
 import { useFormContext } from 'react-hook-form'
-import type { SetRequired } from 'type-fest'
 import VisibilityToggle, { type Icon } from './VisibilityToggle'
 
 /**
- * A Flowbite `<TextInput>` but for passwords and includes visibility toggle.
+ * A native password input with a visibility toggle.
  */
-// Note: Is there a Flowbite native way of doing this?
 export default function Password({
   show,
   hide,
   name,
+  className,
   ...props
-}: SetRequired<TextInputProps, 'name'> & {
+}: ComponentProps<'input'> & {
+  name: string
   show: Icon
   hide: Icon
-}) {
+}): ReactElement {
   const { register } = useFormContext()
   const [visible, setVisible] = useState(false)
 
   return (
-    <TextInput
-      type={visible ? 'text' : 'password'}
-      rightIcon={() => (
-        <VisibilityToggle
-          visible={visible}
-          show={show}
-          hide={hide}
-          toggle={() => setVisible((old) => !old)}
-        />
-      )}
-      {...register(name)}
-      {...props}
-    />
+    <div className="relative">
+      <input
+        {...register(name)}
+        {...props}
+        type={visible ? 'text' : 'password'}
+        className={['field', 'pr-11', className].filter(Boolean).join(' ')}
+      />
+      <VisibilityToggle
+        visible={visible}
+        show={show}
+        hide={hide}
+        toggle={() => setVisible((old) => !old)}
+      />
+    </div>
   )
 }

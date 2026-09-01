@@ -6,6 +6,7 @@ export interface AccountContext {
   account: AccountWithoutPassword | null
   signIn: (credentials: Credentials) => Promise<AuthActionResult>
   signOut: () => Promise<AuthActionResult>
+  completeSetup: (account: AccountWithoutPassword) => void
 }
 
 export const AccountContext = createContext<AccountContext | null>(null)

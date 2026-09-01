@@ -1,14 +1,14 @@
 import { CenteredPageHeader } from '@renderer/components/layout/CenteredPage'
 import { useDelay } from '@renderer/hooks/useDelay'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
-import { Button } from 'flowbite-react'
 import { type MotionNodeAnimationOptions, motion } from 'motion/react'
+import type { ReactElement } from 'react'
 
 export const Route = createFileRoute('/new/completion')({
   component: RouteComponent
 })
 
-function RouteComponent() {
+function RouteComponent(): ReactElement {
   const navigate = useNavigate()
 
   const { animate, transition }: MotionNodeAnimationOptions = {
@@ -28,7 +28,7 @@ function RouteComponent() {
   return (
     <div>
       <CenteredPageHeader title="You're all set!" description="You may now use the application." />
-      <Button as={Link} to="/" className="w-full bg-transparent! p-0 outline-none focus:ring-0">
+      <Link to="/" className="block w-full p-0 outline-none focus:ring-0">
         <motion.div
           animate={animate}
           transition={transition}
@@ -53,7 +53,7 @@ function RouteComponent() {
             Finish
           </motion.div>
         </motion.div>
-      </Button>
+      </Link>
     </div>
   )
 }

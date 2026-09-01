@@ -1,9 +1,18 @@
-import { TextInput, type TextInputProps } from 'flowbite-react'
+import type { ComponentProps, ReactElement } from 'react'
 import { useFormContext } from 'react-hook-form'
-import { SetRequired } from 'type-fest'
 
-export default function Text({ name, ...props }: SetRequired<TextInputProps, 'name'>) {
+type TextProps = ComponentProps<'input'> & {
+  name: string
+}
+
+export default function Text({ name, className, ...props }: TextProps): ReactElement {
   const { register } = useFormContext()
 
-  return <TextInput {...register(name)} {...props} />
+  return (
+    <input
+      {...register(name)}
+      {...props}
+      className={['field', className].filter(Boolean).join(' ')}
+    />
+  )
 }

@@ -3,7 +3,6 @@ import { CenteredPage, CenteredPageHeader } from '@renderer/components/layout/Ce
 import { useAccount } from '@renderer/hooks/useAccount'
 import type { Credentials } from '@shared/types'
 import { createFileRoute } from '@tanstack/react-router'
-import { Button } from 'flowbite-react'
 import { useState, type ReactElement } from 'react'
 import { BsEyeFill, BsEyeSlashFill } from 'react-icons/bs'
 
@@ -41,7 +40,6 @@ function RouteComponent(): ReactElement {
       <Form<Credentials> onSubmit={submit} className="space-y-4">
         <Form.Text
           name="username"
-          color="primary"
           placeholder="Username"
           autoComplete="username"
           required
@@ -50,7 +48,6 @@ function RouteComponent(): ReactElement {
         />
         <Form.Password
           name="password"
-          color="primary"
           placeholder="Password"
           autoComplete="current-password"
           required
@@ -64,9 +61,9 @@ function RouteComponent(): ReactElement {
             {error}
           </p>
         )}
-        <Button type="submit" color="primary" disabled={isSubmitting} className="w-full">
+        <button type="submit" disabled={isSubmitting} className="primary-button w-full">
           {isSubmitting ? 'Signing in…' : 'Continue'}
-        </Button>
+        </button>
       </Form>
     </CenteredPage>
   )

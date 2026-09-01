@@ -56,7 +56,7 @@ export default function OperationsPulse({
           <div>
             <h3 className="font-semibold tracking-tight text-neutral-950">Operations pulse</h3>
             <p className="mt-0.5 text-xs leading-5 text-neutral-500">
-              Sample procurement, finance, and inventory signals
+              Current procurement, finance, and inventory signals
             </p>
           </div>
         </div>

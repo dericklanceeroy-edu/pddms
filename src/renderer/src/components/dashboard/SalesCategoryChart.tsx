@@ -47,7 +47,7 @@ export default function SalesCategoryChart({
             <h3 id="sales-category-title" className="font-semibold tracking-tight text-neutral-950">
               Sales by category
             </h3>
-            <p className="mt-0.5 text-xs leading-5 text-neutral-500">Sample revenue mix</p>
+            <p className="mt-0.5 text-xs leading-5 text-neutral-500">Recorded revenue mix</p>
           </div>
         </div>
       </header>

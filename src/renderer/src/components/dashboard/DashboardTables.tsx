@@ -100,7 +100,7 @@ export function ExpiryWatchlist({ alerts }: { alerts: DashboardExpiryAlert[] }):
     <article className="min-w-0 overflow-hidden rounded-2xl border border-neutral-200/80 bg-white shadow-sm">
       <PanelHeader
         title="Expiry watchlist"
-        description="Sample batches within the next 90 days"
+        description="Live batches expiring within the next 90 days"
         headingId="expiry-watchlist-title"
         count={alerts.length}
         icon={FiCalendar}
@@ -166,7 +166,7 @@ export function LowStockWatchlist({ alerts }: { alerts: DashboardLowStockAlert[]
     <article className="min-w-0 overflow-hidden rounded-2xl border border-neutral-200/80 bg-white shadow-sm">
       <PanelHeader
         title="Low-stock alert"
-        description="Sample products below their reorder level"
+        description="Products at or below the system reorder level"
         headingId="low-stock-watchlist-title"
         count={alerts.length}
         icon={FiAlertTriangle}
@@ -214,7 +214,9 @@ export function LowStockWatchlist({ alerts }: { alerts: DashboardLowStockAlert[]
                     {alert.reorderLevel}
                   </td>
                   <td className="px-4 py-4 whitespace-nowrap text-neutral-600">
-                    {dateFormatter.format(new Date(alert.lastRestockedAt))}
+                    {alert.lastRestockedAt
+                      ? dateFormatter.format(new Date(alert.lastRestockedAt))
+                      : 'Not recorded'}
                   </td>
                   <td className="px-5 py-4 text-right sm:px-6">
                     <SeverityPill severity={alert.severity} />
@@ -238,7 +240,7 @@ export function RecentTransactions({
     <article className="min-w-0 overflow-hidden rounded-2xl border border-neutral-200/80 bg-white shadow-sm">
       <PanelHeader
         title="Recent transactions"
-        description="Sample completed pharmacy sales"
+        description="Completed pharmacy sales from the database"
         headingId="recent-transactions-title"
         count={transactions.length}
         icon={FiShoppingBag}

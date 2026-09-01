@@ -95,12 +95,8 @@ export default function AdminDashboard(): ReactElement {
                   Dashboard
                 </h2>
                 <p className="mt-2 max-w-2xl text-sm leading-6 text-neutral-500">
-                  Lorem ipsum dolor sit amet, consectetur adipiscing elit.
+                  Monitor live inventory risk and recorded pharmacy activity.
                 </p>
-              </div>
-              <div className="inline-flex w-fit items-center gap-2 rounded-full bg-mauve-50 px-3 py-1.5 text-xs font-medium text-mauve-700 ring-1 ring-mauve-100">
-                <span className="size-2 rounded-full bg-mauve-500" aria-hidden="true" />
-                Demo snapshot loaded
               </div>
             </div>
 

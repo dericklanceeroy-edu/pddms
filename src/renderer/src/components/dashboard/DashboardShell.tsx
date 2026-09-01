@@ -279,20 +279,18 @@ export default function DashboardShell({
             </div>
             <div className="flex shrink-0 items-center gap-2 sm:gap-3">
               {source && (
-                <span className="hidden items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-800 ring-1 ring-amber-200 sm:inline-flex">
-                  <span className="size-1.5 rounded-full bg-amber-500" aria-hidden="true" />
+                <span className="hidden items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-800 ring-1 ring-emerald-200 sm:inline-flex">
+                  <span className="size-1.5 rounded-full bg-emerald-500" aria-hidden="true" />
                   {source.label}
                 </span>
               )}
               <span className="hidden text-xs text-neutral-500 md:inline">
-                {source
-                  ? `Sample generated ${timeFormatter.format(generatedAt)}`
-                  : 'Preparing preview'}
+                {source ? `Updated ${timeFormatter.format(generatedAt)}` : 'Loading data'}
               </span>
               {onRefresh && (
                 <button
                   type="button"
-                  aria-label="Refresh demo dashboard data"
+                  aria-label="Refresh dashboard data"
                   onClick={onRefresh}
                   disabled={isRefreshing}
                   className="inline-flex h-10 items-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 text-sm font-medium text-neutral-700 transition hover:border-neutral-300 hover:bg-neutral-50 focus-visible:ring-2 focus-visible:ring-mauve-500 focus-visible:outline-none disabled:cursor-wait disabled:opacity-60"
@@ -301,7 +299,7 @@ export default function DashboardShell({
                     className={`size-4 ${isRefreshing ? 'animate-spin' : ''}`}
                     aria-hidden="true"
                   />
-                  <span className="hidden sm:inline">Refresh sample</span>
+                  <span className="hidden sm:inline">Refresh data</span>
                 </button>
               )}
             </div>

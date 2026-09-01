@@ -1,4 +1,11 @@
 export const channels = {
+  setup: {
+    getStatus: 'setup.getStatus',
+    createMaster: 'setup.createMaster'
+  },
+  dashboard: {
+    getAdmin: 'dashboard.getAdmin'
+  },
   account: {
     createOne: 'account.createOne',
     getOneById: 'account.getOneById',
