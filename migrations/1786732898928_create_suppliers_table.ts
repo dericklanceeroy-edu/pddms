@@ -1,6 +1,7 @@
 import type { Kysely } from 'kysely'
+import type { Database } from '../src/shared/types'
 
-export async function up(db: Kysely<any>): Promise<void> {
+export async function up(db: Kysely<Database>): Promise<void> {
   await db.schema
     .createTable('suppliers')
     .addColumn('id', 'integer', (col) => col.primaryKey().autoIncrement())
@@ -17,6 +18,6 @@ export async function up(db: Kysely<any>): Promise<void> {
     .execute()
 }
 
-export async function down(db: Kysely<any>): Promise<void> {
+export async function down(db: Kysely<Database>): Promise<void> {
   await db.schema.dropTable('suppliers').execute()
 }

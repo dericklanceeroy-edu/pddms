@@ -30,7 +30,7 @@ export default function CustomerProfileView({
   const removeCustomer = useProfileStore((state) => state.removeCustomer)
   const navigate = useNavigate()
   const isNew = customer === null
-  const [draft, setDraft] = useState(customer ?? { ...emptyCustomer, id: Date.now() })
+  const [draft, setDraft] = useState(customer ?? emptyCustomer)
   const [editing, setEditing] = useState(isNew)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
@@ -38,7 +38,7 @@ export default function CustomerProfileView({
   const [confirmRemove, setConfirmRemove] = useState(false)
   const [isRemoving, setIsRemoving] = useState(false)
 
-  const save = (event: FormEvent): void => {
+  const save = async (event: FormEvent): Promise<void> => {
     event.preventDefault()
     const fullName = draft.fullName.trim()
     const phone = draft.phone.trim()
@@ -56,25 +56,45 @@ export default function CustomerProfileView({
 
     setIsSaving(true)
     setError('')
-    saveCustomer({
-      ...draft,
-      fullName,
-      phone,
-      email,
-      discountId: draft.discountType === 'none' ? '' : discountId,
-      discountExpiresAt: draft.discountType === 'none' ? null : draft.discountExpiresAt
-    })
-    setEditing(false)
-    setIsSaving(false)
-    setSuccess(isNew ? 'Customer profile added.' : 'Customer information updated.')
-    if (isNew)
-      void navigate({ to: '/customers/$customerId', params: { customerId: String(draft.id) } })
+    try {
+      const saved = await saveCustomer(
+        {
+          fullName,
+          phone,
+          email,
+          address: draft.address.trim(),
+          discountType: draft.discountType,
+          discountId: draft.discountType === 'none' ? '' : discountId,
+          discountExpiresAt: draft.discountType === 'none' ? null : draft.discountExpiresAt
+        },
+        isNew ? undefined : draft.id
+      )
+      setDraft(saved)
+      setEditing(false)
+      setSuccess(isNew ? 'Customer profile added.' : 'Customer information updated.')
+      if (isNew) {
+        await navigate({
+          to: '/customers/$customerId',
+          params: { customerId: String(saved.id) }
+        })
+      }
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Unable to save the customer.')
+    } finally {
+      setIsSaving(false)
+    }
   }
 
-  const remove = (): void => {
+  const remove = async (): Promise<void> => {
     setIsRemoving(true)
-    removeCustomer(draft.id)
-    void navigate({ to: '/customers' })
+    try {
+      await removeCustomer(draft.id)
+      await navigate({ to: '/customers' })
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Unable to remove the customer.')
+      setConfirmRemove(false)
+      setIsRemoving(false)
+    }
   }
 
   return (
@@ -314,7 +334,7 @@ export default function CustomerProfileView({
             </h2>
             <p className="mt-2 text-sm leading-6 text-neutral-500">
               {draft.fullName} will be removed from the customer list. This action cannot be undone
-              in this session.
+              from the database.
             </p>
             <div className="mt-6 flex justify-end gap-2">
               <button
@@ -326,7 +346,7 @@ export default function CustomerProfileView({
               </button>
               <button
                 disabled={isRemoving}
-                onClick={remove}
+                onClick={() => void remove()}
                 className="rounded-xl bg-rose-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-rose-800 disabled:cursor-wait disabled:opacity-60"
               >
                 {isRemoving ? 'Removing…' : 'Remove customer'}

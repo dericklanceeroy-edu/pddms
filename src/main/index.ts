@@ -4,8 +4,10 @@ import { join } from 'path'
 import icon from '../../resources/icon.png?asset'
 import './account/controller'
 import './auth/controller'
+import './customer/controller'
 import './dashboard/controller'
 import { initializeDatabase } from './migrations'
+import './product/controller'
 import './setup/controller'
 
 function createWindow(): void {

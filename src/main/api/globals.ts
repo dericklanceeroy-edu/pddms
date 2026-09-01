@@ -1,4 +1,4 @@
-import type { Account } from "@shared/types"
+import type { Account } from '@shared/types'
 
 export interface State {
   database: {
@@ -12,7 +12,7 @@ export interface State {
   }
 }
 
-export let state: State = {
+export const state: State = {
   database: {
     stale: false
   }

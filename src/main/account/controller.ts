@@ -1,16 +1,23 @@
 import { accessControl, authorize } from '@main/access-control'
 import { channels, resources } from '@shared/constants'
 import { accountUpdateSchema, newAccountSchema } from '@shared/schemas'
+import type { Account, AccountWithoutPassword } from '@shared/types'
 import { isId } from '@shared/validators'
 import { hash } from 'argon2'
 import { ipcMain } from 'electron'
 import {
-  archiveOneById,
+  findAll,
   findOneById,
   findOneByUsername,
   insertOne,
+  setBlockedById,
   updateOneById
 } from './repository'
+
+const withoutPassword = ({ password, ...account }: Account): AccountWithoutPassword => {
+  void password
+  return account
+}
 
 ipcMain.handle(channels.account.createOne, async (_, payload: unknown) => {
   try {
@@ -24,13 +31,25 @@ ipcMain.handle(channels.account.createOne, async (_, payload: unknown) => {
 
     return {
       success: true,
-      account: newAccount
+      account: withoutPassword(newAccount)
     }
   } catch (error) {
     return {
       success: false,
       error: error instanceof Error ? error.message : String(error)
     }
+  }
+})
+
+ipcMain.handle(channels.account.getAll, async () => {
+  try {
+    const permission = authorize((session) =>
+      accessControl.can(session.account.role).readAny(resources.account)
+    )
+    const accounts = (await findAll()).map(withoutPassword)
+    return { success: true, accounts: permission.filter(accounts) }
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : String(error) }
   }
 })
 
@@ -46,7 +65,7 @@ ipcMain.handle(channels.account.getOneById, async (_, id: unknown) => {
 
     return {
       success: true,
-      account
+      account: account ? withoutPassword(account) : null
     }
   } catch (error) {
     return {
@@ -68,7 +87,7 @@ ipcMain.handle(channels.account.getOneByUsername, async (_, username: unknown) =
 
     return {
       success: true,
-      account
+      account: account ? withoutPassword(account) : null
     }
   } catch (error) {
     return {
@@ -92,7 +111,10 @@ ipcMain.handle(channels.account.updateOneById, async (_, id: unknown, payload: u
       return { success: false }
     }
 
-    await updateOneById(id, data)
+    await updateOneById(id, {
+      ...data,
+      password: data.password ? await hash(data.password) : undefined
+    })
 
     return { success: true }
   } catch (error) {
@@ -103,7 +125,7 @@ ipcMain.handle(channels.account.updateOneById, async (_, id: unknown, payload: u
   }
 })
 
-ipcMain.handle(channels.account.archiveOneById, async (_, id: unknown) => {
+ipcMain.handle(channels.account.setBlockedById, async (_, id: unknown, blocked: unknown) => {
   try {
     authorize((session) => accessControl.can(session.account.role).updateAny(resources.account))
 
@@ -111,7 +133,15 @@ ipcMain.handle(channels.account.archiveOneById, async (_, id: unknown) => {
       return { success: false }
     }
 
-    await archiveOneById(id)
+    if (typeof blocked !== 'boolean') return { success: false, error: 'Invalid status.' }
+
+    const account = await findOneById(id)
+    if (!account) return { success: false, error: 'Account not found.' }
+    if (account.role === 'master') {
+      return { success: false, error: 'The master account cannot be blocked.' }
+    }
+
+    await setBlockedById(id, blocked)
 
     return { success: true }
   } catch (error) {

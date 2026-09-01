@@ -2,7 +2,6 @@ import { db } from '@main/db'
 import type { AdminDashboardData, DashboardAlertSeverity } from '@shared/dashboard'
 import { sql } from 'kysely'
 
-const reorderLevel = 10
 const millisecondsPerDay = 86_400_000
 
 const getSeverity = (ratio: number): DashboardAlertSeverity => {
@@ -14,6 +13,11 @@ const getSeverity = (ratio: number): DashboardAlertSeverity => {
 export async function getAdminDashboard(): Promise<AdminDashboardData> {
   const generatedAt = new Date()
   const expiryLimit = new Date(generatedAt.getTime() + 90 * millisecondsPerDay)
+  const products = await db
+    .selectFrom('drugs')
+    .select(['id', 'genericName', 'formulation', 'reorderLevel'])
+    .where('isArchived', '=', 0)
+    .execute()
   const batches = await db
     .selectFrom('batches')
     .innerJoin('drugs', 'drugs.id', 'batches.drugId')
@@ -26,23 +30,33 @@ export async function getAdminDashboard(): Promise<AdminDashboardData> {
       'drugs.id as drugId',
       'drugs.brandName',
       'drugs.genericName',
-      'drugs.formulation'
+      'drugs.formulation',
+      'drugs.reorderLevel'
     ])
+    .where('drugs.isArchived', '=', 0)
     .execute()
 
-  const stockByDrug = new Map<number, { name: string; stock: number }>()
+  const stockByDrug = new Map<number, { name: string; stock: number; reorderLevel: number }>()
+  for (const product of products) {
+    stockByDrug.set(product.id, {
+      name: `${product.genericName} ${product.formulation}`,
+      stock: 0,
+      reorderLevel: product.reorderLevel
+    })
+  }
   for (const batch of batches) {
     const current = stockByDrug.get(batch.drugId)
     stockByDrug.set(batch.drugId, {
       name: `${batch.genericName} ${batch.formulation}`,
-      stock: (current?.stock ?? 0) + batch.currentStock
+      stock: (current?.stock ?? 0) + batch.currentStock,
+      reorderLevel: batch.reorderLevel
     })
   }
 
   const expiryAlerts = batches
     .filter((batch) => {
       const expiresAt = new Date(batch.expiresAt)
-      return batch.currentStock > 0 && expiresAt >= generatedAt && expiresAt <= expiryLimit
+      return batch.currentStock > 0 && expiresAt <= expiryLimit
     })
     .map((batch) => {
       const daysRemaining = Math.max(
@@ -63,19 +77,21 @@ export async function getAdminDashboard(): Promise<AdminDashboardData> {
     .sort((first, second) => first.expiresAt.localeCompare(second.expiresAt))
 
   const lowStockAlerts = [...stockByDrug.entries()]
-    .filter(([, item]) => item.stock <= reorderLevel)
+    .filter(([, item]) => item.stock <= item.reorderLevel)
     .map(([drugId, item]) => ({
       id: `drug-${drugId}`,
       productName: item.name,
       stockRemaining: item.stock,
-      reorderLevel,
+      reorderLevel: item.reorderLevel,
       lastRestockedAt: null,
-      severity: getSeverity(item.stock / reorderLevel)
+      severity: getSeverity(item.stock / item.reorderLevel)
     }))
 
   const valuation = await db
     .selectFrom('batches')
+    .innerJoin('drugs', 'drugs.id', 'batches.drugId')
     .select(sql<number>`coalesce(sum(current_stock * sell_price), 0)`.as('value'))
+    .where('drugs.isArchived', '=', 0)
     .executeTakeFirstOrThrow()
 
   return {
@@ -102,15 +118,19 @@ export async function getAdminDashboard(): Promise<AdminDashboardData> {
         label: 'Low-stock items',
         value: lowStockAlerts.length,
         format: 'integer',
-        trend: { direction: 'flat', percentage: 0, label: `At or below ${reorderLevel} units` },
+        trend: {
+          direction: 'flat',
+          percentage: 0,
+          label: "At or below each product's reorder level"
+        },
         sparkline: []
       },
       {
         id: 'expiring-batches',
-        label: 'Expiring batches',
+        label: 'Expiring / expired',
         value: expiryAlerts.length,
         format: 'integer',
-        trend: { direction: 'flat', percentage: 0, label: 'Within 90 days' },
+        trend: { direction: 'flat', percentage: 0, label: 'Expired or within 90 days' },
         sparkline: []
       }
     ],

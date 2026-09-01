@@ -1,8 +1,11 @@
-import { AccountContext } from '@renderer/contexts/Account/Context'
+import {
+  AccountContext,
+  type AccountContext as AccountContextValue
+} from '@renderer/contexts/Account/Context'
 import AccountProvider from '@renderer/contexts/Account/Provider'
 import { useContext } from 'react'
 
-export function useAccount() {
+export function useAccount(): AccountContextValue {
   const context = useContext(AccountContext)
 
   if (context === null) {

@@ -8,10 +8,22 @@ export const channels = {
   },
   account: {
     createOne: 'account.createOne',
+    getAll: 'account.getAll',
     getOneById: 'account.getOneById',
     getOneByUsername: 'account.getOneByUsername',
     updateOneById: 'account.updateOneById',
-    archiveOneById: 'account.archiveOneById'
+    setBlockedById: 'account.setBlockedById'
+  },
+  customer: {
+    getAll: 'customer.getAll',
+    createOne: 'customer.createOne',
+    updateOneById: 'customer.updateOneById',
+    removeOneById: 'customer.removeOneById'
+  },
+  product: {
+    getAll: 'product.getAll',
+    createOne: 'product.createOne',
+    removeOneById: 'product.removeOneById'
   },
   auth: {
     getStatus: 'auth.getStatus',
@@ -26,5 +38,7 @@ export const roles = {
 } as const
 
 export const resources = {
-  account: 'account'
+  account: 'account',
+  customer: 'customer',
+  product: 'product'
 } as const

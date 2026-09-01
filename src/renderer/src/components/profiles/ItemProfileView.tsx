@@ -36,7 +36,7 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
   const [isRemoving, setIsRemoving] = useState(false)
 
   if (isNew) {
-    const save = (event: FormEvent<HTMLFormElement>): void => {
+    const save = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
       event.preventDefault()
       const genericName = draft.genericName.trim()
       const brandName = draft.brandName.trim()
@@ -59,8 +59,22 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
       }
 
       setIsSaving(true)
-      addItem({ ...draft, genericName, brandName, category, formulation })
-      void navigate({ to: '/items/$itemId', params: { itemId: String(draft.id) } })
+      setError('')
+      try {
+        const saved = await addItem({
+          genericName,
+          brandName,
+          category,
+          formulation,
+          prescriptionRequired: draft.prescriptionRequired,
+          controlled: draft.controlled,
+          reorderLevel: draft.reorderLevel
+        })
+        await navigate({ to: '/items/$itemId', params: { itemId: String(saved.id) } })
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : 'Unable to add the product.')
+        setIsSaving(false)
+      }
     }
 
     return (
@@ -175,10 +189,16 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
   const equivalents = items.filter((value) => item.genericEquivalentIds.includes(value.id))
   const stock = getItemStock(item)
   const status = getStockStatus(item)
-  const remove = (): void => {
+  const remove = async (): Promise<void> => {
     setIsRemoving(true)
-    removeItem(item.id)
-    void navigate({ to: '/inventory' })
+    try {
+      await removeItem(item.id)
+      await navigate({ to: '/inventory' })
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Unable to remove the product.')
+      setConfirmRemove(false)
+      setIsRemoving(false)
+    }
   }
 
   return (
@@ -300,11 +320,11 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
       {confirmRemove && (
         <ConfirmationDialog
           title="Remove product?"
-          description={`${item.brandName} will be removed from the product list. This action cannot be undone in this session.`}
+          description={`${item.brandName} will be removed from the active product catalog.`}
           confirmLabel={isRemoving ? 'Removing…' : 'Remove product'}
           disabled={isRemoving}
           close={() => setConfirmRemove(false)}
-          confirm={remove}
+          confirm={() => void remove()}
         />
       )}
     </DashboardShell>

@@ -1,31 +1,73 @@
-import {
-  initialCustomers,
-  initialItems,
-  type CustomerProfile,
-  type ItemProfile
+import type {
+  CustomerDraft,
+  CustomerProfile,
+  ItemDraft,
+  ItemProfile
 } from '@renderer/data/profiles'
+import {
+  addProduct,
+  getCustomers,
+  getProducts,
+  removeProduct,
+  removeCustomer as requestRemoveCustomer,
+  saveCustomer as requestSaveCustomer
+} from '@renderer/services/profiles'
 import { create } from 'zustand'
 
 interface ProfileStore {
   items: ItemProfile[]
   customers: CustomerProfile[]
-  addItem: (item: ItemProfile) => void
-  removeItem: (id: number) => void
-  saveCustomer: (customer: CustomerProfile) => void
-  removeCustomer: (id: number) => void
+  isLoaded: boolean
+  isLoading: boolean
+  error: string
+  load: () => Promise<void>
+  addItem: (item: ItemDraft) => Promise<ItemProfile>
+  removeItem: (id: number) => Promise<void>
+  saveCustomer: (customer: CustomerDraft, id?: number) => Promise<CustomerProfile>
+  removeCustomer: (id: number) => Promise<void>
+  reset: () => void
 }
 
-export const useProfileStore = create<ProfileStore>((set) => ({
-  items: initialItems,
-  customers: initialCustomers,
-  addItem: (item) => set((state) => ({ items: [item, ...state.items] })),
-  removeItem: (id) => set((state) => ({ items: state.items.filter((value) => value.id !== id) })),
-  saveCustomer: (customer) =>
+export const useProfileStore = create<ProfileStore>((set, get) => ({
+  items: [],
+  customers: [],
+  isLoaded: false,
+  isLoading: false,
+  error: '',
+  load: async () => {
+    if (get().isLoading || get().isLoaded) return
+    set({ isLoading: true, error: '' })
+    try {
+      const [items, customers] = await Promise.all([getProducts(), getCustomers()])
+      set({ items, customers, isLoaded: true, isLoading: false })
+    } catch (error) {
+      set({
+        isLoading: false,
+        error: error instanceof Error ? error.message : 'Unable to load profile data.'
+      })
+    }
+  },
+  addItem: async (draft) => {
+    const item = await addProduct(draft)
+    set((state) => ({ items: [item, ...state.items] }))
+    return item
+  },
+  removeItem: async (id) => {
+    await removeProduct(id)
+    set((state) => ({ items: state.items.filter((item) => item.id !== id) }))
+  },
+  saveCustomer: async (draft, id) => {
+    const customer = await requestSaveCustomer(draft, id)
     set((state) => ({
       customers: state.customers.some((value) => value.id === customer.id)
         ? state.customers.map((value) => (value.id === customer.id ? customer : value))
         : [customer, ...state.customers]
-    })),
-  removeCustomer: (id) =>
+    }))
+    return customer
+  },
+  removeCustomer: async (id) => {
+    await requestRemoveCustomer(id)
     set((state) => ({ customers: state.customers.filter((value) => value.id !== id) }))
+  },
+  reset: () => set({ items: [], customers: [], isLoaded: false, isLoading: false, error: '' })
 }))

@@ -1,11 +1,16 @@
 import type { Kysely } from 'kysely'
+import type { Database } from '../src/shared/types'
 
-export async function up(db: Kysely<any>): Promise<void> {
+export async function up(db: Kysely<Database>): Promise<void> {
   await db.schema
     .createTable('batches')
     .addColumn('id', 'integer', (col) => col.primaryKey().autoIncrement())
-    .addColumn('drug_id', 'integer', (col) => col.notNull().references('drugs.id').onDelete("restrict"))
-    .addColumn('supplier_id', 'integer', (col) => col.notNull().references('suppliers.id').onDelete("restrict"))
+    .addColumn('drug_id', 'integer', (col) =>
+      col.notNull().references('drugs.id').onDelete('restrict')
+    )
+    .addColumn('supplier_id', 'integer', (col) =>
+      col.notNull().references('suppliers.id').onDelete('restrict')
+    )
     .addColumn('physical_tag', 'text', (col) => col.unique())
     .addColumn('buy_price', 'real', (col) => col.notNull())
     .addColumn('sell_price', 'real', (col) => col.notNull())
@@ -15,6 +20,6 @@ export async function up(db: Kysely<any>): Promise<void> {
     .execute()
 }
 
-export async function down(db: Kysely<any>): Promise<void> {
+export async function down(db: Kysely<Database>): Promise<void> {
   await db.schema.dropTable('batches').execute()
 }

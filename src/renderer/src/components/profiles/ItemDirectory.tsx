@@ -2,7 +2,7 @@ import DashboardShell from '@renderer/components/dashboard/DashboardShell'
 import { getItemStock, getStockStatus } from '@renderer/data/profiles'
 import { useProfileStore } from '@renderer/stores/useProfileStore'
 import { Link } from '@tanstack/react-router'
-import { useMemo, useState, type ReactElement } from 'react'
+import { useEffect, useMemo, useState, type ReactElement } from 'react'
 import { FiArchive, FiChevronRight, FiPlus, FiSearch } from 'react-icons/fi'
 
 const statusLabels = {
@@ -13,6 +13,8 @@ const statusLabels = {
 
 export default function ItemDirectory(): ReactElement {
   const items = useProfileStore((state) => state.items)
+  const load = useProfileStore((state) => state.load)
+  const loadError = useProfileStore((state) => state.error)
   const [query, setQuery] = useState('')
   const filteredItems = useMemo(() => {
     const search = query.trim().toLowerCase()
@@ -22,6 +24,10 @@ export default function ItemDirectory(): ReactElement {
         `${item.genericName} ${item.brandName} ${item.formulation}`.toLowerCase().includes(search)
     )
   }, [items, query])
+
+  useEffect(() => {
+    void load()
+  }, [load])
 
   return (
     <DashboardShell pageTitle="Inventory">
@@ -41,6 +47,14 @@ export default function ItemDirectory(): ReactElement {
           </Link>
         </section>
         <section className="panel overflow-hidden">
+          {loadError && (
+            <p
+              role="alert"
+              className="border-b border-rose-200 bg-rose-50 p-4 text-sm text-rose-700"
+            >
+              {loadError}
+            </p>
+          )}
           <div className="border-b border-neutral-200 p-4">
             <label className="relative block max-w-xl">
               <span className="sr-only">Search medicines</span>

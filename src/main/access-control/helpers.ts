@@ -4,7 +4,7 @@ import { UnauthorizedError } from '.'
 
 export function authorize(
   permissionHandler: (session: NonNullable<State['session']>) => Permission
-) {
+): Permission {
   if (state.session === undefined) {
     throw new UnauthorizedError('Session not found')
   }

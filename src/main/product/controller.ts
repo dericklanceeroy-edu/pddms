@@ -1,0 +1,39 @@
+import { accessControl, authorize } from '@main/access-control'
+import { state } from '@main/api'
+import { channels, resources } from '@shared/constants'
+import { newDrugSchema } from '@shared/schemas'
+import { isId } from '@shared/validators'
+import { ipcMain } from 'electron'
+import { findAll, insertOne, removeOneById } from './repository'
+
+ipcMain.handle(channels.product.getAll, async () => {
+  try {
+    authorize((session) => accessControl.can(session.account.role).readAny(resources.product))
+    return { success: true, products: await findAll() }
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : String(error) }
+  }
+})
+
+ipcMain.handle(channels.product.createOne, async (_, payload: unknown) => {
+  try {
+    authorize((session) => accessControl.can(session.account.role).createAny(resources.product))
+    const product = await insertOne(newDrugSchema.parse(payload))
+    state.database.stale = true
+    return { success: true, product: { ...product, batches: [] } }
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : String(error) }
+  }
+})
+
+ipcMain.handle(channels.product.removeOneById, async (_, id: unknown) => {
+  try {
+    authorize((session) => accessControl.can(session.account.role).deleteAny(resources.product))
+    if (!isId(id)) return { success: false, error: 'Invalid product.' }
+    await removeOneById(id)
+    state.database.stale = true
+    return { success: true }
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : String(error) }
+  }
+})

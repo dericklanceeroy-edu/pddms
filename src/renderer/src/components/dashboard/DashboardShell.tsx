@@ -105,26 +105,28 @@ function Sidebar({
         <p className="px-3 pb-2 text-[0.65rem] font-semibold tracking-[0.18em] text-neutral-500 uppercase">
           Workspace
         </p>
-        {navigation.map(({ label, to, icon: Icon }) => {
-          const isActive = activePath === to
+        {navigation
+          .filter(({ to }) => to !== '/users' || account?.role === 'master')
+          .map(({ label, to, icon: Icon }) => {
+            const isActive = activePath === to
 
-          return (
-            <Link
-              key={to}
-              to={to}
-              aria-current={isActive ? 'page' : undefined}
-              onClick={onClose}
-              className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
-                isActive
-                  ? 'bg-mauve-600 text-white shadow-lg shadow-mauve-950/30'
-                  : 'hover:bg-white/10 hover:text-white'
-              }`}
-            >
-              <Icon className="size-4.5 shrink-0" aria-hidden="true" />
-              <span>{label}</span>
-            </Link>
-          )
-        })}
+            return (
+              <Link
+                key={to}
+                to={to}
+                aria-current={isActive ? 'page' : undefined}
+                onClick={onClose}
+                className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
+                  isActive
+                    ? 'bg-mauve-600 text-white shadow-lg shadow-mauve-950/30'
+                    : 'hover:bg-white/10 hover:text-white'
+                }`}
+              >
+                <Icon className="size-4.5 shrink-0" aria-hidden="true" />
+                <span>{label}</span>
+              </Link>
+            )
+          })}
       </nav>
       <div className="border-t border-white/10 p-4">
         <div className="rounded-xl bg-white/5 p-3">

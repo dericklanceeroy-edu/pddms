@@ -1,12 +1,15 @@
-import { countAll, insertOne } from '@main/account/repository'
+import { countAll, insertMasterIfEmpty } from '@main/account/repository'
 import { state } from '@main/api'
 import { channels, roles } from '@shared/constants'
-import { newAccountSchema } from '@shared/schemas'
-import type { Account } from '@shared/types'
+import { masterSetupSchema, newAccountSchema } from '@shared/schemas'
+import type { Account, AccountWithoutPassword } from '@shared/types'
 import { hash } from 'argon2'
 import { ipcMain } from 'electron'
 
-const getPublicAccount = ({ password: _, ...account }: Account) => account
+const getPublicAccount = ({ password, ...account }: Account): AccountWithoutPassword => {
+  void password
+  return account
+}
 
 ipcMain.handle(channels.setup.getStatus, async () => ({
   success: true,
@@ -19,8 +22,13 @@ ipcMain.handle(channels.setup.createMaster, async (_, payload: unknown) => {
       return { success: false, error: 'Initial setup has already been completed.' }
     }
 
-    const parsed = newAccountSchema.parse({ ...(payload as object), role: roles.master })
-    const account = await insertOne({ ...parsed, password: await hash(parsed.password) })
+    const setup = masterSetupSchema.parse(payload)
+    const parsed = newAccountSchema.parse({ ...setup, role: roles.master })
+    const account = await insertMasterIfEmpty({
+      ...parsed,
+      password: await hash(parsed.password)
+    })
+    if (!account) return { success: false, error: 'Initial setup has already been completed.' }
 
     state.session = { account }
 

@@ -1,8 +1,8 @@
 import { state } from '@main/api'
 import { backupDatabase } from './service'
 
-export function startDatabaseBackupJob() {
-  const run = async () => {
+export function startDatabaseBackupJob(): NodeJS.Timeout {
+  const run = async (): Promise<void> => {
     if (state.database.stale) {
       await backupDatabase()
       state.database.stale = false

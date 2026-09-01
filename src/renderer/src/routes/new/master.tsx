@@ -1,8 +1,7 @@
 import Form from '@renderer/components/Form/Form'
 import { CenteredPageHeader } from '@renderer/components/layout/CenteredPage'
 import { useAccount } from '@renderer/hooks/useAccount'
-import { createMaster } from '@renderer/services/setup'
-import type { Credentials } from '@shared/types'
+import { createMaster, type MasterSetup } from '@renderer/services/setup'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useState, type ReactElement } from 'react'
 import { BsEyeFill, BsEyeSlashFill } from 'react-icons/bs'
@@ -17,7 +16,7 @@ function RouteComponent(): ReactElement {
   const [error, setError] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const submit = async (credentials: Credentials): Promise<void> => {
+  const submit = async (credentials: MasterSetup): Promise<void> => {
     setError('')
     setIsSubmitting(true)
     const result = await createMaster(credentials)
@@ -38,10 +37,19 @@ function RouteComponent(): ReactElement {
         title="Set up master account"
         description="This first account controls system access and administration."
       />
-      <Form<Credentials> onSubmit={submit} className="space-y-4">
+      <Form<MasterSetup> onSubmit={submit} className="space-y-4">
+        <Form.Text
+          name="fullName"
+          placeholder="Full name"
+          autoComplete="name"
+          required
+          minLength={2}
+          disabled={isSubmitting}
+        />
         <Form.Text
           name="username"
           placeholder="Username"
+          autoComplete="username"
           required
           minLength={4}
           disabled={isSubmitting}
@@ -49,6 +57,7 @@ function RouteComponent(): ReactElement {
         <Form.Password
           name="password"
           placeholder="Password"
+          autoComplete="new-password"
           show={BsEyeFill}
           hide={BsEyeSlashFill}
           required

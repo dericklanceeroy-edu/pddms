@@ -6,7 +6,10 @@ import { verify } from 'argon2'
 import { ipcMain } from 'electron'
 import { findOneByUsername } from '../account/repository'
 
-const getPublicAccount = ({ password: _, ...account }: Account): AccountWithoutPassword => account
+const getPublicAccount = ({ password, ...account }: Account): AccountWithoutPassword => {
+  void password
+  return account
+}
 
 ipcMain.handle(channels.auth.getStatus, () => ({
   success: true,
@@ -19,7 +22,7 @@ ipcMain.handle(channels.auth.signIn, async (_, payload: unknown) => {
 
     const account = await findOneByUsername(data.username)
 
-    if (account === null || account.isArchived === 1) {
+    if (account === null || account.isArchived === 1 || account.isVerified !== 1) {
       return { success: false, error: 'The username or password is incorrect.' }
     }
 

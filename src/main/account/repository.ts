@@ -31,6 +31,25 @@ export async function findOneByUsername(username: string): Promise<Account | nul
   )
 }
 
+export async function insertMasterIfEmpty(data: NewAccount): Promise<Account | null> {
+  return await db.transaction().execute(async (transaction) => {
+    const result = await transaction
+      .selectFrom('accounts')
+      .select(({ fn }) => fn.count<number>('id').as('count'))
+      .executeTakeFirstOrThrow()
+    if (Number(result.count) !== 0) return null
+    return await transaction
+      .insertInto('accounts')
+      .values(data)
+      .returningAll()
+      .executeTakeFirstOrThrow()
+  })
+}
+
+export async function findAll(): Promise<Account[]> {
+  return await db.selectFrom('accounts').selectAll().orderBy('createdAt', 'desc').execute()
+}
+
 export async function countAll(): Promise<number> {
   const result = await db
     .selectFrom('accounts')
@@ -49,11 +68,10 @@ export async function updateOneById(id: number, data: AccountUpdate): Promise<vo
     .executeTakeFirstOrThrow()
 }
 
-export async function archiveOneById(id: number): Promise<void> {
+export async function setBlockedById(id: number, blocked: boolean): Promise<void> {
   await db
     .updateTable('accounts')
-    .set({ isArchived: 1 })
+    .set({ isArchived: blocked ? 1 : 0 })
     .where('id', '=', id)
-    .where('isArchived', '==', 0)
     .executeTakeFirstOrThrow()
 }

@@ -4,6 +4,7 @@ import {
   signOut as requestSignOut
 } from '@renderer/services/auth'
 import { getSetupStatus } from '@renderer/services/setup'
+import { useProfileStore } from '@renderer/stores/useProfileStore'
 import type { AccountWithoutPassword, Credentials } from '@shared/types'
 import { Navigate, useRouterState } from '@tanstack/react-router'
 import { useEffect, useMemo, useState, type PropsWithChildren, type ReactElement } from 'react'
@@ -40,7 +41,10 @@ export default function AccountProvider({ children }: PropsWithChildren): ReactE
       },
       signOut: async () => {
         const result = await requestSignOut()
-        if (result.success) setAccount(null)
+        if (result.success) {
+          useProfileStore.getState().reset()
+          setAccount(null)
+        }
         return result
       },
       completeSetup: (createdAccount: AccountWithoutPassword) => {
@@ -82,6 +86,7 @@ export default function AccountProvider({ children }: PropsWithChildren): ReactE
   if (requiresSetup) return <AccountContext value={value}>{children}</AccountContext>
   if (!account && path !== '/signIn') return <Navigate to="/signIn" replace />
   if (account && path === '/signIn') return <Navigate to="/" replace />
+  if (account?.role !== 'master' && path === '/users') return <Navigate to="/" replace />
 
   return <AccountContext value={value}>{children}</AccountContext>
 }

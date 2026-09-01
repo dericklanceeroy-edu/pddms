@@ -14,17 +14,8 @@ An Electron application with React and TypeScript
 $ npm install
 ```
 
-Copy `.env.example` to `.env`. The example configures a local development database and the
-idempotent development master account:
-
-```text
-username: medprix
-password: medprix123
-```
-
-`DEV_MASTER_USERNAME` and `DEV_MASTER_PASSWORD` are optional overrides. When omitted, the seed uses
-the documented development credentials above. These values are read only by the development
-database seed and are never embedded in the renderer.
+The application uses `./pddms.db` by default. Copy `.env.example` to `.env` only when custom
+database paths are needed. Database files are ignored by Git.
 
 Initialize or update the local database manually with:
 
@@ -38,8 +29,9 @@ $ npm run setup:dev
 $ npm run dev
 ```
 
-`npm run dev` automatically runs migrations and the idempotent development seed before Electron
-starts. Re-running it does not create duplicate master accounts.
+`npm run dev` runs migrations before Electron starts. On an empty database, the application opens
+the first-launch flow and requires creation of the master account. No default credentials or
+development account are created.
 
 Authentication sessions are held by the Electron main process. Renderer refreshes retain the
 current session, while fully quitting and restarting the application requires signing in again.

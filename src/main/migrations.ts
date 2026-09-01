@@ -3,6 +3,7 @@ import { up as createAccounts } from '../../migrations/1785501403133_create_acco
 import { up as createDrugs } from '../../migrations/1786732875171_create_drugs_table'
 import { up as createSuppliers } from '../../migrations/1786732898928_create_suppliers_table'
 import { up as createBatches } from '../../migrations/1786733456952_create_batches_table'
+import { up as completeProfilesSchema } from '../../migrations/1788278400000_complete_profiles_schema'
 
 export async function initializeDatabase(): Promise<void> {
   const existingTables = new Set((await db.introspection.getTables()).map((table) => table.name))
@@ -11,4 +12,5 @@ export async function initializeDatabase(): Promise<void> {
   if (!existingTables.has('drugs')) await createDrugs(db)
   if (!existingTables.has('suppliers')) await createSuppliers(db)
   if (!existingTables.has('batches')) await createBatches(db)
+  await completeProfilesSchema(db)
 }

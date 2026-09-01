@@ -5,6 +5,7 @@ import { resources, roles } from './constants'
 export interface Database {
   accounts: AccountsTable
   batches: BatchesTable
+  customers: CustomersTable
   drugs: DrugsTable
   suppliers: SuppliersTable
 }
@@ -23,8 +24,10 @@ export interface AccountsTable {
   id: ColumnType<Id, Id | undefined, never>
   role: Role
   username: string
+  fullName: string
   password: string
   isArchived: ColumnType<ZeroOrOne, never, ZeroOrOne>
+  isVerified: ColumnType<ZeroOrOne, ZeroOrOne | undefined, ZeroOrOne>
   createdAt: ColumnType<Date, string | undefined, never>
   updatedAt: ColumnType<Date, string | undefined, never>
 }
@@ -49,6 +52,21 @@ export interface DrugsTable {
   formulation: string
   isPrescribed: boolean
   isControlled: boolean
+  reorderLevel: ColumnType<number, number | undefined, number>
+  isArchived: ColumnType<ZeroOrOne, ZeroOrOne | undefined, ZeroOrOne>
+}
+
+export interface CustomersTable {
+  id: ColumnType<Id, Id | undefined, never>
+  fullName: string
+  phone: string
+  email: string | null
+  address: string | null
+  discountType: 'none' | 'senior' | 'pwd'
+  discountId: string | null
+  discountExpiresAt: string | null
+  createdAt: ColumnType<string, string | undefined, never>
+  updatedAt: ColumnType<string, string | undefined, never>
 }
 
 export interface SuppliersTable {
@@ -69,6 +87,10 @@ export type Account = Selectable<AccountsTable>
 export type NewAccount = Insertable<AccountsTable>
 export type AccountUpdate = Updateable<AccountsTable>
 export type AccountWithoutPassword = Omit<Account, 'password'>
+
+export type Customer = Selectable<CustomersTable>
+export type NewCustomer = Insertable<CustomersTable>
+export type CustomerUpdate = Updateable<CustomersTable>
 
 export interface Credentials {
   username: Account['username']

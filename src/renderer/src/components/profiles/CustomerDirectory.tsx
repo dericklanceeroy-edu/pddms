@@ -1,11 +1,13 @@
 import DashboardShell from '@renderer/components/dashboard/DashboardShell'
 import { useProfileStore } from '@renderer/stores/useProfileStore'
 import { Link } from '@tanstack/react-router'
-import { useMemo, useState, type ReactElement } from 'react'
+import { useEffect, useMemo, useState, type ReactElement } from 'react'
 import { FiChevronRight, FiPlus, FiSearch, FiUser } from 'react-icons/fi'
 
 export default function CustomerDirectory(): ReactElement {
   const customers = useProfileStore((state) => state.customers)
+  const load = useProfileStore((state) => state.load)
+  const loadError = useProfileStore((state) => state.error)
   const [query, setQuery] = useState('')
   const filteredCustomers = useMemo(() => {
     const search = query.trim().toLowerCase()
@@ -17,6 +19,10 @@ export default function CustomerDirectory(): ReactElement {
           .includes(search)
     )
   }, [customers, query])
+
+  useEffect(() => {
+    void load()
+  }, [load])
 
   return (
     <DashboardShell pageTitle="Customer profiles">
@@ -40,6 +46,14 @@ export default function CustomerDirectory(): ReactElement {
           </Link>
         </section>
         <section className="panel overflow-hidden">
+          {loadError && (
+            <p
+              role="alert"
+              className="border-b border-rose-200 bg-rose-50 p-4 text-sm text-rose-700"
+            >
+              {loadError}
+            </p>
+          )}
           <div className="border-b border-neutral-200 p-4">
             <label className="relative block max-w-xl">
               <FiSearch className="absolute top-3 left-3.5 text-neutral-400" />

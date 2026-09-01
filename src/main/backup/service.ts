@@ -6,7 +6,7 @@ import { join } from 'node:path'
 /**
  * Creates or updates database backup in Google Drive.
  */
-export async function backupDatabase() {
+export async function backupDatabase(): Promise<void> {
   const { data } = await drive.files.list({
     q: `name = '${env.DATABASE_BACKUP}' and trashed = false`,
     fields: 'files(id)'

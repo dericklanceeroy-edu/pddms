@@ -1,5 +1,11 @@
 import { channels } from '@shared/constants'
-import type { AccountWithoutPassword, Credentials } from '@shared/types'
+import type { AccountWithoutPassword } from '@shared/types'
+
+export interface MasterSetup {
+  fullName: string
+  username: string
+  password: string
+}
 
 export interface SetupStatusResult {
   success: boolean
@@ -21,7 +27,7 @@ export async function getSetupStatus(): Promise<SetupStatusResult> {
   }
 }
 
-export async function createMaster(credentials: Credentials): Promise<CreateMasterResult> {
+export async function createMaster(credentials: MasterSetup): Promise<CreateMasterResult> {
   try {
     return (await window.electron.ipcRenderer.invoke(
       channels.setup.createMaster,

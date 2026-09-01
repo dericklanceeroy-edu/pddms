@@ -15,13 +15,23 @@ accessControl
   .updateOwn(resources.account, ['*'])
   .updateAny(resources.account, ['!password'])
   .deleteAny(resources.account)
+  .createAny(resources.customer)
+  .readAny(resources.customer)
+  .updateAny(resources.customer)
+  .deleteAny(resources.customer)
+  .createAny(resources.product)
+  .readAny(resources.product)
+  .deleteAny(resources.product)
 
 accessControl
   .grant(roles.manager)
   .readOwn(resources.account, ['*'])
-  .readAny(resources.account, ['!password'])
   .updateOwn(resources.account, ['*'])
-  .updateAny(resources.account, ['!role', '!password'])
+  .readAny(resources.customer)
+  .createAny(resources.customer)
+  .updateAny(resources.customer)
+  .deleteAny(resources.customer)
+  .readAny(resources.product)
 
 export * from './errors'
 export * from './helpers'
