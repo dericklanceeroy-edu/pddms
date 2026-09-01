@@ -1,7 +1,7 @@
 import { db } from '@main/db'
-import type { Drug, NewDrug } from '@shared/types'
+import type { Drug, NewProduct, Product } from '@shared/types'
 
-export interface ProductWithInventory extends Drug {
+export interface ProductWithInventory extends Product {
   batches: Array<{
     id: number
     batchNumber: string
@@ -34,7 +34,7 @@ export async function findAll(): Promise<ProductWithInventory[]> {
     .execute()
 
   return products.map((product) => ({
-    ...product,
+    ...toProduct(product),
     batches: batches
       .filter((batch) => batch.drugId === product.id)
       .map((batch) => ({
@@ -48,8 +48,23 @@ export async function findAll(): Promise<ProductWithInventory[]> {
   }))
 }
 
-export async function insertOne(data: NewDrug): Promise<Drug> {
-  return await db.insertInto('drugs').values(data).returningAll().executeTakeFirstOrThrow()
+const toProduct = (drug: Drug): Product => ({
+  ...drug,
+  isPrescribed: drug.isPrescribed === 1,
+  isControlled: drug.isControlled === 1
+})
+
+export async function insertOne(data: NewProduct): Promise<Product> {
+  const drug = await db
+    .insertInto('drugs')
+    .values({
+      ...data,
+      isPrescribed: data.isPrescribed ? 1 : 0,
+      isControlled: data.isControlled ? 1 : 0
+    })
+    .returningAll()
+    .executeTakeFirstOrThrow()
+  return toProduct(drug)
 }
 
 export async function removeOneById(id: number): Promise<void> {

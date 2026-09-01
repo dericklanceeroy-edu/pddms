@@ -68,6 +68,7 @@ export default function AdminDashboard(): ReactElement {
   return (
     <DashboardShell
       source={data?.source ?? null}
+      isLoading={!data && isLoading}
       isRefreshing={isLoading}
       onRefresh={() => void reload()}
     >

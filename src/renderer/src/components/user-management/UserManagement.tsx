@@ -7,7 +7,7 @@ import {
 } from '@renderer/data/userManagement'
 import { useUserManagement } from '@renderer/hooks/useUserManagement'
 import { useMemo, useState, type FormEvent, type ReactElement } from 'react'
-import { FiEye, FiPlus, FiSearch, FiShield, FiUsers, FiX } from 'react-icons/fi'
+import { FiEye, FiPlus, FiSearch, FiShield, FiTrash2, FiUsers, FiX } from 'react-icons/fi'
 
 const date = new Intl.DateTimeFormat('en-PH', { dateStyle: 'medium' })
 
@@ -17,6 +17,7 @@ export default function UserManagement(): ReactElement {
   const [role, setRole] = useState<UserRole | 'all'>('all')
   const [creating, setCreating] = useState(false)
   const [selected, setSelected] = useState<ManagedUser | null>(null)
+  const [deleteUser, setDeleteUser] = useState<ManagedUser | null>(null)
   const [feedback, setFeedback] = useState('')
   const filtered = useMemo(() => {
     const search = query.trim().toLowerCase()
@@ -126,6 +127,14 @@ export default function UserManagement(): ReactElement {
                         </button>
                         <button
                           disabled={user.role === 'master'}
+                          onClick={() => setDeleteUser(user)}
+                          className="icon-button text-rose-700 disabled:opacity-40"
+                          aria-label={`Delete ${user.fullName}`}
+                        >
+                          <FiTrash2 />
+                        </button>
+                        <button
+                          disabled={user.role === 'master'}
                           onClick={() => {
                             void management
                               .toggleStatus(user)
@@ -176,6 +185,17 @@ export default function UserManagement(): ReactElement {
         />
       )}
       {selected && <UserDetails user={selected} close={() => setSelected(null)} />}
+      {deleteUser && (
+        <DeleteUserDialog
+          user={deleteUser}
+          close={() => setDeleteUser(null)}
+          confirm={async () => {
+            await management.deleteUser(deleteUser)
+            setDeleteUser(null)
+            setFeedback('User account deleted.')
+          }}
+        />
+      )}
     </DashboardShell>
   )
 }
@@ -233,8 +253,16 @@ function CreateUserDialog({
           />
         </Field>
         <Field label="Role">
-          <select disabled className="field" value="manager">
-            <option value="manager">Manager</option>
+          <select
+            className="field"
+            value={values.role}
+            onChange={(event) => setValues({ ...values, role: event.target.value as UserRole })}
+          >
+            {(Object.keys(roleLabels) as UserRole[]).map((role) => (
+              <option key={role} value={role}>
+                {roleLabels[role]}
+              </option>
+            ))}
           </select>
         </Field>
         <Field label="Temporary password">
@@ -262,6 +290,57 @@ function CreateUserDialog({
           </button>
         </div>
       </form>
+    </Dialog>
+  )
+}
+
+function DeleteUserDialog({
+  user,
+  close,
+  confirm
+}: {
+  user: ManagedUser
+  close: VoidFunction
+  confirm: () => Promise<void>
+}): ReactElement {
+  const [error, setError] = useState('')
+  const [deleting, setDeleting] = useState(false)
+
+  const remove = async (): Promise<void> => {
+    setDeleting(true)
+    setError('')
+    try {
+      await confirm()
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Unable to delete the account.')
+      setDeleting(false)
+    }
+  }
+
+  return (
+    <Dialog title="Delete staff account?" close={close}>
+      <div>
+        <p className="text-sm leading-6 text-neutral-600">
+          {user.fullName} will permanently lose access and be removed from the user list.
+        </p>
+        {error && (
+          <p role="alert" className="mt-4 rounded-xl bg-rose-50 p-3 text-sm text-rose-700">
+            {error}
+          </p>
+        )}
+        <div className="mt-6 flex justify-end gap-2">
+          <button disabled={deleting} onClick={close} className="secondary-button">
+            Cancel
+          </button>
+          <button
+            disabled={deleting}
+            onClick={() => void remove()}
+            className="rounded-xl bg-rose-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-rose-800 disabled:opacity-60"
+          >
+            {deleting ? 'Deleting…' : 'Delete account'}
+          </button>
+        </div>
+      </div>
     </Dialog>
   )
 }

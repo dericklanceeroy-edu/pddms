@@ -7,7 +7,7 @@ import type {
   CustomerUpdate,
   NewAccount,
   NewCustomer,
-  NewDrug
+  NewProduct
 } from './types'
 
 export const accountSchema = z.strictObject({
@@ -70,4 +70,4 @@ export const newDrugSchema = z.strictObject({
   isPrescribed: z.boolean(),
   isControlled: z.boolean(),
   reorderLevel: z.number().int().nonnegative()
-}) satisfies z.ZodType<NewDrug>
+}) satisfies z.ZodType<NewProduct>

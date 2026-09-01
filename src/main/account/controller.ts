@@ -10,6 +10,7 @@ import {
   findOneById,
   findOneByUsername,
   insertOne,
+  removeOneById,
   setBlockedById,
   updateOneById
 } from './repository'
@@ -149,5 +150,23 @@ ipcMain.handle(channels.account.setBlockedById, async (_, id: unknown, blocked: 
       success: false,
       error: error instanceof Error ? error.message : String(error)
     }
+  }
+})
+
+ipcMain.handle(channels.account.removeOneById, async (_, id: unknown) => {
+  try {
+    authorize((session) => accessControl.can(session.account.role).deleteAny(resources.account))
+    if (!isId(id)) return { success: false, error: 'Invalid account.' }
+
+    const account = await findOneById(id)
+    if (!account) return { success: false, error: 'Account not found.' }
+    if (account.role === 'master') {
+      return { success: false, error: 'Master accounts cannot be deleted.' }
+    }
+
+    await removeOneById(id)
+    return { success: true }
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : String(error) }
   }
 })

@@ -16,7 +16,7 @@ export interface ManagedUser {
 export interface UserFormValues {
   fullName: string
   username: string
-  role: 'manager'
+  role: UserRole
   password: string
 }
 

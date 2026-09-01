@@ -1,5 +1,10 @@
 import type { ManagedUser, UserFormValues } from '@renderer/data/userManagement'
-import { createAccount, getAccounts, setAccountBlocked } from '@renderer/services/accounts'
+import {
+  createAccount,
+  deleteAccount,
+  getAccounts,
+  setAccountBlocked
+} from '@renderer/services/accounts'
 import { useCallback, useEffect, useState } from 'react'
 
 interface UserManagementState {
@@ -9,6 +14,7 @@ interface UserManagementState {
   load: () => Promise<void>
   saveUser: (values: UserFormValues) => Promise<void>
   toggleStatus: (user: ManagedUser) => Promise<void>
+  deleteUser: (user: ManagedUser) => Promise<void>
 }
 
 export function useUserManagement(): UserManagementState {
@@ -62,5 +68,10 @@ export function useUserManagement(): UserManagementState {
     )
   }
 
-  return { users, isLoading, error, load, saveUser, toggleStatus }
+  const deleteUser = async (user: ManagedUser): Promise<void> => {
+    await deleteAccount(user.id)
+    setUsers((current) => current.filter((value) => value.id !== user.id))
+  }
+
+  return { users, isLoading, error, load, saveUser, toggleStatus, deleteUser }
 }

@@ -22,8 +22,16 @@ ipcMain.handle(channels.auth.signIn, async (_, payload: unknown) => {
 
     const account = await findOneByUsername(data.username)
 
-    if (account === null || account.isArchived === 1 || account.isVerified !== 1) {
+    if (account === null) {
       return { success: false, error: 'The username or password is incorrect.' }
+    }
+
+    if (account.isArchived === 1) {
+      return { success: false, error: 'This user is blocked from accessing the system.' }
+    }
+
+    if (account.isVerified !== 1) {
+      return { success: false, error: 'This account has not been verified.' }
     }
 
     const isPasswordCorrect = await verify(account.password, data.password)

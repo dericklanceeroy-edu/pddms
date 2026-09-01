@@ -50,8 +50,8 @@ export interface DrugsTable {
   genericName: string
   brandName: string
   formulation: string
-  isPrescribed: boolean
-  isControlled: boolean
+  isPrescribed: ZeroOrOne
+  isControlled: ZeroOrOne
   reorderLevel: ColumnType<number, number | undefined, number>
   isArchived: ColumnType<ZeroOrOne, ZeroOrOne | undefined, ZeroOrOne>
 }
@@ -104,6 +104,14 @@ export type BatchUpdate = Updateable<BatchesTable>
 export type Drug = Selectable<DrugsTable>
 export type NewDrug = Insertable<DrugsTable>
 export type DrugUpdate = Updateable<DrugsTable>
+export type Product = Omit<Drug, 'isPrescribed' | 'isControlled'> & {
+  isPrescribed: boolean
+  isControlled: boolean
+}
+export type NewProduct = Omit<NewDrug, 'isPrescribed' | 'isControlled'> & {
+  isPrescribed: boolean
+  isControlled: boolean
+}
 
 export type Supplier = Selectable<SuppliersTable>
 export type NewSupplier = Insertable<SuppliersTable>

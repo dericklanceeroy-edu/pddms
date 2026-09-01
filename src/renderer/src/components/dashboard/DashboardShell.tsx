@@ -49,6 +49,7 @@ const timeFormatter = new Intl.DateTimeFormat('en-PH', {
 interface DashboardShellProps extends PropsWithChildren {
   pageTitle?: string
   source?: DashboardSourceMetadata | null
+  isLoading?: boolean
   isRefreshing?: boolean
   onRefresh?: VoidFunction
 }
@@ -166,6 +167,7 @@ export default function DashboardShell({
   children,
   pageTitle = 'Admin dashboard',
   source = null,
+  isLoading = false,
   isRefreshing = false,
   onRefresh
 }: DashboardShellProps): ReactElement {
@@ -287,7 +289,11 @@ export default function DashboardShell({
                 </span>
               )}
               <span className="hidden text-xs text-neutral-500 md:inline">
-                {source ? `Updated ${timeFormatter.format(generatedAt)}` : 'Loading data'}
+                {source
+                  ? `Updated ${timeFormatter.format(generatedAt)}`
+                  : isLoading
+                    ? 'Loading data'
+                    : 'No data source'}
               </span>
               {onRefresh && (
                 <button

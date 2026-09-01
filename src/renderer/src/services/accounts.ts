@@ -36,3 +36,11 @@ export async function setAccountBlocked(id: number, blocked: boolean): Promise<v
   )) as AccountResult
   if (!result.success) throw new Error(result.error ?? 'Unable to change account access.')
 }
+
+export async function deleteAccount(id: number): Promise<void> {
+  const result = (await window.electron.ipcRenderer.invoke(
+    channels.account.removeOneById,
+    id
+  )) as AccountResult
+  if (!result.success) throw new Error(result.error ?? 'Unable to delete the account.')
+}

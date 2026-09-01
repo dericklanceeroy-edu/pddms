@@ -12,7 +12,8 @@ export const channels = {
     getOneById: 'account.getOneById',
     getOneByUsername: 'account.getOneByUsername',
     updateOneById: 'account.updateOneById',
-    setBlockedById: 'account.setBlockedById'
+    setBlockedById: 'account.setBlockedById',
+    removeOneById: 'account.removeOneById'
   },
   customer: {
     getAll: 'customer.getAll',

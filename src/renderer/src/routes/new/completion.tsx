@@ -10,49 +10,31 @@ export const Route = createFileRoute('/new/completion')({
 
 function RouteComponent(): ReactElement {
   const navigate = useNavigate()
+  const completionDelaySeconds = 3
 
-  const { animate, transition }: MotionNodeAnimationOptions = {
-    animate: {
-      backgroundPosition: ['100% 0%', '0% 0%']
-    },
+  const progress: MotionNodeAnimationOptions = {
+    initial: { scaleX: 0 },
+    animate: { scaleX: 1 },
     transition: {
-      duration: 3,
+      duration: completionDelaySeconds,
       ease: 'easeInOut'
     }
   }
 
   useDelay(() => {
     navigate({ to: '/' })
-  }, transition.duration!)
+  }, completionDelaySeconds)
 
   return (
     <div>
       <CenteredPageHeader title="You're all set!" description="You may now use the application." />
-      <Link to="/" className="block w-full p-0 outline-none focus:ring-0">
-        <motion.div
-          animate={animate}
-          transition={transition}
-          style={{
-            background: 'linear-gradient(to right, var(--color-mauve-600) 50%, transparent 50%)',
-            backgroundSize: '200% 100%'
-          }}
-          className="h-full w-full cursor-pointer rounded border-2 border-mauve-600 text-white"
-        >
-          <motion.div
-            animate={animate}
-            transition={transition}
-            style={{
-              background: 'linear-gradient(to right, white 50%, var(--color-mauve-600) 50%)',
-              backgroundSize: '200% 100%',
-              backgroundClip: 'text',
-              WebkitBackgroundClip: 'text',
-              color: 'transparent'
-            }}
-            className="grid h-full items-center"
-          >
-            Finish
-          </motion.div>
-        </motion.div>
+      <Link to="/" className="primary-button relative w-full overflow-hidden">
+        <motion.span
+          {...progress}
+          aria-hidden="true"
+          className="absolute inset-0 origin-left bg-mauve-600"
+        />
+        <span className="relative">Finish</span>
       </Link>
     </div>
   )

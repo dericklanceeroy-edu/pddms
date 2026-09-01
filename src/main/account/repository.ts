@@ -75,3 +75,7 @@ export async function setBlockedById(id: number, blocked: boolean): Promise<void
     .where('id', '=', id)
     .executeTakeFirstOrThrow()
 }
+
+export async function removeOneById(id: number): Promise<void> {
+  await db.deleteFrom('accounts').where('id', '=', id).executeTakeFirstOrThrow()
+}
