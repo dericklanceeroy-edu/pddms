@@ -10,7 +10,8 @@ import {
   getProducts,
   removeProduct,
   removeCustomer as requestRemoveCustomer,
-  saveCustomer as requestSaveCustomer
+  saveCustomer as requestSaveCustomer,
+  updateProduct
 } from '@renderer/services/profiles'
 import { create } from 'zustand'
 
@@ -22,6 +23,7 @@ interface ProfileStore {
   error: string
   load: () => Promise<void>
   addItem: (item: ItemDraft) => Promise<ItemProfile>
+  updateItem: (id: number, item: ItemDraft) => Promise<ItemProfile>
   removeItem: (id: number) => Promise<void>
   saveCustomer: (customer: CustomerDraft, id?: number) => Promise<CustomerProfile>
   removeCustomer: (id: number) => Promise<void>
@@ -51,6 +53,15 @@ export const useProfileStore = create<ProfileStore>((set, get) => ({
     const item = await addProduct(draft)
     set((state) => ({ items: [item, ...state.items] }))
     return item
+  },
+  updateItem: async (id, draft) => {
+    const item = await updateProduct(id, draft)
+    const currentItem = get().items.find((value) => value.id === id)
+    const updatedItem = { ...item, batches: currentItem?.batches ?? [] }
+    set((state) => ({
+      items: state.items.map((value) => (value.id === id ? updatedItem : value))
+    }))
+    return updatedItem
   },
   removeItem: async (id) => {
     await removeProduct(id)

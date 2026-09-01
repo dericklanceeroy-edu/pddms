@@ -8,7 +8,8 @@ import type {
   NewAccount,
   NewCustomer,
   NewProduct,
-  NewSupplier
+  NewSupplier,
+  ProductUpdate
 } from './types'
 
 export const accountSchema = z.strictObject({
@@ -72,6 +73,8 @@ export const newDrugSchema = z.strictObject({
   isControlled: z.boolean(),
   reorderLevel: z.number().int().nonnegative()
 }) satisfies z.ZodType<NewProduct>
+
+export const productUpdateSchema = newDrugSchema.partial() satisfies z.ZodType<ProductUpdate>
 
 const supplierFields = {
   organization: z.string().trim().min(2),

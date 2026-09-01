@@ -1,9 +1,10 @@
 import DashboardShell from '@renderer/components/dashboard/DashboardShell'
 import { getItemStock, getStockStatus, type ItemProfile } from '@renderer/data/profiles'
+import { useAccount } from '@renderer/hooks/useAccount'
 import { useProfileStore } from '@renderer/stores/useProfileStore'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { useState, type FormEvent, type ReactElement } from 'react'
-import { FiArrowLeft, FiPackage, FiTrash2 } from 'react-icons/fi'
+import { FiArrowLeft, FiEdit2, FiPackage, FiTrash2, FiX } from 'react-icons/fi'
 
 const currency = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' })
 const date = new Intl.DateTimeFormat('en-PH', { dateStyle: 'medium' })
@@ -24,7 +25,9 @@ const emptyItem: ItemProfile = {
 export default function ItemProfileView({ item }: { item: ItemProfile | null }): ReactElement {
   const items = useProfileStore((state) => state.items)
   const addItem = useProfileStore((state) => state.addItem)
+  const updateItem = useProfileStore((state) => state.updateItem)
   const removeItem = useProfileStore((state) => state.removeItem)
+  const { account } = useAccount()
   const navigate = useNavigate()
   const isNew = item === null
   const [draft, setDraft] = useState<ItemProfile>(() =>
@@ -34,6 +37,8 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
   const [isSaving, setIsSaving] = useState(false)
   const [confirmRemove, setConfirmRemove] = useState(false)
   const [isRemoving, setIsRemoving] = useState(false)
+  const [isEditing, setIsEditing] = useState(false)
+  const canEdit = account?.role === 'master' || account?.role === 'staff'
 
   if (isNew) {
     const save = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
@@ -94,76 +99,10 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
                 Create the product profile. Stock is recorded separately through inventory batches.
               </p>
             </div>
-            <div className="grid gap-5 sm:grid-cols-2">
-              <Field label="Brand name">
-                <input
-                  required
-                  className="field"
-                  value={draft.brandName}
-                  onChange={(event) => setDraft({ ...draft, brandName: event.target.value })}
-                />
-              </Field>
-              <Field label="Generic name">
-                <input
-                  required
-                  className="field"
-                  value={draft.genericName}
-                  onChange={(event) => setDraft({ ...draft, genericName: event.target.value })}
-                />
-              </Field>
-              <Field label="Category">
-                <input
-                  required
-                  className="field"
-                  value={draft.category}
-                  onChange={(event) => setDraft({ ...draft, category: event.target.value })}
-                />
-              </Field>
-              <Field label="Formulation">
-                <input
-                  required
-                  className="field"
-                  placeholder="e.g. 500 mg tablet"
-                  value={draft.formulation}
-                  onChange={(event) => setDraft({ ...draft, formulation: event.target.value })}
-                />
-              </Field>
-              <Field label="Reorder level">
-                <input
-                  required
-                  type="number"
-                  min="0"
-                  step="1"
-                  className="field"
-                  value={draft.reorderLevel}
-                  onChange={(event) =>
-                    setDraft({ ...draft, reorderLevel: Number(event.target.value) })
-                  }
-                />
-              </Field>
-              <div className="flex flex-col justify-end gap-3 pb-2">
-                <label className="flex items-center gap-3 text-sm text-neutral-700">
-                  <input
-                    type="checkbox"
-                    checked={draft.prescriptionRequired}
-                    onChange={(event) =>
-                      setDraft({ ...draft, prescriptionRequired: event.target.checked })
-                    }
-                    className="size-4 rounded border-neutral-300 text-mauve-700"
-                  />
-                  Prescription required
-                </label>
-                <label className="flex items-center gap-3 text-sm text-neutral-700">
-                  <input
-                    type="checkbox"
-                    checked={draft.controlled}
-                    onChange={(event) => setDraft({ ...draft, controlled: event.target.checked })}
-                    className="size-4 rounded border-neutral-300 text-mauve-700"
-                  />
-                  Controlled medicine
-                </label>
-              </div>
-            </div>
+            <ProductFields
+              draft={draft}
+              update={(field, value) => setDraft((current) => ({ ...current, [field]: value }))}
+            />
             {error && (
               <p role="alert" className="rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700">
                 {error}
@@ -198,6 +137,48 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
       setError(cause instanceof Error ? cause.message : 'Unable to remove the product.')
       setConfirmRemove(false)
       setIsRemoving(false)
+    }
+  }
+
+  const saveEdit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
+    event.preventDefault()
+    const genericName = draft.genericName.trim()
+    const brandName = draft.brandName.trim()
+    const category = draft.category.trim()
+    const formulation = draft.formulation.trim()
+    if (!genericName || !brandName || !category || !formulation) {
+      setError('Complete all required product details.')
+      return
+    }
+    if (
+      items.some(
+        (value) =>
+          value.id !== item.id &&
+          value.brandName.toLowerCase() === brandName.toLowerCase() &&
+          value.formulation.toLowerCase() === formulation.toLowerCase()
+      )
+    ) {
+      setError('A product with this brand and formulation already exists.')
+      return
+    }
+    setIsSaving(true)
+    setError('')
+    try {
+      const saved = await updateItem(item.id, {
+        genericName,
+        brandName,
+        category,
+        formulation,
+        prescriptionRequired: draft.prescriptionRequired,
+        controlled: draft.controlled,
+        reorderLevel: draft.reorderLevel
+      })
+      setDraft({ ...saved, batches: item.batches })
+      setIsEditing(false)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Unable to update the product.')
+    } finally {
+      setIsSaving(false)
     }
   }
 
@@ -238,14 +219,80 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
                 )}
               </div>
             </div>
-            <button
-              onClick={() => setConfirmRemove(true)}
-              className="inline-flex h-fit items-center gap-2 rounded-xl border border-rose-200 bg-white px-3 py-2 font-medium text-rose-700 transition hover:bg-rose-50 focus-visible:ring-2 focus-visible:ring-rose-200"
-            >
-              <FiTrash2 /> Remove product
-            </button>
+            <div className="flex flex-wrap gap-2">
+              {canEdit && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDraft(item)
+                    setError('')
+                    setIsEditing(true)
+                  }}
+                  className="secondary-button inline-flex h-fit items-center gap-2 whitespace-nowrap"
+                >
+                  <FiEdit2 /> Edit product
+                </button>
+              )}
+              {account?.role === 'master' && (
+                <button
+                  type="button"
+                  onClick={() => setConfirmRemove(true)}
+                  className="inline-flex h-fit items-center gap-2 rounded-xl border border-rose-200 bg-white px-3 py-2 font-medium text-rose-700 transition hover:bg-rose-50 focus-visible:ring-2 focus-visible:ring-rose-200"
+                >
+                  <FiTrash2 /> Remove product
+                </button>
+              )}
+            </div>
           </div>
         </section>
+        {isEditing && (
+          <form
+            onSubmit={(event) => void saveEdit(event)}
+            className="panel mx-auto max-w-3xl space-y-5 p-6"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="eyebrow">Item details</p>
+                <h2 className="mt-1 text-2xl font-semibold">Edit product</h2>
+                <p className="mt-2 text-sm text-neutral-500">
+                  Update catalog information without changing stock batch history.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="icon-button"
+                onClick={() => setIsEditing(false)}
+                aria-label="Cancel editing"
+              >
+                <FiX />
+              </button>
+            </div>
+            <ProductFields
+              draft={draft}
+              update={(field, value) => setDraft((current) => ({ ...current, [field]: value }))}
+            />
+            {error && (
+              <p role="alert" className="rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                {error}
+              </p>
+            )}
+            <div className="flex justify-end gap-2 border-t border-neutral-100 pt-5">
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => setIsEditing(false)}
+              >
+                Cancel
+              </button>
+              <button
+                disabled={isSaving}
+                className="primary-button disabled:cursor-wait disabled:opacity-60"
+              >
+                {isSaving ? 'Saving…' : 'Save changes'}
+              </button>
+            </div>
+          </form>
+        )}
         <section className="grid gap-5 md:grid-cols-3">
           <Metric label="Available stock" value={`${stock} units`} />
           <Metric label="Reorder level" value={`${item.reorderLevel} units`} />
@@ -337,6 +384,92 @@ function Field({ label, children }: { label: string; children: ReactElement }): 
       {label}
       {children}
     </label>
+  )
+}
+
+type EditableProductField =
+  | 'brandName'
+  | 'genericName'
+  | 'category'
+  | 'formulation'
+  | 'reorderLevel'
+  | 'prescriptionRequired'
+  | 'controlled'
+
+function ProductFields({
+  draft,
+  update
+}: {
+  draft: ItemProfile
+  update: (field: EditableProductField, value: string | number | boolean) => void
+}): ReactElement {
+  return (
+    <div className="grid gap-5 sm:grid-cols-2">
+      <Field label="Brand name">
+        <input
+          required
+          className="field"
+          value={draft.brandName}
+          onChange={(event) => update('brandName', event.target.value)}
+        />
+      </Field>
+      <Field label="Generic name">
+        <input
+          required
+          className="field"
+          value={draft.genericName}
+          onChange={(event) => update('genericName', event.target.value)}
+        />
+      </Field>
+      <Field label="Category">
+        <input
+          required
+          className="field"
+          value={draft.category}
+          onChange={(event) => update('category', event.target.value)}
+        />
+      </Field>
+      <Field label="Formulation">
+        <input
+          required
+          className="field"
+          placeholder="e.g. 500 mg tablet"
+          value={draft.formulation}
+          onChange={(event) => update('formulation', event.target.value)}
+        />
+      </Field>
+      <Field label="Reorder level">
+        <input
+          required
+          type="number"
+          min="0"
+          step="1"
+          className="field"
+          value={draft.reorderLevel}
+          onChange={(event) => update('reorderLevel', Number(event.target.value))}
+        />
+      </Field>
+      <div className="flex flex-col justify-end gap-3 pb-2">
+        <label className="flex items-center gap-3 text-sm text-neutral-700">
+          <input
+            type="checkbox"
+            checked={draft.prescriptionRequired}
+            onChange={(event) => update('prescriptionRequired', event.target.checked)}
+            className="size-4 rounded border-neutral-300 text-mauve-700"
+          />
+          Prescription required
+        </label>
+        <label className="flex items-center gap-3 text-sm text-neutral-700">
+          <input
+            type="checkbox"
+            checked={draft.controlled}
+            onChange={(event) => update('controlled', event.target.checked)}
+            className="size-4 rounded border-neutral-300 text-mauve-700"
+          />
+          Controlled medicine
+        </label>
+      </div>
+    </div>
   )
 }
 

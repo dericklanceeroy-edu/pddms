@@ -1,5 +1,5 @@
 import { db } from '@main/db'
-import type { Drug, NewProduct, Product } from '@shared/types'
+import type { Drug, DrugUpdate, NewProduct, Product, ProductUpdate } from '@shared/types'
 
 export interface ProductWithInventory extends Product {
   batches: Array<{
@@ -62,6 +62,21 @@ export async function insertOne(data: NewProduct): Promise<Product> {
       isPrescribed: data.isPrescribed ? 1 : 0,
       isControlled: data.isControlled ? 1 : 0
     })
+    .returningAll()
+    .executeTakeFirstOrThrow()
+  return toProduct(drug)
+}
+
+export async function updateOneById(id: number, data: ProductUpdate): Promise<Product> {
+  const { isPrescribed, isControlled, ...details } = data
+  const values: DrugUpdate = { ...details }
+  if (isPrescribed !== undefined) values.isPrescribed = isPrescribed ? 1 : 0
+  if (isControlled !== undefined) values.isControlled = isControlled ? 1 : 0
+  const drug = await db
+    .updateTable('drugs')
+    .set(values)
+    .where('id', '=', id)
+    .where('isArchived', '=', 0)
     .returningAll()
     .executeTakeFirstOrThrow()
   return toProduct(drug)

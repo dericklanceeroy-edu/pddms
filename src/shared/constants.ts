@@ -24,6 +24,7 @@ export const channels = {
   product: {
     getAll: 'product.getAll',
     createOne: 'product.createOne',
+    updateOneById: 'product.updateOneById',
     removeOneById: 'product.removeOneById'
   },
   supplier: {

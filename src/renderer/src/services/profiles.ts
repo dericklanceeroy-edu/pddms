@@ -110,6 +110,22 @@ export async function addProduct(product: ItemDraft): Promise<ItemProfile> {
   return mapProduct(result.product)
 }
 
+export async function updateProduct(id: number, product: ItemDraft): Promise<ItemProfile> {
+  const result = (await window.electron.ipcRenderer.invoke(channels.product.updateOneById, id, {
+    category: product.category,
+    genericName: product.genericName,
+    brandName: product.brandName,
+    formulation: product.formulation,
+    isPrescribed: product.prescriptionRequired,
+    isControlled: product.controlled,
+    reorderLevel: product.reorderLevel
+  })) as Result<ItemProfile>
+  if (!result.success || !result.product) {
+    throw new Error(result.error ?? 'Unable to update the product.')
+  }
+  return mapProduct(result.product)
+}
+
 export async function removeProduct(id: number): Promise<void> {
   const result = (await window.electron.ipcRenderer.invoke(
     channels.product.removeOneById,

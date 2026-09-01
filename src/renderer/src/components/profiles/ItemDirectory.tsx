@@ -1,5 +1,6 @@
 import DashboardShell from '@renderer/components/dashboard/DashboardShell'
 import { getItemStock, getStockStatus } from '@renderer/data/profiles'
+import { useAccount } from '@renderer/hooks/useAccount'
 import { useProfileStore } from '@renderer/stores/useProfileStore'
 import { Link } from '@tanstack/react-router'
 import { useEffect, useMemo, useState, type ReactElement } from 'react'
@@ -12,6 +13,7 @@ const statusLabels = {
 }
 
 export default function ItemDirectory(): ReactElement {
+  const { account } = useAccount()
   const items = useProfileStore((state) => state.items)
   const load = useProfileStore((state) => state.load)
   const loadError = useProfileStore((state) => state.error)
@@ -42,9 +44,11 @@ export default function ItemDirectory(): ReactElement {
               Review product details, generic equivalents, stock batches, pricing, and expiry dates.
             </p>
           </div>
-          <Link to="/items/$itemId" params={{ itemId: 'new' }} className="primary-button">
-            <FiPlus /> Add product
-          </Link>
+          {(account?.role === 'master' || account?.role === 'staff') && (
+            <Link to="/items/$itemId" params={{ itemId: 'new' }} className="primary-button">
+              <FiPlus /> Add product
+            </Link>
+          )}
         </section>
         <section className="panel overflow-hidden">
           {loadError && (

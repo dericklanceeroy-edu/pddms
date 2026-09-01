@@ -1,3 +1,4 @@
+import { canAccessPath, getHomePath } from '@renderer/navigation/access'
 import {
   getAuthStatus,
   signIn as requestSignIn,
@@ -85,8 +86,10 @@ export default function AccountProvider({ children }: PropsWithChildren): ReactE
   if (!requiresSetup && isSetupRoute) return <Navigate to={account ? '/' : '/signIn'} replace />
   if (requiresSetup) return <AccountContext value={value}>{children}</AccountContext>
   if (!account && path !== '/signIn') return <Navigate to="/signIn" replace />
-  if (account && path === '/signIn') return <Navigate to="/" replace />
-  if (account?.role !== 'master' && path === '/users') return <Navigate to="/" replace />
+  if (account && path === '/signIn') return <Navigate to={getHomePath(account.role)} replace />
+  if (account && !canAccessPath(account.role, path)) {
+    return <Navigate to={getHomePath(account.role)} replace />
+  }
 
   return <AccountContext value={value}>{children}</AccountContext>
 }

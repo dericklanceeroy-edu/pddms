@@ -1,5 +1,6 @@
 import type { DashboardSourceMetadata } from '@renderer/data/adminDashboard'
 import { useAccount } from '@renderer/hooks/useAccount'
+import { canAccessPath } from '@renderer/navigation/access'
 import { Link, useRouterState } from '@tanstack/react-router'
 import {
   useEffect,
@@ -107,7 +108,7 @@ function Sidebar({
           Workspace
         </p>
         {navigation
-          .filter(({ to }) => to !== '/users' || account?.role === 'master')
+          .filter(({ to }) => account !== null && canAccessPath(account.role, to))
           .map(({ label, to, icon: Icon }) => {
             const isActive = activePath === to
 
