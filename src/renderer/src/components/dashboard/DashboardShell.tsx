@@ -140,7 +140,9 @@ function Sidebar({
                 {account?.username ?? 'Unknown account'}
               </p>
               <p className="text-xs text-neutral-400">
-                {account?.role === 'master' ? 'Master account' : 'Manager account'}
+                {account?.role === 'master'
+                  ? 'Master account'
+                  : `${account?.role ?? 'User'} account`}
               </p>
             </div>
           </div>

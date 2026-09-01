@@ -7,7 +7,8 @@ import type {
   CustomerUpdate,
   NewAccount,
   NewCustomer,
-  NewProduct
+  NewProduct,
+  NewSupplier
 } from './types'
 
 export const accountSchema = z.strictObject({
@@ -71,3 +72,58 @@ export const newDrugSchema = z.strictObject({
   isControlled: z.boolean(),
   reorderLevel: z.number().int().nonnegative()
 }) satisfies z.ZodType<NewProduct>
+
+const supplierFields = {
+  organization: z.string().trim().min(2),
+  person: z.string().trim().min(2),
+  phone: z.string().trim().min(7),
+  telephone: z.string().trim().nullable(),
+  email: z.string().trim().email().nullable(),
+  street: z.string().trim().min(1),
+  city: z.string().trim().min(1),
+  country: z.string().trim().min(1),
+  province: z.string().trim().min(1),
+  postalCode: z.string().trim().min(1)
+}
+
+const supplierSchema = z.strictObject(supplierFields)
+export const newSupplierSchema = supplierSchema satisfies z.ZodType<NewSupplier>
+export const supplierUpdateSchema = supplierSchema.partial()
+
+export const purchaseOrderStatusSchema = z.enum([
+  'draft',
+  'submitted',
+  'partially_received',
+  'received',
+  'cancelled'
+])
+
+export const newPurchaseOrderSchema = z.strictObject({
+  supplierId: z.number().int().positive(),
+  expectedAt: z.string().trim().nullable().optional(),
+  notes: z.string().trim().nullable().optional(),
+  items: z
+    .array(
+      z.strictObject({
+        drugId: z.number().int().positive(),
+        quantity: z.number().int().positive(),
+        unitCost: z.number().nonnegative()
+      })
+    )
+    .min(1)
+})
+
+export const purchaseOrderStatusUpdateSchema = z.strictObject({
+  status: purchaseOrderStatusSchema
+})
+
+export const purchaseOrderDeliverySchema = z.strictObject({
+  items: z
+    .array(
+      z.strictObject({
+        itemId: z.number().int().positive(),
+        receivedQuantity: z.number().int().nonnegative()
+      })
+    )
+    .min(1)
+})

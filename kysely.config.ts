@@ -7,7 +7,11 @@ export default defineConfig({
   // To-do: Re-use the dialect. This is temporary because 'kysely-ctl' cannot
   // resolve import path alias.
   dialect: new SqliteDialect({
-    database: new SQLite(env.DATABASE)
+    database: (() => {
+      const database = new SQLite(env.DATABASE)
+      database.pragma('foreign_keys = ON')
+      return database
+    })()
   }),
   plugins: [new CamelCasePlugin()],
   migrations: {

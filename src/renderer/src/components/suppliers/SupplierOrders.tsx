@@ -1,0 +1,926 @@
+import DashboardShell from '@renderer/components/dashboard/DashboardShell'
+import type { ItemProfile } from '@renderer/data/profiles'
+import type {
+  OrderStatus,
+  PurchaseOrderFormValues,
+  SupplierFormValues
+} from '@renderer/data/supplierOrders'
+import {
+  orderStatusLabels,
+  orderStatusTone,
+  type PurchaseOrderRecord
+} from '@renderer/data/supplierOrders'
+import { useSupplierOrders } from '@renderer/hooks/useSupplierOrders'
+import type { Supplier } from '@shared/types'
+import { useMemo, useState, type FormEvent, type ReactElement, type ReactNode } from 'react'
+import {
+  FiArchive,
+  FiCheck,
+  FiEdit2,
+  FiFileText,
+  FiPlus,
+  FiRefreshCw,
+  FiSearch,
+  FiTrash2,
+  FiTruck,
+  FiX
+} from 'react-icons/fi'
+
+type Tab = 'suppliers' | 'orders'
+
+const currency = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' })
+const date = new Intl.DateTimeFormat('en-PH', { dateStyle: 'medium' })
+
+const blankSupplier: SupplierFormValues = {
+  organization: '',
+  person: '',
+  phone: '',
+  telephone: null,
+  email: null,
+  street: '',
+  city: '',
+  country: 'Philippines',
+  province: '',
+  postalCode: ''
+}
+
+export default function SupplierOrders(): ReactElement {
+  const procurement = useSupplierOrders()
+  const [tab, setTab] = useState<Tab>('suppliers')
+  const [query, setQuery] = useState('')
+  const [status, setStatus] = useState<OrderStatus | 'all'>('all')
+  const [supplierDialog, setSupplierDialog] = useState<Supplier | 'new' | null>(null)
+  const [orderDialog, setOrderDialog] = useState(false)
+  const [receiveDialog, setReceiveDialog] = useState<PurchaseOrderRecord | null>(null)
+  const [feedback, setFeedback] = useState('')
+
+  const filteredSuppliers = useMemo(() => {
+    const normalized = query.trim().toLowerCase()
+    return procurement.suppliers.filter((supplier) => {
+      if (!normalized) return true
+      return `${supplier.organization} ${supplier.person} ${supplier.city} ${supplier.phone}`
+        .toLowerCase()
+        .includes(normalized)
+    })
+  }, [procurement.suppliers, query])
+
+  const filteredOrders = useMemo(() => {
+    const normalized = query.trim().toLowerCase()
+    return procurement.orders.filter((order) => {
+      const matchesStatus = status === 'all' || order.status === status
+      const matchesQuery =
+        !normalized ||
+        `${order.orderNumber} ${order.supplierName} ${order.createdByName}`
+          .toLowerCase()
+          .includes(normalized)
+      return matchesStatus && matchesQuery
+    })
+  }, [procurement.orders, query, status])
+
+  const saveSupplier = async (values: SupplierFormValues, id?: number): Promise<void> => {
+    await procurement.saveSupplier(values, id)
+    setSupplierDialog(null)
+    setFeedback(id ? 'Supplier updated.' : 'Supplier added.')
+  }
+
+  const removeSupplier = async (supplier: Supplier): Promise<void> => {
+    if (!window.confirm(`Remove ${supplier.organization}?`)) return
+    try {
+      await procurement.deleteSupplier(supplier.id)
+      setFeedback('Supplier removed.')
+    } catch (cause) {
+      setFeedback(cause instanceof Error ? cause.message : 'Unable to remove the supplier.')
+    }
+  }
+
+  const updateOrderStatus = async (
+    order: PurchaseOrderRecord,
+    nextStatus: OrderStatus
+  ): Promise<void> => {
+    try {
+      await procurement.updateOrderStatus(order.id, nextStatus)
+      setFeedback(`${order.orderNumber} marked ${orderStatusLabels[nextStatus].toLowerCase()}.`)
+    } catch (cause) {
+      setFeedback(cause instanceof Error ? cause.message : 'Unable to update the order.')
+    }
+  }
+
+  const removeOrder = async (order: PurchaseOrderRecord): Promise<void> => {
+    if (!window.confirm(`Delete ${order.orderNumber}?`)) return
+    try {
+      await procurement.deleteOrder(order.id)
+      setFeedback('Purchase order deleted.')
+    } catch (cause) {
+      setFeedback(cause instanceof Error ? cause.message : 'Unable to delete the order.')
+    }
+  }
+
+  return (
+    <DashboardShell pageTitle="Suppliers & orders">
+      <div className="space-y-6">
+        <section className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+          <div>
+            <p className="eyebrow">Supplier & procurement</p>
+            <h2 className="mt-1 text-3xl font-semibold tracking-tight">Suppliers & orders</h2>
+            <p className="mt-2 max-w-2xl text-sm text-neutral-500">
+              Maintain supplier records, create purchase orders, and record deliveries from one live
+              workspace.
+            </p>
+          </div>
+          <button
+            type="button"
+            className="primary-button"
+            onClick={() => (tab === 'suppliers' ? setSupplierDialog('new') : setOrderDialog(true))}
+          >
+            <FiPlus aria-hidden="true" /> {tab === 'suppliers' ? 'Add supplier' : 'Create order'}
+          </button>
+        </section>
+        <section className="grid gap-4 sm:grid-cols-3">
+          <Metric label="Suppliers" value={procurement.suppliers.length} icon={<FiTruck />} />
+          <Metric
+            label="Open orders"
+            value={
+              procurement.orders.filter(
+                (order) => !['received', 'cancelled'].includes(order.status)
+              ).length
+            }
+            icon={<FiFileText />}
+          />
+          <Metric
+            label="Order value"
+            value={currency.format(
+              procurement.orders.reduce((total, order) => total + order.totalAmount, 0)
+            )}
+            icon={<FiArchive />}
+          />
+        </section>
+        {(procurement.error || feedback) && (
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700 shadow-sm">
+            <p
+              className={procurement.error ? 'text-rose-700' : 'text-emerald-700'}
+              role={procurement.error ? 'alert' : 'status'}
+            >
+              {procurement.error || feedback}
+            </p>
+            <button
+              type="button"
+              className="icon-button"
+              aria-label="Dismiss message"
+              onClick={() => setFeedback('')}
+            >
+              <FiX />
+            </button>
+          </div>
+        )}
+        <section className="panel overflow-hidden">
+          <div className="flex flex-col gap-3 border-b border-neutral-200 p-4 lg:flex-row lg:items-center lg:justify-between">
+            <div
+              className="flex rounded-xl bg-neutral-100 p-1"
+              role="tablist"
+              aria-label="Procurement views"
+            >
+              <button
+                type="button"
+                role="tab"
+                aria-selected={tab === 'suppliers'}
+                onClick={() => {
+                  setTab('suppliers')
+                  setQuery('')
+                  setStatus('all')
+                }}
+                className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${tab === 'suppliers' ? 'bg-white text-mauve-800 shadow-sm' : 'text-neutral-500 hover:text-neutral-800'}`}
+              >
+                Suppliers
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={tab === 'orders'}
+                onClick={() => {
+                  setTab('orders')
+                  setQuery('')
+                  setStatus('all')
+                }}
+                className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${tab === 'orders' ? 'bg-white text-mauve-800 shadow-sm' : 'text-neutral-500 hover:text-neutral-800'}`}
+              >
+                Purchase orders
+              </button>
+            </div>
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <label className="relative min-w-0 sm:w-72">
+                <span className="sr-only">Search {tab}</span>
+                <FiSearch className="absolute top-3 left-3.5 text-neutral-400" />
+                <input
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  className="field mt-0 pl-10"
+                  placeholder={
+                    tab === 'suppliers' ? 'Search suppliers' : 'Search order number or supplier'
+                  }
+                />
+              </label>
+              {tab === 'orders' && (
+                <select
+                  value={status}
+                  onChange={(event) => setStatus(event.target.value as OrderStatus | 'all')}
+                  className="field mt-0 sm:w-48"
+                  aria-label="Filter by order status"
+                >
+                  <option value="all">All statuses</option>
+                  {(Object.keys(orderStatusLabels) as OrderStatus[]).map((value) => (
+                    <option key={value} value={value}>
+                      {orderStatusLabels[value]}
+                    </option>
+                  ))}
+                </select>
+              )}
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => void procurement.refresh()}
+                disabled={procurement.isLoading}
+              >
+                <FiRefreshCw className={procurement.isLoading ? 'animate-spin' : ''} /> Refresh
+              </button>
+            </div>
+          </div>
+          {tab === 'suppliers' ? (
+            <SupplierTable
+              suppliers={filteredSuppliers}
+              remove={removeSupplier}
+              edit={setSupplierDialog}
+              isLoading={procurement.isLoading}
+            />
+          ) : (
+            <OrderTable
+              orders={filteredOrders}
+              isLoading={procurement.isLoading}
+              updateStatus={(order, nextStatus) => void updateOrderStatus(order, nextStatus)}
+              receive={setReceiveDialog}
+              remove={(order) => void removeOrder(order)}
+            />
+          )}
+        </section>
+      </div>
+      {supplierDialog && (
+        <SupplierDialog
+          initial={supplierDialog === 'new' ? null : supplierDialog}
+          close={() => setSupplierDialog(null)}
+          save={saveSupplier}
+        />
+      )}
+      {orderDialog && (
+        <OrderDialog
+          suppliers={procurement.suppliers}
+          products={procurement.products}
+          close={() => setOrderDialog(false)}
+          save={async (values) => {
+            await procurement.createOrder(values)
+            setOrderDialog(false)
+            setFeedback('Purchase order created.')
+          }}
+        />
+      )}
+      {receiveDialog && (
+        <ReceiveDialog
+          order={receiveDialog}
+          close={() => setReceiveDialog(null)}
+          save={async (items) => {
+            await procurement.receiveOrder(receiveDialog.id, items)
+            setReceiveDialog(null)
+            setFeedback('Delivery recorded.')
+          }}
+        />
+      )}
+    </DashboardShell>
+  )
+}
+
+function SupplierTable({
+  suppliers,
+  isLoading,
+  edit,
+  remove
+}: {
+  suppliers: Supplier[]
+  isLoading: boolean
+  edit: (supplier: Supplier | 'new') => void
+  remove: (supplier: Supplier) => Promise<void>
+}): ReactElement {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[760px] text-sm">
+        <thead className="bg-neutral-50 text-left text-neutral-500">
+          <tr>
+            <th className="px-5 py-3">Supplier</th>
+            <th className="px-5 py-3">Contact</th>
+            <th className="px-5 py-3">Location</th>
+            <th className="px-5 py-3 text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-neutral-100">
+          {suppliers.map((supplier) => (
+            <tr key={supplier.id}>
+              <td className="px-5 py-4">
+                <p className="font-semibold text-neutral-900">{supplier.organization}</p>
+                <p className="text-xs text-neutral-500">{supplier.person}</p>
+              </td>
+              <td className="px-5 py-4">
+                <p>{supplier.phone}</p>
+                <p className="text-xs text-neutral-500">
+                  {supplier.email || supplier.telephone || 'No secondary contact'}
+                </p>
+              </td>
+              <td className="px-5 py-4 text-neutral-600">
+                {supplier.city}, {supplier.province}
+              </td>
+              <td className="px-5 py-4">
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    className="icon-button"
+                    aria-label={`Edit ${supplier.organization}`}
+                    onClick={() => edit(supplier)}
+                  >
+                    <FiEdit2 />
+                  </button>
+                  <button
+                    type="button"
+                    className="icon-button text-rose-700"
+                    aria-label={`Remove ${supplier.organization}`}
+                    onClick={() => void remove(supplier)}
+                  >
+                    <FiTrash2 />
+                  </button>
+                </div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {!isLoading && suppliers.length === 0 && (
+        <EmptyState label="No suppliers match this search." />
+      )}
+      {isLoading && <EmptyState label="Loading suppliers…" />}
+    </div>
+  )
+}
+
+function OrderTable({
+  orders,
+  isLoading,
+  updateStatus,
+  receive,
+  remove
+}: {
+  orders: PurchaseOrderRecord[]
+  isLoading: boolean
+  updateStatus: (order: PurchaseOrderRecord, status: OrderStatus) => void
+  receive: (order: PurchaseOrderRecord) => void
+  remove: (order: PurchaseOrderRecord) => void
+}): ReactElement {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[980px] text-sm">
+        <thead className="bg-neutral-50 text-left text-neutral-500">
+          <tr>
+            <th className="px-5 py-3">Order</th>
+            <th className="px-5 py-3">Supplier</th>
+            <th className="px-5 py-3">Status</th>
+            <th className="px-5 py-3">Items</th>
+            <th className="px-5 py-3">Total</th>
+            <th className="px-5 py-3 text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-neutral-100">
+          {orders.map((order) => {
+            const canReceive =
+              ['submitted', 'partially_received'].includes(order.status) &&
+              order.items.some((item) => item.receivedQuantity < item.quantity)
+            return (
+              <tr key={order.id}>
+                <td className="px-5 py-4">
+                  <p className="font-semibold text-neutral-900">{order.orderNumber}</p>
+                  <p className="text-xs text-neutral-500">
+                    {date.format(new Date(order.orderedAt))}
+                  </p>
+                </td>
+                <td className="px-5 py-4">{order.supplierName}</td>
+                <td className="px-5 py-4">
+                  <select
+                    value={order.status}
+                    onChange={(event) => updateStatus(order, event.target.value as OrderStatus)}
+                    className={`rounded-full border-0 px-2.5 py-1 text-xs font-semibold ${orderStatusTone[order.status]}`}
+                    aria-label={`Status for ${order.orderNumber}`}
+                  >
+                    <option value="draft">Draft</option>
+                    <option value="submitted">Submitted</option>
+                    <option value="partially_received">Partially received</option>
+                    <option value="received">Received</option>
+                    <option value="cancelled">Cancelled</option>
+                  </select>
+                </td>
+                <td className="px-5 py-4 text-neutral-600">
+                  {order.items.reduce((total, item) => total + item.quantity, 0)} units
+                </td>
+                <td className="px-5 py-4 font-semibold">{currency.format(order.totalAmount)}</td>
+                <td className="px-5 py-4">
+                  <div className="flex justify-end gap-2">
+                    {canReceive && (
+                      <button
+                        type="button"
+                        className="secondary-button text-xs"
+                        onClick={() => receive(order)}
+                      >
+                        <FiCheck /> Receive
+                      </button>
+                    )}
+                    {['draft', 'cancelled'].includes(order.status) && (
+                      <button
+                        type="button"
+                        className="icon-button text-rose-700"
+                        aria-label={`Delete ${order.orderNumber}`}
+                        onClick={() => remove(order)}
+                      >
+                        <FiTrash2 />
+                      </button>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+      {!isLoading && orders.length === 0 && (
+        <EmptyState label="No purchase orders match these filters." />
+      )}
+      {isLoading && <EmptyState label="Loading purchase orders…" />}
+    </div>
+  )
+}
+
+function SupplierDialog({
+  initial,
+  close,
+  save
+}: {
+  initial: Supplier | null
+  close: VoidFunction
+  save: (values: SupplierFormValues, id?: number) => Promise<void>
+}): ReactElement {
+  const [values, setValues] = useState<SupplierFormValues>(() => {
+    if (!initial) return blankSupplier
+    const { id, ...supplierValues } = initial
+    void id
+    return supplierValues
+  })
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const set = (key: keyof SupplierFormValues, value: string): void =>
+    setValues((current) => ({ ...current, [key]: value }))
+  const submit = async (event: FormEvent): Promise<void> => {
+    event.preventDefault()
+    setSaving(true)
+    setError('')
+    try {
+      await save(
+        { ...values, telephone: values.telephone || null, email: values.email || null },
+        initial?.id
+      )
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Unable to save the supplier.')
+      setSaving(false)
+    }
+  }
+  return (
+    <Dialog title={initial ? 'Edit supplier' : 'Add supplier'} close={close}>
+      <form onSubmit={(event) => void submit(event)} className="space-y-4">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Organization">
+            <input
+              required
+              className="field"
+              value={values.organization}
+              onChange={(event) => set('organization', event.target.value)}
+            />
+          </Field>
+          <Field label="Contact person">
+            <input
+              required
+              className="field"
+              value={values.person}
+              onChange={(event) => set('person', event.target.value)}
+            />
+          </Field>
+          <Field label="Mobile phone">
+            <input
+              required
+              className="field"
+              value={values.phone}
+              onChange={(event) => set('phone', event.target.value)}
+            />
+          </Field>
+          <Field label="Email">
+            <input
+              type="email"
+              className="field"
+              value={values.email ?? ''}
+              onChange={(event) => set('email', event.target.value)}
+            />
+          </Field>
+          <Field label="Street">
+            <input
+              required
+              className="field"
+              value={values.street}
+              onChange={(event) => set('street', event.target.value)}
+            />
+          </Field>
+          <Field label="City">
+            <input
+              required
+              className="field"
+              value={values.city}
+              onChange={(event) => set('city', event.target.value)}
+            />
+          </Field>
+          <Field label="Province">
+            <input
+              required
+              className="field"
+              value={values.province}
+              onChange={(event) => set('province', event.target.value)}
+            />
+          </Field>
+          <Field label="Postal code">
+            <input
+              required
+              className="field"
+              value={values.postalCode}
+              onChange={(event) => set('postalCode', event.target.value)}
+            />
+          </Field>
+        </div>
+        {error && (
+          <p role="alert" className="rounded-xl bg-rose-50 p-3 text-sm text-rose-700">
+            {error}
+          </p>
+        )}
+        <div className="flex justify-end gap-2 pt-2">
+          <button type="button" className="secondary-button" onClick={close}>
+            Cancel
+          </button>
+          <button disabled={saving} className="primary-button">
+            {saving ? 'Saving…' : 'Save supplier'}
+          </button>
+        </div>
+      </form>
+    </Dialog>
+  )
+}
+
+function OrderDialog({
+  suppliers,
+  products,
+  close,
+  save
+}: {
+  suppliers: Supplier[]
+  products: ItemProfile[]
+  close: VoidFunction
+  save: (values: PurchaseOrderFormValues) => Promise<void>
+}): ReactElement {
+  const [supplierId, setSupplierId] = useState(suppliers[0]?.id ?? 0)
+  const [expectedAt, setExpectedAt] = useState('')
+  const [notes, setNotes] = useState('')
+  const [lines, setLines] = useState<Array<{ drugId: string; quantity: string; unitCost: string }>>(
+    [{ drugId: String(products[0]?.id ?? ''), quantity: '1', unitCost: '0' }]
+  )
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const submit = async (event: FormEvent): Promise<void> => {
+    event.preventDefault()
+    setSaving(true)
+    setError('')
+    const items = lines.map((line) => ({
+      drugId: Number(line.drugId),
+      quantity: Number(line.quantity),
+      unitCost: Number(line.unitCost)
+    }))
+    if (
+      !supplierId ||
+      items.some(
+        (item) =>
+          !item.drugId ||
+          item.quantity < 1 ||
+          item.unitCost < 0 ||
+          !Number.isFinite(item.quantity) ||
+          !Number.isFinite(item.unitCost)
+      )
+    ) {
+      setError('Choose a supplier and provide valid order lines.')
+      setSaving(false)
+      return
+    }
+    try {
+      await save({ supplierId, expectedAt: expectedAt || null, notes: notes || null, items })
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Unable to create the purchase order.')
+      setSaving(false)
+    }
+  }
+  return (
+    <Dialog title="Create purchase order" close={close}>
+      <form onSubmit={(event) => void submit(event)} className="space-y-4">
+        <Field label="Supplier">
+          <select
+            required
+            className="field"
+            value={supplierId}
+            onChange={(event) => setSupplierId(Number(event.target.value))}
+          >
+            <option value={0}>Select supplier</option>
+            {suppliers.map((supplier) => (
+              <option key={supplier.id} value={supplier.id}>
+                {supplier.organization}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Expected delivery">
+          <input
+            type="date"
+            className="field"
+            value={expectedAt}
+            onChange={(event) => setExpectedAt(event.target.value)}
+          />
+        </Field>
+        <div>
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-sm font-medium text-neutral-700">Order lines</p>
+            <button
+              type="button"
+              className="secondary-button text-xs"
+              onClick={() =>
+                setLines((current) => [
+                  ...current,
+                  { drugId: String(products[0]?.id ?? ''), quantity: '1', unitCost: '0' }
+                ])
+              }
+              disabled={products.length === 0}
+            >
+              <FiPlus /> Add line
+            </button>
+          </div>
+          <div className="space-y-2">
+            {lines.map((line, index) => (
+              <div
+                key={`${index}-${line.drugId}`}
+                className="grid gap-2 sm:grid-cols-[1fr_6rem_7rem_auto]"
+              >
+                <select
+                  required
+                  className="field mt-0"
+                  value={line.drugId}
+                  onChange={(event) =>
+                    setLines((current) =>
+                      current.map((item, itemIndex) =>
+                        itemIndex === index ? { ...item, drugId: event.target.value } : item
+                      )
+                    )
+                  }
+                >
+                  <option value="">Select product</option>
+                  {products.map((product) => (
+                    <option key={product.id} value={product.id}>
+                      {product.brandName} · {product.genericName}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  required
+                  min="1"
+                  type="number"
+                  className="field mt-0"
+                  aria-label="Quantity"
+                  value={line.quantity}
+                  onChange={(event) =>
+                    setLines((current) =>
+                      current.map((item, itemIndex) =>
+                        itemIndex === index ? { ...item, quantity: event.target.value } : item
+                      )
+                    )
+                  }
+                />
+                <input
+                  required
+                  min="0"
+                  step="0.01"
+                  type="number"
+                  className="field mt-0"
+                  aria-label="Unit cost"
+                  value={line.unitCost}
+                  onChange={(event) =>
+                    setLines((current) =>
+                      current.map((item, itemIndex) =>
+                        itemIndex === index ? { ...item, unitCost: event.target.value } : item
+                      )
+                    )
+                  }
+                />
+                <button
+                  type="button"
+                  className="icon-button"
+                  aria-label="Remove order line"
+                  disabled={lines.length === 1}
+                  onClick={() =>
+                    setLines((current) => current.filter((_, itemIndex) => itemIndex !== index))
+                  }
+                >
+                  <FiX />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+        <Field label="Notes">
+          <textarea
+            className="field min-h-20"
+            value={notes}
+            onChange={(event) => setNotes(event.target.value)}
+          />
+        </Field>
+        {error && (
+          <p role="alert" className="rounded-xl bg-rose-50 p-3 text-sm text-rose-700">
+            {error}
+          </p>
+        )}
+        <div className="flex justify-end gap-2 pt-2">
+          <button type="button" className="secondary-button" onClick={close}>
+            Cancel
+          </button>
+          <button
+            disabled={saving || suppliers.length === 0 || products.length === 0}
+            className="primary-button"
+          >
+            {saving ? 'Creating…' : 'Create order'}
+          </button>
+        </div>
+      </form>
+    </Dialog>
+  )
+}
+
+function ReceiveDialog({
+  order,
+  close,
+  save
+}: {
+  order: PurchaseOrderRecord
+  close: VoidFunction
+  save: (items: Array<{ itemId: number; receivedQuantity: number }>) => Promise<void>
+}): ReactElement {
+  const [quantities, setQuantities] = useState<Record<number, string>>(() =>
+    Object.fromEntries(
+      order.items.map((item) => [
+        item.id,
+        String(Math.max(item.quantity - item.receivedQuantity, 0))
+      ])
+    )
+  )
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const submit = async (event: FormEvent): Promise<void> => {
+    event.preventDefault()
+    setSaving(true)
+    setError('')
+    const deliveries = Object.entries(quantities)
+      .map(([itemId, value]) => ({ itemId: Number(itemId), receivedQuantity: Number(value) }))
+      .filter((item) => item.receivedQuantity > 0)
+    if (deliveries.length === 0) {
+      setError('Enter at least one delivered quantity.')
+      setSaving(false)
+      return
+    }
+    try {
+      await save(deliveries)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Unable to record the delivery.')
+      setSaving(false)
+    }
+  }
+  return (
+    <Dialog title={`Receive ${order.orderNumber}`} close={close}>
+      <form onSubmit={(event) => void submit(event)} className="space-y-4">
+        <p className="text-sm leading-6 text-neutral-600">
+          Enter the units delivered for each line. The order status is updated from the recorded
+          quantities.
+        </p>
+        <div className="space-y-3">
+          {order.items.map((item) => (
+            <label key={item.id} className="grid grid-cols-[1fr_6rem] items-center gap-3 text-sm">
+              <span>
+                <span className="block font-medium text-neutral-800">{item.productName}</span>
+                <span className="text-xs text-neutral-500">
+                  {item.receivedQuantity} of {item.quantity} already received
+                </span>
+              </span>
+              <input
+                required
+                min="0"
+                max={item.quantity - item.receivedQuantity}
+                type="number"
+                className="field mt-0"
+                value={quantities[item.id] ?? '0'}
+                onChange={(event) =>
+                  setQuantities((current) => ({ ...current, [item.id]: event.target.value }))
+                }
+              />
+            </label>
+          ))}
+        </div>
+        {error && (
+          <p role="alert" className="rounded-xl bg-rose-50 p-3 text-sm text-rose-700">
+            {error}
+          </p>
+        )}
+        <div className="flex justify-end gap-2 pt-2">
+          <button type="button" className="secondary-button" onClick={close}>
+            Cancel
+          </button>
+          <button disabled={saving} className="primary-button">
+            {saving ? 'Saving…' : 'Record delivery'}
+          </button>
+        </div>
+      </form>
+    </Dialog>
+  )
+}
+
+function Dialog({
+  title,
+  close,
+  children
+}: {
+  title: string
+  close: VoidFunction
+  children: ReactNode
+}): ReactElement {
+  return (
+    <div className="fixed inset-0 z-[70] grid place-items-center bg-neutral-950/55 p-4 backdrop-blur-sm">
+      <button
+        type="button"
+        className="absolute inset-0"
+        aria-label="Close dialog"
+        onClick={close}
+      />
+      <section
+        role="dialog"
+        aria-modal="true"
+        className="relative z-10 max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl"
+      >
+        <div className="mb-5 flex items-center justify-between">
+          <h2 className="text-xl font-semibold">{title}</h2>
+          <button type="button" onClick={close} className="icon-button" aria-label="Close dialog">
+            <FiX />
+          </button>
+        </div>
+        {children}
+      </section>
+    </div>
+  )
+}
+
+function Field({ label, children }: { label: string; children: ReactElement }): ReactElement {
+  return (
+    <label className="block text-sm font-medium text-neutral-700">
+      {label}
+      {children}
+    </label>
+  )
+}
+
+function EmptyState({ label }: { label: string }): ReactElement {
+  return <p className="p-10 text-center text-sm text-neutral-500">{label}</p>
+}
+
+function Metric({
+  label,
+  value,
+  icon
+}: {
+  label: string
+  value: number | string
+  icon: ReactElement
+}): ReactElement {
+  return (
+    <div className="panel p-5">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-neutral-500">{label}</p>
+        <span className="text-mauve-600">{icon}</span>
+      </div>
+      <p className="mt-3 text-2xl font-semibold tracking-tight">{value}</p>
+    </div>
+  )
+}

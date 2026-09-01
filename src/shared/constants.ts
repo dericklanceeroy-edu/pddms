@@ -26,6 +26,19 @@ export const channels = {
     createOne: 'product.createOne',
     removeOneById: 'product.removeOneById'
   },
+  supplier: {
+    getAll: 'supplier.getAll',
+    createOne: 'supplier.createOne',
+    updateOneById: 'supplier.updateOneById',
+    removeOneById: 'supplier.removeOneById'
+  },
+  purchaseOrder: {
+    getAll: 'purchaseOrder.getAll',
+    createOne: 'purchaseOrder.createOne',
+    updateStatusById: 'purchaseOrder.updateStatusById',
+    recordDeliveryById: 'purchaseOrder.recordDeliveryById',
+    removeOneById: 'purchaseOrder.removeOneById'
+  },
   auth: {
     getStatus: 'auth.getStatus',
     signIn: 'auth.signIn',
@@ -35,11 +48,14 @@ export const channels = {
 
 export const roles = {
   master: 'master',
-  manager: 'manager'
+  staff: 'staff',
+  cashier: 'cashier'
 } as const
 
 export const resources = {
   account: 'account',
   customer: 'customer',
-  product: 'product'
+  product: 'product',
+  supplier: 'supplier',
+  purchaseOrder: 'purchaseOrder'
 } as const

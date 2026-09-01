@@ -22,7 +22,8 @@ export interface UserFormValues {
 
 export const roleLabels: Record<UserRole, string> = {
   master: 'Master',
-  manager: 'Manager'
+  staff: 'Staff',
+  cashier: 'Cashier'
 }
 
 export const mapAccount = (account: AccountWithoutPassword): ManagedUser => ({

@@ -5,7 +5,9 @@ export async function up(db: Kysely<Database>): Promise<void> {
   await db.schema
     .createTable('accounts')
     .addColumn('id', 'integer', (col) => col.primaryKey().autoIncrement())
-    .addColumn('role', 'text', (col) => col.notNull())
+    .addColumn('role', 'text', (col) =>
+      col.notNull().check(sql`role IN ('master', 'staff', 'cashier')`)
+    )
     .addColumn('username', 'text', (col) => col.notNull().unique())
     .addColumn('full_name', 'text', (col) => col.notNull())
     .addColumn('password', 'text', (col) => col.notNull())

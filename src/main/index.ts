@@ -8,7 +8,9 @@ import './customer/controller'
 import './dashboard/controller'
 import { initializeDatabase } from './migrations'
 import './product/controller'
+import './purchase-order/controller'
 import './setup/controller'
+import './supplier/controller'
 
 function createWindow(): void {
   // Create the browser window.

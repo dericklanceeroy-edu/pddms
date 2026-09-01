@@ -22,9 +22,17 @@ accessControl
   .createAny(resources.product)
   .readAny(resources.product)
   .deleteAny(resources.product)
+  .createAny(resources.supplier)
+  .readAny(resources.supplier)
+  .updateAny(resources.supplier)
+  .deleteAny(resources.supplier)
+  .createAny(resources.purchaseOrder)
+  .readAny(resources.purchaseOrder)
+  .updateAny(resources.purchaseOrder)
+  .deleteAny(resources.purchaseOrder)
 
 accessControl
-  .grant(roles.manager)
+  .grant(roles.staff)
   .readOwn(resources.account, ['*'])
   .updateOwn(resources.account, ['*'])
   .readAny(resources.customer)
@@ -32,6 +40,25 @@ accessControl
   .updateAny(resources.customer)
   .deleteAny(resources.customer)
   .readAny(resources.product)
+  .createAny(resources.supplier)
+  .readAny(resources.supplier)
+  .updateAny(resources.supplier)
+  .deleteAny(resources.supplier)
+  .createAny(resources.purchaseOrder)
+  .readAny(resources.purchaseOrder)
+  .updateAny(resources.purchaseOrder)
+  .deleteAny(resources.purchaseOrder)
+
+accessControl
+  .grant(roles.cashier)
+  .readOwn(resources.account, ['*'])
+  .updateOwn(resources.account, ['*'])
+  .readAny(resources.customer)
+  .createAny(resources.customer)
+  .updateAny(resources.customer)
+  .readAny(resources.product)
+  .readAny(resources.supplier)
+  .readAny(resources.purchaseOrder)
 
 export * from './errors'
 export * from './helpers'

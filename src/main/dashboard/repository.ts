@@ -93,6 +93,11 @@ export async function getAdminDashboard(): Promise<AdminDashboardData> {
     .select(sql<number>`coalesce(sum(current_stock * sell_price), 0)`.as('value'))
     .where('drugs.isArchived', '=', 0)
     .executeTakeFirstOrThrow()
+  const openOrders = await db
+    .selectFrom('purchaseOrders')
+    .select(({ fn }) => fn.count<number>('id').as('count'))
+    .where('status', 'not in', ['received', 'cancelled'])
+    .executeTakeFirstOrThrow()
 
   return {
     source: { kind: 'database', label: 'Live database', generatedAt: generatedAt.toISOString() },
@@ -142,10 +147,10 @@ export async function getAdminDashboard(): Promise<AdminDashboardData> {
       {
         id: 'purchase-orders',
         label: 'Open purchase orders',
-        value: 0,
+        value: Number(openOrders.count),
         format: 'integer',
-        detail: 'Procurement records are not available yet.',
-        status: 'healthy'
+        detail: 'Draft, submitted, and partially received orders.',
+        status: Number(openOrders.count) > 0 ? 'attention' : 'healthy'
       },
       {
         id: 'supplier-payments',

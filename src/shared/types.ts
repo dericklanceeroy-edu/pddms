@@ -7,6 +7,8 @@ export interface Database {
   batches: BatchesTable
   customers: CustomersTable
   drugs: DrugsTable
+  purchaseOrderItems: PurchaseOrderItemsTable
+  purchaseOrders: PurchaseOrdersTable
   suppliers: SuppliersTable
 }
 
@@ -83,6 +85,33 @@ export interface SuppliersTable {
   postalCode: string
 }
 
+export type PurchaseOrderStatus =
+  'draft' | 'submitted' | 'partially_received' | 'received' | 'cancelled'
+
+export interface PurchaseOrdersTable {
+  id: ColumnType<Id, Id | undefined, never>
+  supplierId: Id
+  orderNumber: string
+  status: PurchaseOrderStatus
+  orderedAt: ColumnType<string, string | undefined, never>
+  expectedAt: string | null
+  receivedAt: string | null
+  notes: string | null
+  totalAmount: number
+  createdBy: Id
+  createdAt: ColumnType<string, string | undefined, never>
+  updatedAt: ColumnType<string, string | undefined, never>
+}
+
+export interface PurchaseOrderItemsTable {
+  id: ColumnType<Id, Id | undefined, never>
+  purchaseOrderId: Id
+  drugId: Id
+  quantity: number
+  unitCost: number
+  receivedQuantity: number
+}
+
 export type Account = Selectable<AccountsTable>
 export type NewAccount = Insertable<AccountsTable>
 export type AccountUpdate = Updateable<AccountsTable>
@@ -116,6 +145,22 @@ export type NewProduct = Omit<NewDrug, 'isPrescribed' | 'isControlled'> & {
 export type Supplier = Selectable<SuppliersTable>
 export type NewSupplier = Insertable<SuppliersTable>
 export type SupplierUpdate = Updateable<SuppliersTable>
+
+export type PurchaseOrder = Selectable<PurchaseOrdersTable>
+export type NewPurchaseOrder = Insertable<PurchaseOrdersTable>
+export type PurchaseOrderUpdate = Updateable<PurchaseOrdersTable>
+export type PurchaseOrderItem = Selectable<PurchaseOrderItemsTable>
+export type NewPurchaseOrderItem = Insertable<PurchaseOrderItemsTable>
+
+export interface PurchaseOrderLine extends PurchaseOrderItem {
+  productName: string
+}
+
+export interface PurchaseOrderWithDetails extends PurchaseOrder {
+  supplierName: string
+  createdByName: string
+  items: PurchaseOrderLine[]
+}
 
 export type Role = ValueOf<typeof roles>
 export type Resource = ValueOf<typeof resources>

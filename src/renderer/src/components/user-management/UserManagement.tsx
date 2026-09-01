@@ -84,7 +84,8 @@ export default function UserManagement(): ReactElement {
             >
               <option value="all">All roles</option>
               <option value="master">Master</option>
-              <option value="manager">Manager</option>
+              <option value="staff">Staff</option>
+              <option value="cashier">Cashier</option>
             </select>
           </div>
           <div className="overflow-x-auto">
@@ -210,7 +211,7 @@ function CreateUserDialog({
   const [values, setValues] = useState<UserFormValues>({
     fullName: '',
     username: '',
-    role: 'manager',
+    role: 'staff',
     password: ''
   })
   const [error, setError] = useState('')
