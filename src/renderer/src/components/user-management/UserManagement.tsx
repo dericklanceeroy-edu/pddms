@@ -7,9 +7,15 @@ import {
 } from '@renderer/data/userManagement'
 import { useUserManagement } from '@renderer/hooks/useUserManagement'
 import { useMemo, useState, type FormEvent, type ReactElement } from 'react'
-import { FiEye, FiPlus, FiSearch, FiShield, FiTrash2, FiUsers, FiX } from 'react-icons/fi'
+import { FiPlus, FiSearch, FiShield, FiTrash2, FiUsers, FiX } from 'react-icons/fi'
 
 const date = new Intl.DateTimeFormat('en-PH', { dateStyle: 'medium' })
+
+const roleTone: Record<UserRole, string> = {
+  master: 'border-mauve-200 bg-mauve-50 text-mauve-800',
+  staff: 'border-indigo-200 bg-indigo-50 text-indigo-800',
+  cashier: 'border-sky-200 bg-sky-50 text-sky-800'
+}
 
 export default function UserManagement(): ReactElement {
   const management = useUserManagement()
@@ -30,20 +36,37 @@ export default function UserManagement(): ReactElement {
 
   return (
     <DashboardShell pageTitle="User management">
-      <div className="space-y-6">
-        <section className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-          <div>
-            <p className="eyebrow">System administration</p>
-            <h2 className="mt-1 text-3xl font-semibold tracking-tight">User accounts</h2>
-            <p className="mt-2 text-sm text-neutral-500">
-              Create, find, inspect, block, and unblock verified system users.
-            </p>
+      <div className="space-y-5 lg:space-y-6">
+        <section className="relative isolate overflow-hidden rounded-[2rem] border border-white/70 bg-white/70 p-6 shadow-xl shadow-slate-200/40 backdrop-blur-xl sm:p-7">
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute -top-20 right-0 size-64 rounded-full bg-indigo-400/20 blur-3xl"
+          />
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute right-1/4 -bottom-24 size-52 rounded-full bg-mauve-400/15 blur-3xl"
+          />
+          <div className="relative flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
+            <div>
+              <p className="eyebrow">System administration</p>
+              <h2 className="mt-1 text-3xl font-semibold tracking-tight text-neutral-950 sm:text-[2rem]">
+                User accounts
+              </h2>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-neutral-600">
+                Create, find, inspect, block, and unblock verified system users.
+              </p>
+            </div>
+            <div className="flex flex-col items-start gap-3 sm:items-end">
+              <p className="rounded-full border border-white/80 bg-white/55 px-3 py-1.5 text-xs font-medium text-neutral-500 shadow-sm backdrop-blur-md">
+                Access control workspace
+              </p>
+              <button onClick={() => setCreating(true)} className="primary-button">
+                <FiPlus /> Create user
+              </button>
+            </div>
           </div>
-          <button onClick={() => setCreating(true)} className="primary-button">
-            <FiPlus /> Create user
-          </button>
         </section>
-        <section className="grid gap-4 sm:grid-cols-3">
+        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           <Metric label="Total accounts" value={management.users.length} icon={<FiUsers />} />
           <Metric
             label="Active accounts"
@@ -59,13 +82,13 @@ export default function UserManagement(): ReactElement {
         {(management.error || feedback) && (
           <p
             role={management.error ? 'alert' : 'status'}
-            className={`rounded-xl border px-4 py-3 text-sm ${management.error ? 'border-rose-200 bg-rose-50 text-rose-700' : 'border-emerald-200 bg-emerald-50 text-emerald-800'}`}
+            className={`rounded-2xl border px-4 py-3 text-sm shadow-sm backdrop-blur-md ${management.error ? 'border-rose-200/80 bg-rose-50/75 text-rose-700' : 'border-emerald-200/80 bg-emerald-50/75 text-emerald-800'}`}
           >
             {management.error || feedback}
           </p>
         )}
-        <section className="panel overflow-hidden">
-          <div className="flex flex-col gap-3 border-b border-neutral-200 p-4 sm:flex-row">
+        <section className="overflow-hidden rounded-[2rem] border border-neutral-200/80 bg-white/90 shadow-[0_18px_42px_-32px_rgba(23,18,33,0.36)]">
+          <div className="flex flex-col gap-3 border-b border-neutral-200/70 bg-neutral-50/55 p-4 sm:flex-row sm:p-5">
             <label className="relative flex-1">
               <span className="sr-only">Search users</span>
               <FiSearch className="absolute top-3 left-3.5 text-neutral-400" />
@@ -90,7 +113,7 @@ export default function UserManagement(): ReactElement {
           </div>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[720px] text-sm">
-              <thead className="bg-neutral-50 text-left">
+              <thead className="bg-neutral-50/85 text-left text-neutral-500">
                 <tr>
                   <th className="px-5 py-3">User</th>
                   <th className="px-5 py-3">Role</th>
@@ -99,17 +122,36 @@ export default function UserManagement(): ReactElement {
                   <th className="px-5 py-3 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-neutral-100">
+              <tbody className="divide-y divide-neutral-100/90">
                 {filtered.map((user) => (
-                  <tr key={user.id}>
+                  <tr
+                    key={user.id}
+                    tabIndex={0}
+                    role="button"
+                    aria-label={`View ${user.fullName}`}
+                    onClick={() => setSelected(user)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault()
+                        setSelected(user)
+                      }
+                    }}
+                    className="cursor-pointer transition-colors hover:bg-mauve-50/50 focus-visible:bg-mauve-50/50 focus-visible:ring-2 focus-visible:ring-mauve-500 focus-visible:outline-none focus-visible:ring-inset"
+                  >
                     <td className="px-5 py-4">
                       <p className="font-semibold">{user.fullName}</p>
                       <p className="text-xs text-neutral-500">@{user.username}</p>
                     </td>
-                    <td className="px-5 py-4">{roleLabels[user.role]}</td>
                     <td className="px-5 py-4">
                       <span
-                        className={user.status === 'active' ? 'text-emerald-700' : 'text-rose-700'}
+                        className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${roleTone[user.role]}`}
+                      >
+                        {roleLabels[user.role]}
+                      </span>
+                    </td>
+                    <td className="px-5 py-4">
+                      <span
+                        className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${user.status === 'active' ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-rose-200 bg-rose-50 text-rose-700'}`}
                       >
                         {user.status === 'active' ? 'Active' : 'Blocked'}
                       </span>
@@ -120,15 +162,12 @@ export default function UserManagement(): ReactElement {
                     <td className="px-5 py-4">
                       <div className="flex justify-end gap-2">
                         <button
-                          onClick={() => setSelected(user)}
-                          className="icon-button"
-                          aria-label={`View ${user.fullName}`}
-                        >
-                          <FiEye />
-                        </button>
-                        <button
                           disabled={user.role === 'master'}
-                          onClick={() => setDeleteUser(user)}
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            setDeleteUser(user)
+                          }}
+                          onKeyDown={(event) => event.stopPropagation()}
                           className="icon-button text-rose-700 disabled:opacity-40"
                           aria-label={`Delete ${user.fullName}`}
                         >
@@ -136,7 +175,8 @@ export default function UserManagement(): ReactElement {
                         </button>
                         <button
                           disabled={user.role === 'master'}
-                          onClick={() => {
+                          onClick={(event) => {
+                            event.stopPropagation()
                             void management
                               .toggleStatus(user)
                               .then(() =>
@@ -154,6 +194,7 @@ export default function UserManagement(): ReactElement {
                                 )
                               )
                           }}
+                          onKeyDown={(event) => event.stopPropagation()}
                           className="secondary-button text-xs disabled:opacity-40"
                         >
                           {user.status === 'active' ? 'Block' : 'Unblock'}
@@ -278,7 +319,10 @@ function CreateUserDialog({
           />
         </Field>
         {error && (
-          <p role="alert" className="rounded-xl bg-rose-50 p-3 text-sm text-rose-700">
+          <p
+            role="alert"
+            className="rounded-2xl border border-rose-200/80 bg-rose-50/75 p-3 text-sm text-rose-700"
+          >
             {error}
           </p>
         )}
@@ -325,7 +369,10 @@ function DeleteUserDialog({
           {user.fullName} will permanently lose access and be removed from the user list.
         </p>
         {error && (
-          <p role="alert" className="mt-4 rounded-xl bg-rose-50 p-3 text-sm text-rose-700">
+          <p
+            role="alert"
+            className="mt-4 rounded-2xl border border-rose-200/80 bg-rose-50/75 p-3 text-sm text-rose-700"
+          >
             {error}
           </p>
         )}
@@ -336,7 +383,7 @@ function DeleteUserDialog({
           <button
             disabled={deleting}
             onClick={() => void remove()}
-            className="rounded-xl bg-rose-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-rose-800 disabled:opacity-60"
+            className="danger-button disabled:opacity-60"
           >
             {deleting ? 'Deleting…' : 'Delete account'}
           </button>
@@ -369,20 +416,24 @@ function Dialog({
   children: ReactElement
 }): ReactElement {
   return (
-    <div className="fixed inset-0 z-[70] grid place-items-center bg-neutral-950/55 p-4 backdrop-blur-sm">
+    <div className="bg-ink-950/55 fixed inset-0 z-[70] grid place-items-center p-4 backdrop-blur-md">
       <button className="absolute inset-0" aria-label="Close dialog" onClick={close} />
       <section
         role="dialog"
         aria-modal="true"
-        className="relative z-10 w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl"
+        className="glass-surface relative z-10 w-full max-w-lg rounded-[2rem] border-white/80 p-5 sm:p-6"
       >
-        <div className="mb-5 flex items-center justify-between">
-          <h2 className="text-xl font-semibold">{title}</h2>
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -top-20 right-0 size-44 rounded-full bg-mauve-300/30 blur-3xl"
+        />
+        <div className="relative mb-5 flex items-center justify-between">
+          <h2 className="text-xl font-semibold tracking-tight text-neutral-950">{title}</h2>
           <button onClick={close} className="icon-button" aria-label="Close dialog">
             <FiX />
           </button>
         </div>
-        {children}
+        <div className="relative">{children}</div>
       </section>
     </div>
   )
@@ -392,14 +443,14 @@ function Field({ label, children }: { label: string; children: ReactElement }): 
   return (
     <label className="block text-sm font-medium text-neutral-700">
       {label}
-      {children}
+      <span className="mt-1.5 block">{children}</span>
     </label>
   )
 }
 
 function Detail({ label, value }: { label: string; value: string }): ReactElement {
   return (
-    <div>
+    <div className="rounded-2xl border border-neutral-200/80 bg-white/70 p-3">
       <dt className="text-xs font-medium tracking-wide text-neutral-500 uppercase">{label}</dt>
       <dd className="mt-1 font-semibold">{value}</dd>
     </div>
@@ -416,10 +467,16 @@ function Metric({
   icon: ReactElement
 }): ReactElement {
   return (
-    <div className="panel p-5">
+    <div className="relative overflow-hidden rounded-[1.5rem] border border-neutral-200/80 bg-white/85 p-5 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md">
+      <div
+        aria-hidden="true"
+        className="absolute inset-x-5 top-0 h-px bg-gradient-to-r from-mauve-300/0 via-mauve-300/90 to-indigo-300/0"
+      />
       <div className="flex items-center justify-between">
         <p className="text-sm text-neutral-500">{label}</p>
-        <span className="text-mauve-600">{icon}</span>
+        <span className="grid size-10 place-items-center rounded-2xl bg-mauve-50 text-mauve-700">
+          {icon}
+        </span>
       </div>
       <p className="mt-3 text-3xl font-semibold">{value}</p>
     </div>

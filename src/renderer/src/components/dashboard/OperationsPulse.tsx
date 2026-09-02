@@ -22,13 +22,6 @@ const currencyFormatter = new Intl.NumberFormat('en-PH', {
 
 const numberFormatter = new Intl.NumberFormat('en-PH')
 
-const operationBorders = [
-  '',
-  'border-t border-neutral-100 sm:border-t-0 sm:border-l',
-  'border-t border-neutral-100 xl:border-t-0 xl:border-l',
-  'border-t border-neutral-100 sm:border-l xl:border-t-0'
-]
-
 const statusStyles: Record<DashboardOperationStatus, string> = {
   healthy: 'bg-emerald-50 text-emerald-700 ring-emerald-100',
   attention: 'bg-amber-50 text-amber-700 ring-amber-100',
@@ -47,10 +40,10 @@ export default function OperationsPulse({
   items: DashboardOperationsPulseItem[]
 }): ReactElement {
   return (
-    <article className="overflow-hidden rounded-2xl border border-neutral-200/80 bg-white shadow-sm">
-      <header className="flex items-start justify-between gap-4 border-b border-neutral-100 px-5 py-5 sm:px-6">
+    <article className="panel overflow-hidden">
+      <header className="flex items-start justify-between gap-4 border-b border-white/60 bg-white/30 px-5 py-5 sm:px-6">
         <div className="flex min-w-0 gap-3">
-          <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-cyan-50 text-cyan-700">
+          <div className="grid size-10 shrink-0 place-items-center rounded-2xl bg-cyan-50 text-cyan-700 ring-1 ring-cyan-100">
             <FiTruck className="size-4.5" aria-hidden="true" />
           </div>
           <div>
@@ -60,7 +53,7 @@ export default function OperationsPulse({
             </p>
           </div>
         </div>
-        <span className="rounded-full bg-neutral-100 px-2.5 py-1 text-xs font-semibold text-neutral-600">
+        <span className="rounded-full bg-white/70 px-2.5 py-1 text-xs font-semibold text-neutral-600 ring-1 ring-white/70 backdrop-blur-sm">
           {items.length} signals
         </span>
       </header>
@@ -72,14 +65,17 @@ export default function OperationsPulse({
           </p>
         </div>
       ) : (
-        <div className="grid sm:grid-cols-2 xl:grid-cols-4">
-          {items.map((item, index) => {
+        <div className="grid gap-3 p-3 sm:grid-cols-2 xl:grid-cols-4">
+          {items.map((item) => {
             const Icon = operationIcons[item.id]
 
             return (
-              <div key={item.id} className={`p-5 sm:p-6 ${operationBorders[index]}`}>
+              <div
+                key={item.id}
+                className="min-w-0 rounded-2xl border border-white/70 bg-white/45 p-5 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-white/65 hover:shadow-md"
+              >
                 <div className="flex items-start justify-between gap-3">
-                  <div className="grid size-9 place-items-center rounded-xl bg-neutral-100 text-neutral-600">
+                  <div className="grid size-9 place-items-center rounded-2xl bg-neutral-100/80 text-neutral-600 ring-1 ring-white/80">
                     <Icon className="size-4" aria-hidden="true" />
                   </div>
                   <span

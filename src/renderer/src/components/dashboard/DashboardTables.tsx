@@ -52,9 +52,11 @@ function PanelHeader({
   tone: string
 }): ReactElement {
   return (
-    <header className="flex items-start justify-between gap-4 border-b border-neutral-100 px-5 py-5 sm:px-6">
+    <header className="flex items-start justify-between gap-4 border-b border-white/60 bg-white/30 px-5 py-5 sm:px-6">
       <div className="flex min-w-0 gap-3">
-        <div className={`grid size-10 shrink-0 place-items-center rounded-xl ${tone}`}>
+        <div
+          className={`grid size-10 shrink-0 place-items-center rounded-2xl ring-1 ring-white/60 ${tone}`}
+        >
           <Icon className="size-4.5" aria-hidden="true" />
         </div>
         <div className="min-w-0">
@@ -64,7 +66,7 @@ function PanelHeader({
           <p className="mt-0.5 text-xs leading-5 text-neutral-500">{description}</p>
         </div>
       </div>
-      <span className="rounded-full bg-neutral-100 px-2.5 py-1 text-xs font-semibold text-neutral-600">
+      <span className="rounded-full bg-white/70 px-2.5 py-1 text-xs font-semibold text-neutral-600 ring-1 ring-white/70 backdrop-blur-sm">
         {count}
       </span>
     </header>
@@ -75,7 +77,7 @@ function EmptyTable({ colSpan, label }: { colSpan: number; label: string }): Rea
   return (
     <tr>
       <td colSpan={colSpan} className="px-5 py-12 text-center">
-        <div className="mx-auto grid size-10 place-items-center rounded-full bg-emerald-50 text-emerald-600">
+        <div className="mx-auto grid size-10 place-items-center rounded-2xl bg-emerald-50/80 text-emerald-600 ring-1 ring-emerald-100">
           <FiClock className="size-4" aria-hidden="true" />
         </div>
         <p className="mt-3 text-sm font-medium text-neutral-700">{label}</p>
@@ -97,7 +99,7 @@ function SeverityPill({ severity }: { severity: DashboardAlertSeverity }): React
 
 export function ExpiryWatchlist({ alerts }: { alerts: DashboardExpiryAlert[] }): ReactElement {
   return (
-    <article className="min-w-0 overflow-hidden rounded-2xl border border-neutral-200/80 bg-white shadow-sm">
+    <article className="panel min-w-0 overflow-hidden">
       <PanelHeader
         title="Expiry watchlist"
         description="Live batches expiring within the next 90 days"
@@ -111,7 +113,7 @@ export function ExpiryWatchlist({ alerts }: { alerts: DashboardExpiryAlert[] }):
           aria-labelledby="expiry-watchlist-title"
           className="w-full min-w-[35rem] text-left text-sm"
         >
-          <thead className="bg-neutral-50/80 text-[0.68rem] tracking-wide text-neutral-500 uppercase">
+          <thead className="border-b border-white/70 bg-slate-50/60 text-[0.68rem] tracking-wide text-neutral-500 uppercase">
             <tr>
               <th scope="col" className="px-5 py-3 font-semibold sm:px-6">
                 Product
@@ -130,12 +132,12 @@ export function ExpiryWatchlist({ alerts }: { alerts: DashboardExpiryAlert[] }):
               </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-neutral-100">
+          <tbody className="divide-y divide-white/60">
             {alerts.length === 0 ? (
               <EmptyTable colSpan={5} label="No batches are nearing expiry." />
             ) : (
               alerts.map((alert) => (
-                <tr key={alert.id} className="transition-colors hover:bg-neutral-50/70">
+                <tr key={alert.id} className="transition-colors hover:bg-mauve-50/35">
                   <th scope="row" className="px-5 py-4 font-medium text-neutral-800 sm:px-6">
                     {alert.productName}
                   </th>
@@ -163,7 +165,7 @@ export function ExpiryWatchlist({ alerts }: { alerts: DashboardExpiryAlert[] }):
 
 export function LowStockWatchlist({ alerts }: { alerts: DashboardLowStockAlert[] }): ReactElement {
   return (
-    <article className="min-w-0 overflow-hidden rounded-2xl border border-neutral-200/80 bg-white shadow-sm">
+    <article className="panel min-w-0 overflow-hidden">
       <PanelHeader
         title="Low-stock alert"
         description="Products at or below the system reorder level"
@@ -177,7 +179,7 @@ export function LowStockWatchlist({ alerts }: { alerts: DashboardLowStockAlert[]
           aria-labelledby="low-stock-watchlist-title"
           className="w-full min-w-[34rem] text-left text-sm"
         >
-          <thead className="bg-neutral-50/80 text-[0.68rem] tracking-wide text-neutral-500 uppercase">
+          <thead className="border-b border-white/70 bg-slate-50/60 text-[0.68rem] tracking-wide text-neutral-500 uppercase">
             <tr>
               <th scope="col" className="px-5 py-3 font-semibold sm:px-6">
                 Product
@@ -196,12 +198,12 @@ export function LowStockWatchlist({ alerts }: { alerts: DashboardLowStockAlert[]
               </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-neutral-100">
+          <tbody className="divide-y divide-white/60">
             {alerts.length === 0 ? (
               <EmptyTable colSpan={5} label="Every product is above its reorder level." />
             ) : (
               alerts.map((alert) => (
-                <tr key={alert.id} className="transition-colors hover:bg-neutral-50/70">
+                <tr key={alert.id} className="transition-colors hover:bg-mauve-50/35">
                   <th scope="row" className="px-5 py-4 font-medium text-neutral-800 sm:px-6">
                     {alert.productName}
                   </th>
@@ -237,7 +239,7 @@ export function RecentTransactions({
   transactions: DashboardRecentTransaction[]
 }): ReactElement {
   return (
-    <article className="min-w-0 overflow-hidden rounded-2xl border border-neutral-200/80 bg-white shadow-sm">
+    <article className="panel min-w-0 overflow-hidden">
       <PanelHeader
         title="Recent transactions"
         description="Completed pharmacy sales from the database"
@@ -251,7 +253,7 @@ export function RecentTransactions({
           aria-labelledby="recent-transactions-title"
           className="w-full min-w-[58rem] text-left text-sm"
         >
-          <thead className="bg-neutral-50/80 text-[0.68rem] tracking-wide text-neutral-500 uppercase">
+          <thead className="border-b border-white/70 bg-slate-50/60 text-[0.68rem] tracking-wide text-neutral-500 uppercase">
             <tr>
               <th scope="col" className="px-5 py-3 font-semibold sm:px-6">
                 Receipt
@@ -276,7 +278,7 @@ export function RecentTransactions({
               </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-neutral-100">
+          <tbody className="divide-y divide-white/60">
             {transactions.length === 0 ? (
               <EmptyTable colSpan={7} label="No transactions have been recorded yet." />
             ) : (
@@ -284,7 +286,7 @@ export function RecentTransactions({
                 const occurredAt = new Date(transaction.occurredAt)
 
                 return (
-                  <tr key={transaction.id} className="transition-colors hover:bg-neutral-50/70">
+                  <tr key={transaction.id} className="transition-colors hover:bg-mauve-50/35">
                     <th scope="row" className="px-5 py-4 font-semibold text-mauve-700 sm:px-6">
                       {transaction.id}
                     </th>

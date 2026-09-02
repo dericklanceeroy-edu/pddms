@@ -84,18 +84,20 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
 
     return (
       <DashboardShell pageTitle="New product">
-        <div className="space-y-6">
+        <div className="space-y-5 sm:space-y-6">
           <Link
             to="/inventory"
-            className="inline-flex items-center gap-2 text-sm font-medium text-neutral-500 hover:text-mauve-700"
+            className="inline-flex items-center gap-2 rounded-2xl px-1 text-sm font-medium text-neutral-500 transition hover:text-mauve-700"
           >
             <FiArrowLeft /> Back to inventory
           </Link>
-          <form onSubmit={save} className="panel mx-auto max-w-3xl space-y-5 p-6">
+          <form onSubmit={save} className="panel mx-auto max-w-3xl space-y-6 p-6 sm:p-7">
             <div>
               <p className="eyebrow">Item details</p>
-              <h2 className="mt-1 text-2xl font-semibold">Add new product</h2>
-              <p className="mt-2 text-sm text-neutral-500">
+              <h2 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">
+                Add new product
+              </h2>
+              <p className="mt-3 text-sm leading-6 text-neutral-500">
                 Create the product profile. Stock is recorded separately through inventory batches.
               </p>
             </div>
@@ -104,11 +106,14 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
               update={(field, value) => setDraft((current) => ({ ...current, [field]: value }))}
             />
             {error && (
-              <p role="alert" className="rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700">
+              <p
+                role="alert"
+                className="rounded-2xl border border-rose-200/80 bg-rose-50/80 px-4 py-3 text-sm text-rose-700"
+              >
                 {error}
               </p>
             )}
-            <div className="flex justify-end gap-2 border-t border-neutral-100 pt-5">
+            <div className="flex flex-wrap justify-end gap-2 border-t border-white/65 pt-5">
               <Link to="/inventory" className="secondary-button">
                 Cancel
               </Link>
@@ -184,42 +189,46 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
 
   return (
     <DashboardShell pageTitle="Item profile">
-      <div className="space-y-6">
+      <div className="space-y-5 sm:space-y-6">
         <Link
           to="/inventory"
-          className="inline-flex items-center gap-2 text-sm font-medium text-neutral-500 hover:text-mauve-700"
+          className="inline-flex items-center gap-2 rounded-2xl px-1 text-sm font-medium text-neutral-500 transition hover:text-mauve-700"
         >
           <FiArrowLeft /> Back to inventory
         </Link>
-        <section className="panel p-6">
-          <div className="flex flex-col justify-between gap-5 md:flex-row">
+        <section className="panel relative overflow-hidden p-6 sm:p-7">
+          <div className="mesh-glow -top-24 -right-12 size-64 bg-indigo-300/25" />
+          <div className="mesh-glow -bottom-32 left-1/4 size-64 bg-mauve-300/20" />
+          <div className="relative flex flex-col justify-between gap-5 md:flex-row">
             <div>
               <div className="flex flex-wrap items-center gap-2">
                 <p className="eyebrow">{item.category}</p>
                 <span
-                  className={`rounded-full px-2.5 py-1 text-xs font-medium ${status === 'in-stock' ? 'bg-emerald-50 text-emerald-700' : status === 'low-stock' ? 'bg-amber-50 text-amber-700' : 'bg-rose-50 text-rose-700'}`}
+                  className={`rounded-full border px-2.5 py-1 text-xs font-semibold capitalize ${status === 'in-stock' ? 'border-emerald-100 bg-emerald-50/80 text-emerald-700' : status === 'low-stock' ? 'border-amber-100 bg-amber-50/80 text-amber-700' : 'border-rose-100 bg-rose-50/80 text-rose-700'}`}
                 >
                   {status.replaceAll('-', ' ')}
                 </span>
               </div>
-              <h2 className="mt-2 text-3xl font-semibold">{item.brandName}</h2>
-              <p className="mt-1 text-neutral-500">
+              <h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
+                {item.brandName}
+              </h2>
+              <p className="mt-3 text-sm text-neutral-600 sm:text-base">
                 {item.genericName} · {item.formulation}
               </p>
-              <div className="mt-4 flex gap-2">
+              <div className="mt-5 flex flex-wrap gap-2">
                 {item.prescriptionRequired && (
-                  <span className="rounded-lg bg-violet-50 px-2.5 py-1 text-xs text-violet-700">
+                  <span className="rounded-xl border border-violet-100 bg-violet-50/80 px-3 py-1.5 text-xs font-semibold text-violet-700">
                     Prescription required
                   </span>
                 )}
                 {item.controlled && (
-                  <span className="rounded-lg bg-rose-50 px-2.5 py-1 text-xs text-rose-700">
+                  <span className="rounded-xl border border-rose-100 bg-rose-50/80 px-3 py-1.5 text-xs font-semibold text-rose-700">
                     Controlled medicine
                   </span>
                 )}
               </div>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="glass-surface flex h-fit flex-wrap gap-2 rounded-3xl p-3">
               {canEdit && (
                 <button
                   type="button"
@@ -228,7 +237,7 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
                     setError('')
                     setIsEditing(true)
                   }}
-                  className="secondary-button inline-flex h-fit items-center gap-2 whitespace-nowrap"
+                  className="secondary-button whitespace-nowrap"
                 >
                   <FiEdit2 /> Edit product
                 </button>
@@ -237,7 +246,7 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
                 <button
                   type="button"
                   onClick={() => setConfirmRemove(true)}
-                  className="inline-flex h-fit items-center gap-2 rounded-xl border border-rose-200 bg-white px-3 py-2 font-medium text-rose-700 transition hover:bg-rose-50 focus-visible:ring-2 focus-visible:ring-rose-200"
+                  className="danger-button whitespace-nowrap"
                 >
                   <FiTrash2 /> Remove product
                 </button>
@@ -248,13 +257,15 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
         {isEditing && (
           <form
             onSubmit={(event) => void saveEdit(event)}
-            className="panel mx-auto max-w-3xl space-y-5 p-6"
+            className="panel mx-auto max-w-3xl space-y-6 p-6 sm:p-7"
           >
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="eyebrow">Item details</p>
-                <h2 className="mt-1 text-2xl font-semibold">Edit product</h2>
-                <p className="mt-2 text-sm text-neutral-500">
+                <h2 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">
+                  Edit product
+                </h2>
+                <p className="mt-3 text-sm leading-6 text-neutral-500">
                   Update catalog information without changing stock batch history.
                 </p>
               </div>
@@ -272,11 +283,14 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
               update={(field, value) => setDraft((current) => ({ ...current, [field]: value }))}
             />
             {error && (
-              <p role="alert" className="rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700">
+              <p
+                role="alert"
+                className="rounded-2xl border border-rose-200/80 bg-rose-50/80 px-4 py-3 text-sm text-rose-700"
+              >
                 {error}
               </p>
             )}
-            <div className="flex justify-end gap-2 border-t border-neutral-100 pt-5">
+            <div className="flex flex-wrap justify-end gap-2 border-t border-white/65 pt-5">
               <button
                 type="button"
                 className="secondary-button"
@@ -301,15 +315,15 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
             value={item.batches[0] ? currency.format(item.batches[0].sellPrice) : 'Unavailable'}
           />
         </section>
-        <section className="grid gap-5 xl:grid-cols-[1.6fr_1fr]">
-          <div className="panel overflow-hidden">
+        <section className="grid gap-5 xl:grid-cols-[minmax(0,1.6fr)_minmax(18rem,1fr)]">
+          <div className="panel min-w-0 overflow-hidden">
             <Header
               title="Stock batches"
               description="Batch-level stock follows first-expiry, first-out dispensing."
             />
             <div className="overflow-x-auto">
               <table className="w-full min-w-[620px] text-sm">
-                <thead className="bg-neutral-50 text-left">
+                <thead className="bg-white/35 text-left">
                   <tr>
                     <th className="px-5 py-3">Batch</th>
                     <th className="px-5 py-3">Supplier</th>
@@ -318,9 +332,9 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
                     <th className="px-5 py-3">Expiry</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-neutral-100">
+                <tbody className="divide-y divide-white/65">
                   {item.batches.map((batch) => (
-                    <tr key={batch.id}>
+                    <tr key={batch.id} className="transition hover:bg-white/30">
                       <td className="px-5 py-4 font-medium">{batch.batchNumber}</td>
                       <td className="px-5 py-4 text-neutral-500">{batch.supplier}</td>
                       <td className="px-5 py-4">{batch.stock}</td>
@@ -337,21 +351,23 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
               )}
             </div>
           </div>
-          <div className="panel">
+          <div className="panel min-w-0 overflow-hidden">
             <Header
               title="Generic equivalents"
               description="Products sharing the same generic formulation."
             />
-            <div className="divide-y divide-neutral-100">
+            <div className="divide-y divide-white/65">
               {equivalents.map((equivalent) => (
                 <Link
                   key={equivalent.id}
                   to="/items/$itemId"
                   params={{ itemId: String(equivalent.id) }}
-                  className="flex items-center gap-3 p-5 hover:bg-neutral-50"
+                  className="group flex items-center gap-3 p-5 transition hover:bg-white/45"
                 >
-                  <FiPackage className="text-mauve-600" />
-                  <div>
+                  <div className="grid size-10 place-items-center rounded-2xl bg-mauve-50/80 text-mauve-700">
+                    <FiPackage />
+                  </div>
+                  <div className="min-w-0">
                     <p className="font-medium">{equivalent.brandName}</p>
                     <p className="text-xs text-neutral-500">{equivalent.formulation}</p>
                   </div>
@@ -380,9 +396,9 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
 
 function Field({ label, children }: { label: string; children: ReactElement }): ReactElement {
   return (
-    <label className="block text-sm font-medium text-neutral-700">
+    <label className="block text-[0.72rem] font-semibold tracking-[0.08em] text-neutral-600 uppercase">
       {label}
-      {children}
+      <span className="mt-2 block">{children}</span>
     </label>
   )
 }
@@ -449,26 +465,31 @@ function ProductFields({
           onChange={(event) => update('reorderLevel', Number(event.target.value))}
         />
       </Field>
-      <div className="flex flex-col justify-end gap-3 pb-2">
-        <label className="flex items-center gap-3 text-sm text-neutral-700">
-          <input
-            type="checkbox"
-            checked={draft.prescriptionRequired}
-            onChange={(event) => update('prescriptionRequired', event.target.checked)}
-            className="size-4 rounded border-neutral-300 text-mauve-700"
-          />
-          Prescription required
-        </label>
-        <label className="flex items-center gap-3 text-sm text-neutral-700">
-          <input
-            type="checkbox"
-            checked={draft.controlled}
-            onChange={(event) => update('controlled', event.target.checked)}
-            className="size-4 rounded border-neutral-300 text-mauve-700"
-          />
-          Controlled medicine
-        </label>
-      </div>
+      <section className="rounded-2xl border border-white/80 bg-white/40 p-4 shadow-inner shadow-white/50 sm:col-span-2">
+        <p className="text-[0.72rem] font-semibold tracking-[0.08em] text-neutral-600 uppercase">
+          Dispensing controls
+        </p>
+        <div className="mt-3 flex flex-wrap gap-x-6 gap-y-3">
+          <label className="flex items-center gap-3 text-sm text-neutral-700">
+            <input
+              type="checkbox"
+              checked={draft.prescriptionRequired}
+              onChange={(event) => update('prescriptionRequired', event.target.checked)}
+              className="size-4 rounded border-neutral-300 text-mauve-700"
+            />
+            Prescription required
+          </label>
+          <label className="flex items-center gap-3 text-sm text-neutral-700">
+            <input
+              type="checkbox"
+              checked={draft.controlled}
+              onChange={(event) => update('controlled', event.target.checked)}
+              className="size-4 rounded border-neutral-300 text-mauve-700"
+            />
+            Controlled medicine
+          </label>
+        </div>
+      </section>
     </div>
   )
 }
@@ -494,7 +515,7 @@ function ConfirmationDialog({
       <section
         role="alertdialog"
         aria-modal="true"
-        className="relative z-10 w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
+        className="glass-surface relative z-10 w-full max-w-md rounded-[1.75rem] p-6"
       >
         <h2 className="text-xl font-semibold">{title}</h2>
         <p className="mt-2 text-sm leading-6 text-neutral-500">{description}</p>
@@ -509,7 +530,7 @@ function ConfirmationDialog({
           <button
             disabled={disabled}
             onClick={confirm}
-            className="rounded-xl bg-rose-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-rose-800 disabled:cursor-wait disabled:opacity-60"
+            className="danger-button disabled:cursor-wait disabled:opacity-60"
           >
             {confirmLabel}
           </button>
@@ -521,16 +542,19 @@ function ConfirmationDialog({
 
 function Metric({ label, value }: { label: string; value: string }): ReactElement {
   return (
-    <div className="panel p-5">
-      <p className="text-sm text-neutral-500">{label}</p>
-      <p className="mt-2 text-2xl font-semibold">{value}</p>
+    <div className="panel relative overflow-hidden p-5 sm:p-6">
+      <div className="absolute -top-10 -right-10 size-24 rounded-full bg-indigo-200/30 blur-2xl" />
+      <div className="relative">
+        <p className="text-sm text-neutral-500">{label}</p>
+        <p className="mt-2 text-2xl font-semibold tracking-tight">{value}</p>
+      </div>
     </div>
   )
 }
 
 function Header({ title, description }: { title: string; description: string }): ReactElement {
   return (
-    <header className="border-b border-neutral-200 p-5">
+    <header className="border-b border-white/65 px-5 py-5 sm:px-6">
       <h3 className="font-semibold">{title}</h3>
       <p className="mt-1 text-sm text-neutral-500">{description}</p>
     </header>

@@ -117,25 +117,45 @@ export default function SupplierOrders(): ReactElement {
 
   return (
     <DashboardShell pageTitle="Suppliers & orders">
-      <div className="space-y-6">
-        <section className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-          <div>
-            <p className="eyebrow">Supplier & procurement</p>
-            <h2 className="mt-1 text-3xl font-semibold tracking-tight">Suppliers & orders</h2>
-            <p className="mt-2 max-w-2xl text-sm text-neutral-500">
-              Maintain supplier records, create purchase orders, and record deliveries from one live
-              workspace.
-            </p>
+      <div className="space-y-5 lg:space-y-6">
+        <section className="relative isolate overflow-hidden rounded-[2rem] border border-white/70 bg-white/70 p-6 shadow-xl shadow-slate-200/40 backdrop-blur-xl sm:p-7">
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute -top-20 right-0 size-64 rounded-full bg-mauve-400/20 blur-3xl"
+          />
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute right-1/4 -bottom-24 size-52 rounded-full bg-indigo-400/15 blur-3xl"
+          />
+          <div className="relative flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
+            <div>
+              <p className="eyebrow">Supplier & procurement</p>
+              <h2 className="mt-1 text-3xl font-semibold tracking-tight text-neutral-950 sm:text-[2rem]">
+                Suppliers & orders
+              </h2>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-neutral-600">
+                Maintain supplier records, create purchase orders, and record deliveries from one
+                live workspace.
+              </p>
+            </div>
+            <div className="flex flex-col items-start gap-3 sm:items-end">
+              <p className="rounded-full border border-white/80 bg-white/55 px-3 py-1.5 text-xs font-medium text-neutral-500 shadow-sm backdrop-blur-md">
+                Live procurement workspace
+              </p>
+              <button
+                type="button"
+                className="primary-button"
+                onClick={() =>
+                  tab === 'suppliers' ? setSupplierDialog('new') : setOrderDialog(true)
+                }
+              >
+                <FiPlus aria-hidden="true" />{' '}
+                {tab === 'suppliers' ? 'Add supplier' : 'Create order'}
+              </button>
+            </div>
           </div>
-          <button
-            type="button"
-            className="primary-button"
-            onClick={() => (tab === 'suppliers' ? setSupplierDialog('new') : setOrderDialog(true))}
-          >
-            <FiPlus aria-hidden="true" /> {tab === 'suppliers' ? 'Add supplier' : 'Create order'}
-          </button>
         </section>
-        <section className="grid gap-4 sm:grid-cols-3">
+        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           <Metric label="Suppliers" value={procurement.suppliers.length} icon={<FiTruck />} />
           <Metric
             label="Open orders"
@@ -155,7 +175,7 @@ export default function SupplierOrders(): ReactElement {
           />
         </section>
         {(procurement.error || feedback) && (
-          <div className="flex items-center justify-between gap-3 rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700 shadow-sm">
+          <div className="flex items-center justify-between gap-3 rounded-2xl border border-white/80 bg-white/70 px-4 py-3 text-sm text-neutral-700 shadow-sm backdrop-blur-md">
             <p
               className={procurement.error ? 'text-rose-700' : 'text-emerald-700'}
               role={procurement.error ? 'alert' : 'status'}
@@ -172,10 +192,10 @@ export default function SupplierOrders(): ReactElement {
             </button>
           </div>
         )}
-        <section className="panel overflow-hidden">
-          <div className="flex flex-col gap-3 border-b border-neutral-200 p-4 lg:flex-row lg:items-center lg:justify-between">
+        <section className="overflow-hidden rounded-[2rem] border border-neutral-200/80 bg-white/90 shadow-[0_18px_42px_-32px_rgba(23,18,33,0.36)]">
+          <div className="flex flex-col gap-4 border-b border-neutral-200/70 bg-neutral-50/55 p-4 sm:p-5 lg:flex-row lg:items-center lg:justify-between">
             <div
-              className="flex rounded-xl bg-neutral-100 p-1"
+              className="flex w-full rounded-2xl border border-neutral-200/80 bg-white p-1 shadow-sm sm:w-auto"
               role="tablist"
               aria-label="Procurement views"
             >
@@ -188,7 +208,7 @@ export default function SupplierOrders(): ReactElement {
                   setQuery('')
                   setStatus('all')
                 }}
-                className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${tab === 'suppliers' ? 'bg-white text-mauve-800 shadow-sm' : 'text-neutral-500 hover:text-neutral-800'}`}
+                className={`flex-1 rounded-xl px-4 py-2 text-sm font-semibold transition sm:flex-none ${tab === 'suppliers' ? 'bg-mauve-700 text-white shadow-sm shadow-mauve-950/15' : 'text-neutral-500 hover:bg-neutral-50 hover:text-neutral-800'}`}
               >
                 Suppliers
               </button>
@@ -201,12 +221,12 @@ export default function SupplierOrders(): ReactElement {
                   setQuery('')
                   setStatus('all')
                 }}
-                className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${tab === 'orders' ? 'bg-white text-mauve-800 shadow-sm' : 'text-neutral-500 hover:text-neutral-800'}`}
+                className={`flex-1 rounded-xl px-4 py-2 text-sm font-semibold transition sm:flex-none ${tab === 'orders' ? 'bg-mauve-700 text-white shadow-sm shadow-mauve-950/15' : 'text-neutral-500 hover:bg-neutral-50 hover:text-neutral-800'}`}
               >
                 Purchase orders
               </button>
             </div>
-            <div className="flex flex-col gap-3 sm:flex-row">
+            <div className="flex flex-col gap-3 sm:flex-row lg:justify-end">
               <label className="relative min-w-0 sm:w-72">
                 <span className="sr-only">Search {tab}</span>
                 <FiSearch className="absolute top-3 left-3.5 text-neutral-400" />
@@ -310,7 +330,7 @@ function SupplierTable({
   return (
     <div className="overflow-x-auto">
       <table className="w-full min-w-[760px] text-sm">
-        <thead className="bg-neutral-50 text-left text-neutral-500">
+        <thead className="bg-neutral-50/85 text-left text-neutral-500">
           <tr>
             <th className="px-5 py-3">Supplier</th>
             <th className="px-5 py-3">Contact</th>
@@ -318,9 +338,22 @@ function SupplierTable({
             <th className="px-5 py-3 text-right">Actions</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-neutral-100">
+        <tbody className="divide-y divide-neutral-100/90">
           {suppliers.map((supplier) => (
-            <tr key={supplier.id}>
+            <tr
+              key={supplier.id}
+              tabIndex={0}
+              role="button"
+              aria-label={`View ${supplier.organization}`}
+              onClick={() => edit(supplier)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault()
+                  edit(supplier)
+                }
+              }}
+              className="cursor-pointer transition-colors hover:bg-mauve-50/50 focus-visible:bg-mauve-50/50 focus-visible:ring-2 focus-visible:ring-mauve-500 focus-visible:outline-none focus-visible:ring-inset"
+            >
               <td className="px-5 py-4">
                 <p className="font-semibold text-neutral-900">{supplier.organization}</p>
                 <p className="text-xs text-neutral-500">{supplier.person}</p>
@@ -340,7 +373,11 @@ function SupplierTable({
                     type="button"
                     className="icon-button"
                     aria-label={`Edit ${supplier.organization}`}
-                    onClick={() => edit(supplier)}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      edit(supplier)
+                    }}
+                    onKeyDown={(event) => event.stopPropagation()}
                   >
                     <FiEdit2 />
                   </button>
@@ -348,7 +385,11 @@ function SupplierTable({
                     type="button"
                     className="icon-button text-rose-700"
                     aria-label={`Remove ${supplier.organization}`}
-                    onClick={() => void remove(supplier)}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      void remove(supplier)
+                    }}
+                    onKeyDown={(event) => event.stopPropagation()}
                   >
                     <FiTrash2 />
                   </button>
@@ -382,7 +423,7 @@ function OrderTable({
   return (
     <div className="overflow-x-auto">
       <table className="w-full min-w-[980px] text-sm">
-        <thead className="bg-neutral-50 text-left text-neutral-500">
+        <thead className="bg-neutral-50/85 text-left text-neutral-500">
           <tr>
             <th className="px-5 py-3">Order</th>
             <th className="px-5 py-3">Supplier</th>
@@ -392,13 +433,13 @@ function OrderTable({
             <th className="px-5 py-3 text-right">Actions</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-neutral-100">
+        <tbody className="divide-y divide-neutral-100/90">
           {orders.map((order) => {
             const canReceive =
               ['submitted', 'partially_received'].includes(order.status) &&
               order.items.some((item) => item.receivedQuantity < item.quantity)
             return (
-              <tr key={order.id}>
+              <tr key={order.id} className="transition-colors hover:bg-mauve-50/50">
                 <td className="px-5 py-4">
                   <p className="font-semibold text-neutral-900">{order.orderNumber}</p>
                   <p className="text-xs text-neutral-500">
@@ -410,7 +451,7 @@ function OrderTable({
                   <select
                     value={order.status}
                     onChange={(event) => updateStatus(order, event.target.value as OrderStatus)}
-                    className={`rounded-full border-0 px-2.5 py-1 text-xs font-semibold ${orderStatusTone[order.status]}`}
+                    className={`rounded-full border border-white/80 px-2.5 py-1 text-xs font-semibold shadow-sm ${orderStatusTone[order.status]}`}
                     aria-label={`Status for ${order.orderNumber}`}
                   >
                     <option value="draft">Draft</option>
@@ -563,7 +604,10 @@ function SupplierDialog({
           </Field>
         </div>
         {error && (
-          <p role="alert" className="rounded-xl bg-rose-50 p-3 text-sm text-rose-700">
+          <p
+            role="alert"
+            className="rounded-2xl border border-rose-200/80 bg-rose-50/75 p-3 text-sm text-rose-700"
+          >
             {error}
           </p>
         )}
@@ -656,8 +700,8 @@ function OrderDialog({
             onChange={(event) => setExpectedAt(event.target.value)}
           />
         </Field>
-        <div>
-          <div className="mb-2 flex items-center justify-between">
+        <div className="rounded-2xl border border-neutral-200/80 bg-neutral-50/55 p-3 sm:p-4">
+          <div className="mb-3 flex items-center justify-between">
             <p className="text-sm font-medium text-neutral-700">Order lines</p>
             <button
               type="button"
@@ -677,7 +721,7 @@ function OrderDialog({
             {lines.map((line, index) => (
               <div
                 key={`${index}-${line.drugId}`}
-                className="grid gap-2 sm:grid-cols-[1fr_6rem_7rem_auto]"
+                className="grid gap-2 rounded-2xl border border-neutral-200/70 bg-white/80 p-2 sm:grid-cols-[1fr_6rem_7rem_auto]"
               >
                 <select
                   required
@@ -752,7 +796,10 @@ function OrderDialog({
           />
         </Field>
         {error && (
-          <p role="alert" className="rounded-xl bg-rose-50 p-3 text-sm text-rose-700">
+          <p
+            role="alert"
+            className="rounded-2xl border border-rose-200/80 bg-rose-50/75 p-3 text-sm text-rose-700"
+          >
             {error}
           </p>
         )}
@@ -819,7 +866,10 @@ function ReceiveDialog({
         </p>
         <div className="space-y-3">
           {order.items.map((item) => (
-            <label key={item.id} className="grid grid-cols-[1fr_6rem] items-center gap-3 text-sm">
+            <label
+              key={item.id}
+              className="grid grid-cols-[1fr_6rem] items-center gap-3 rounded-2xl border border-neutral-200/80 bg-white/70 p-3 text-sm"
+            >
               <span>
                 <span className="block font-medium text-neutral-800">{item.productName}</span>
                 <span className="text-xs text-neutral-500">
@@ -841,7 +891,10 @@ function ReceiveDialog({
           ))}
         </div>
         {error && (
-          <p role="alert" className="rounded-xl bg-rose-50 p-3 text-sm text-rose-700">
+          <p
+            role="alert"
+            className="rounded-2xl border border-rose-200/80 bg-rose-50/75 p-3 text-sm text-rose-700"
+          >
             {error}
           </p>
         )}
@@ -868,7 +921,7 @@ function Dialog({
   children: ReactNode
 }): ReactElement {
   return (
-    <div className="fixed inset-0 z-[70] grid place-items-center bg-neutral-950/55 p-4 backdrop-blur-sm">
+    <div className="bg-ink-950/55 fixed inset-0 z-[70] grid place-items-center p-4 backdrop-blur-md">
       <button
         type="button"
         className="absolute inset-0"
@@ -878,15 +931,19 @@ function Dialog({
       <section
         role="dialog"
         aria-modal="true"
-        className="relative z-10 max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl"
+        className="glass-surface relative z-10 max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-[2rem] border-white/80 p-5 sm:p-6"
       >
-        <div className="mb-5 flex items-center justify-between">
-          <h2 className="text-xl font-semibold">{title}</h2>
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -top-20 right-0 size-44 rounded-full bg-mauve-300/30 blur-3xl"
+        />
+        <div className="relative mb-5 flex items-center justify-between">
+          <h2 className="text-xl font-semibold tracking-tight text-neutral-950">{title}</h2>
           <button type="button" onClick={close} className="icon-button" aria-label="Close dialog">
             <FiX />
           </button>
         </div>
-        {children}
+        <div className="relative">{children}</div>
       </section>
     </div>
   )
@@ -896,13 +953,17 @@ function Field({ label, children }: { label: string; children: ReactElement }): 
   return (
     <label className="block text-sm font-medium text-neutral-700">
       {label}
-      {children}
+      <span className="mt-1.5 block">{children}</span>
     </label>
   )
 }
 
 function EmptyState({ label }: { label: string }): ReactElement {
-  return <p className="p-10 text-center text-sm text-neutral-500">{label}</p>
+  return (
+    <p className="grid min-h-52 place-items-center p-10 text-center text-sm text-neutral-500">
+      {label}
+    </p>
+  )
 }
 
 function Metric({
@@ -915,10 +976,16 @@ function Metric({
   icon: ReactElement
 }): ReactElement {
   return (
-    <div className="panel p-5">
+    <div className="relative overflow-hidden rounded-[1.5rem] border border-neutral-200/80 bg-white/85 p-5 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md">
+      <div
+        aria-hidden="true"
+        className="absolute inset-x-5 top-0 h-px bg-gradient-to-r from-mauve-300/0 via-mauve-300/90 to-indigo-300/0"
+      />
       <div className="flex items-center justify-between">
         <p className="text-sm text-neutral-500">{label}</p>
-        <span className="text-mauve-600">{icon}</span>
+        <span className="grid size-10 place-items-center rounded-2xl bg-mauve-50 text-mauve-700">
+          {icon}
+        </span>
       </div>
       <p className="mt-3 text-2xl font-semibold tracking-tight">{value}</p>
     </div>
