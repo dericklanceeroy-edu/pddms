@@ -20,6 +20,13 @@ export interface UserFormValues {
   password: string
 }
 
+export interface UserUpdateValues {
+  fullName: string
+  username: string
+  role: UserRole
+  password: string
+}
+
 export const roleLabels: Record<UserRole, string> = {
   master: 'Master',
   staff: 'Staff',

@@ -64,15 +64,6 @@ export default function CustomerProfileView({
     const email = draft.email.trim()
     const discountId = draft.discountId.trim()
 
-    if (fullName.length < 2 || phone.length < 7) {
-      setError('Enter a full name and a valid contact number.')
-      return
-    }
-    if (draft.discountType !== 'none' && !discountId) {
-      setError('A discount ID is required for Senior Citizen and PWD profiles.')
-      return
-    }
-
     setIsSaving(true)
     setError('')
     try {
@@ -139,7 +130,7 @@ export default function CustomerProfileView({
 
         {editing ? (
           <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_20rem]">
-            <form onSubmit={save} className="panel space-y-6 p-6 sm:p-7">
+            <form noValidate onSubmit={save} className="panel space-y-6 p-6 sm:p-7">
               <div>
                 <p className="eyebrow">Customer details</p>
                 <h2 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">
@@ -156,6 +147,7 @@ export default function CustomerProfileView({
                   <input
                     required
                     className="field"
+                    placeholder={'e.g. Juan Dela Cruz'}
                     value={draft.fullName}
                     onChange={(event) => setDraft({ ...draft, fullName: event.target.value })}
                   />
@@ -164,6 +156,9 @@ export default function CustomerProfileView({
                   <input
                     required
                     className="field"
+                    inputMode={'numeric'}
+                    maxLength={11}
+                    placeholder={'e.g. 09171234567'}
                     value={draft.phone}
                     onChange={(event) => setDraft({ ...draft, phone: event.target.value })}
                   />
@@ -172,6 +167,7 @@ export default function CustomerProfileView({
                   <input
                     type="email"
                     className="field"
+                    placeholder={'e.g. juan@example.com'}
                     value={draft.email}
                     onChange={(event) => setDraft({ ...draft, email: event.target.value })}
                   />
@@ -196,6 +192,7 @@ export default function CustomerProfileView({
                   <Field label="Address">
                     <input
                       className="field"
+                      placeholder={'e.g. Davao City'}
                       value={draft.address}
                       onChange={(event) => setDraft({ ...draft, address: event.target.value })}
                     />
@@ -207,6 +204,7 @@ export default function CustomerProfileView({
                       <input
                         required
                         className="field"
+                        placeholder={'e.g. SC-123456'}
                         value={draft.discountId}
                         onChange={(event) => setDraft({ ...draft, discountId: event.target.value })}
                       />
@@ -362,7 +360,7 @@ export default function CustomerProfileView({
               </header>
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[560px] text-sm">
-                  <thead className="bg-white/35 text-left">
+                  <thead className="surface-header text-left">
                     <tr>
                       <th className="px-5 py-3 sm:px-6">Receipt</th>
                       <th className="px-5 py-3">Date</th>

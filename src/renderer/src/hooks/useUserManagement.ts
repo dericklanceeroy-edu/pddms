@@ -1,9 +1,10 @@
-import type { ManagedUser, UserFormValues } from '@renderer/data/userManagement'
+import type { ManagedUser, UserFormValues, UserUpdateValues } from '@renderer/data/userManagement'
 import {
   createAccount,
   deleteAccount,
   getAccounts,
-  setAccountBlocked
+  setAccountBlocked,
+  updateAccount
 } from '@renderer/services/accounts'
 import { useCallback, useEffect, useState } from 'react'
 
@@ -13,6 +14,7 @@ interface UserManagementState {
   error: string
   load: () => Promise<void>
   saveUser: (values: UserFormValues) => Promise<void>
+  updateUser: (user: ManagedUser, values: UserUpdateValues) => Promise<void>
   toggleStatus: (user: ManagedUser) => Promise<void>
   deleteUser: (user: ManagedUser) => Promise<void>
 }
@@ -68,10 +70,21 @@ export function useUserManagement(): UserManagementState {
     )
   }
 
+  const updateUser = async (user: ManagedUser, values: UserUpdateValues): Promise<void> => {
+    const { password, ...accountValues } = values
+    await updateAccount(user.id, {
+      ...accountValues,
+      ...(password ? { password } : {})
+    })
+    setUsers((current) =>
+      current.map((value) => (value.id === user.id ? { ...value, ...accountValues } : value))
+    )
+  }
+
   const deleteUser = async (user: ManagedUser): Promise<void> => {
     await deleteAccount(user.id)
     setUsers((current) => current.filter((value) => value.id !== user.id))
   }
 
-  return { users, isLoading, error, load, saveUser, toggleStatus, deleteUser }
+  return { users, isLoading, error, load, saveUser, updateUser, toggleStatus, deleteUser }
 }

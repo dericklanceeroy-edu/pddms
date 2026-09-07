@@ -115,7 +115,7 @@ export default function SummaryCard({ metric }: { metric: DashboardSummaryMetric
         : 'bg-rose-50 text-rose-700'
 
   return (
-    <article className="panel group relative min-w-0 overflow-hidden p-5 transition duration-200 hover:-translate-y-0.5 hover:shadow-2xl hover:shadow-mauve-200/30">
+    <article className="metric-card group relative min-w-0 overflow-hidden transition duration-200 hover:-translate-y-0.5 hover:shadow-2xl hover:shadow-mauve-200/30">
       <div className="pointer-events-none absolute -right-14 -bottom-16 size-36 rounded-full bg-mauve-300/15 opacity-80 blur-3xl transition-opacity duration-200 group-hover:opacity-100" />
       <div className="relative flex items-start justify-between gap-3">
         <div

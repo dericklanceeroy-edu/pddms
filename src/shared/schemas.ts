@@ -26,23 +26,38 @@ export const accountSchema = z.strictObject({
 
 const usernameMin = 4
 const passwordMin = 8
+const namePattern = /^\p{L}[\p{L} .,'-]*$/u
+const usernamePattern = /^[A-Za-z0-9._-]+$/
+const phonePattern = /^09\d{9}$/
+const catalogTextPattern = /^[\p{L}0-9][\p{L}0-9 .,&()/'-]*$/u
+
 export const newAccountSchema = z.strictObject({
   role: z.enum(Object.values(roles)),
-  fullName: z.string().trim().min(2, 'Full name must have at least two characters.'),
-  username: z.string().min(usernameMin, `Username must have at least ${usernameMin} characters.`),
-  password: z.string().min(passwordMin, `Password must have at least ${passwordMin} characters`)
+  fullName: z
+    .string()
+    .trim()
+    .min(2, 'Full name must have at least two characters.')
+    .regex(namePattern),
+  username: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .min(usernameMin, 'Username must have at least 4 characters.')
+    .max(32)
+    .regex(usernamePattern),
+  password: z.string().min(passwordMin, 'Password must have at least 8 characters.')
 }) satisfies z.ZodType<NewAccount>
 
 export const accountUpdateSchema = z.strictObject({
   role: z.enum(Object.values(roles)).optional(),
-  fullName: z.string().trim().min(2).optional(),
-  username: z.string().min(4).optional(),
+  fullName: z.string().trim().min(2).regex(namePattern).optional(),
+  username: z.string().trim().toLowerCase().min(4).max(32).regex(usernamePattern).optional(),
   password: z.string().min(8).optional()
 }) satisfies z.ZodType<AccountUpdate>
 
 export const credentialsSchema = z.strictObject({
-  username: z.string(),
-  password: z.string()
+  username: z.string().trim().toLowerCase().min(usernameMin).max(32).regex(usernamePattern),
+  password: z.string().min(passwordMin)
 }) satisfies z.ZodType<Credentials>
 
 export const masterSetupSchema = credentialsSchema.extend({
@@ -50,8 +65,8 @@ export const masterSetupSchema = credentialsSchema.extend({
 })
 
 const customerFields = {
-  fullName: z.string().trim().min(2),
-  phone: z.string().trim().min(7),
+  fullName: z.string().trim().min(2).regex(namePattern),
+  phone: z.string().trim().regex(phonePattern),
   email: z.string().trim().email().nullable(),
   address: z.string().trim().nullable(),
   discountType: z.enum(['none', 'senior', 'pwd']),
@@ -59,16 +74,20 @@ const customerFields = {
   discountExpiresAt: z.string().nullable()
 }
 
-export const newCustomerSchema = z.strictObject(customerFields) satisfies z.ZodType<NewCustomer>
-export const customerUpdateSchema = z.strictObject(
-  customerFields
-) satisfies z.ZodType<CustomerUpdate>
+const customerSchema = z.strictObject(customerFields).superRefine((value, context) => {
+  if (value.discountType !== 'none' && !value.discountId) {
+    context.addIssue({ code: 'custom', path: ['discountId'], message: 'Discount ID is required.' })
+  }
+})
+
+export const newCustomerSchema = customerSchema satisfies z.ZodType<NewCustomer>
+export const customerUpdateSchema = customerSchema satisfies z.ZodType<CustomerUpdate>
 
 export const newDrugSchema = z.strictObject({
-  category: z.string().trim().min(1),
-  genericName: z.string().trim().min(1),
-  brandName: z.string().trim().min(1),
-  formulation: z.string().trim().min(1),
+  category: z.string().trim().min(1).regex(catalogTextPattern),
+  genericName: z.string().trim().min(1).regex(catalogTextPattern),
+  brandName: z.string().trim().min(1).regex(catalogTextPattern),
+  formulation: z.string().trim().min(1).regex(catalogTextPattern),
   isPrescribed: z.boolean(),
   isControlled: z.boolean(),
   reorderLevel: z.number().int().nonnegative()
@@ -78,15 +97,18 @@ export const productUpdateSchema = newDrugSchema.partial() satisfies z.ZodType<P
 
 const supplierFields = {
   organization: z.string().trim().min(2),
-  person: z.string().trim().min(2),
-  phone: z.string().trim().min(7),
+  person: z.string().trim().min(2).regex(namePattern),
+  phone: z.string().trim().regex(phonePattern),
   telephone: z.string().trim().nullable(),
   email: z.string().trim().email().nullable(),
   street: z.string().trim().min(1),
   city: z.string().trim().min(1),
   country: z.string().trim().min(1),
   province: z.string().trim().min(1),
-  postalCode: z.string().trim().min(1)
+  postalCode: z
+    .string()
+    .trim()
+    .regex(/^\d{4}$/)
 }
 
 const supplierSchema = z.strictObject(supplierFields)

@@ -2,6 +2,7 @@ import { accessControl, authorize } from '@main/access-control'
 import { channels, resources } from '@shared/constants'
 import { accountUpdateSchema, newAccountSchema } from '@shared/schemas'
 import type { Account, AccountWithoutPassword } from '@shared/types'
+import { formatValidationError } from '@shared/validation'
 import { isId } from '@shared/validators'
 import { hash } from 'argon2'
 import { ipcMain } from 'electron'
@@ -25,6 +26,12 @@ ipcMain.handle(channels.account.createOne, async (_, payload: unknown) => {
     authorize((session) => accessControl.can(session.account.role).createAny(resources.account))
 
     const data = newAccountSchema.parse(payload)
+    if (data.role === 'master') {
+      return { success: false, error: 'Master accounts can only be created during initial setup.' }
+    }
+    if (await findOneByUsername(data.username)) {
+      return { success: false, error: 'That username is already in use.' }
+    }
     const newAccount = await insertOne({
       ...data,
       password: await hash(data.password)
@@ -37,7 +44,7 @@ ipcMain.handle(channels.account.createOne, async (_, payload: unknown) => {
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : String(error)
+      error: formatValidationError(error)
     }
   }
 })
@@ -50,7 +57,7 @@ ipcMain.handle(channels.account.getAll, async () => {
     const accounts = (await findAll()).map(withoutPassword)
     return { success: true, accounts: permission.filter(accounts) }
   } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : String(error) }
+    return { success: false, error: formatValidationError(error) }
   }
 })
 
@@ -71,7 +78,7 @@ ipcMain.handle(channels.account.getOneById, async (_, id: unknown) => {
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : String(error)
+      error: formatValidationError(error)
     }
   }
 })
@@ -93,7 +100,7 @@ ipcMain.handle(channels.account.getOneByUsername, async (_, username: unknown) =
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : String(error)
+      error: formatValidationError(error)
     }
   }
 })
@@ -112,6 +119,13 @@ ipcMain.handle(channels.account.updateOneById, async (_, id: unknown, payload: u
       return { success: false }
     }
 
+    if (data.username) {
+      const existing = await findOneByUsername(data.username)
+      if (existing && existing.id !== id) {
+        return { success: false, error: 'That username is already in use.' }
+      }
+    }
+
     await updateOneById(id, {
       ...data,
       password: data.password ? await hash(data.password) : undefined
@@ -121,7 +135,7 @@ ipcMain.handle(channels.account.updateOneById, async (_, id: unknown, payload: u
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : String(error)
+      error: formatValidationError(error)
     }
   }
 })
@@ -148,7 +162,7 @@ ipcMain.handle(channels.account.setBlockedById, async (_, id: unknown, blocked: 
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : String(error)
+      error: formatValidationError(error)
     }
   }
 })
@@ -167,6 +181,6 @@ ipcMain.handle(channels.account.removeOneById, async (_, id: unknown) => {
     await removeOneById(id)
     return { success: true }
   } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : String(error) }
+    return { success: false, error: formatValidationError(error) }
   }
 })

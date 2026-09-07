@@ -5,6 +5,13 @@ import type {
   ItemProfile
 } from '@renderer/data/profiles'
 import { channels } from '@shared/constants'
+import {
+  customerUpdateSchema,
+  newCustomerSchema,
+  newDrugSchema,
+  productUpdateSchema
+} from '@shared/schemas'
+import { validate } from '@shared/validation'
 
 interface Result<T> {
   success: boolean
@@ -56,7 +63,8 @@ export async function getCustomers(): Promise<CustomerProfile[]> {
 
 export async function saveCustomer(customer: CustomerDraft, id?: number): Promise<CustomerProfile> {
   const channel = id ? channels.customer.updateOneById : channels.customer.createOne
-  const args = id ? [id, customerPayload(customer)] : [customerPayload(customer)]
+  const payload = validate(id ? customerUpdateSchema : newCustomerSchema, customerPayload(customer))
+  const args = id ? [id, payload] : [payload]
   const result = (await window.electron.ipcRenderer.invoke(
     channel,
     ...args
@@ -95,7 +103,7 @@ export async function getProducts(): Promise<ItemProfile[]> {
 }
 
 export async function addProduct(product: ItemDraft): Promise<ItemProfile> {
-  const result = (await window.electron.ipcRenderer.invoke(channels.product.createOne, {
+  const payload = validate(newDrugSchema, {
     category: product.category,
     genericName: product.genericName,
     brandName: product.brandName,
@@ -103,6 +111,9 @@ export async function addProduct(product: ItemDraft): Promise<ItemProfile> {
     isPrescribed: product.prescriptionRequired,
     isControlled: product.controlled,
     reorderLevel: product.reorderLevel
+  })
+  const result = (await window.electron.ipcRenderer.invoke(channels.product.createOne, {
+    ...payload
   })) as Result<ItemProfile>
   if (!result.success || !result.product) {
     throw new Error(result.error ?? 'Unable to add the product.')
@@ -111,7 +122,7 @@ export async function addProduct(product: ItemDraft): Promise<ItemProfile> {
 }
 
 export async function updateProduct(id: number, product: ItemDraft): Promise<ItemProfile> {
-  const result = (await window.electron.ipcRenderer.invoke(channels.product.updateOneById, id, {
+  const payload = validate(productUpdateSchema, {
     category: product.category,
     genericName: product.genericName,
     brandName: product.brandName,
@@ -119,6 +130,9 @@ export async function updateProduct(id: number, product: ItemDraft): Promise<Ite
     isPrescribed: product.prescriptionRequired,
     isControlled: product.controlled,
     reorderLevel: product.reorderLevel
+  })
+  const result = (await window.electron.ipcRenderer.invoke(channels.product.updateOneById, id, {
+    ...payload
   })) as Result<ItemProfile>
   if (!result.success || !result.product) {
     throw new Error(result.error ?? 'Unable to update the product.')

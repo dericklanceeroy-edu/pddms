@@ -6,6 +6,7 @@ import {
   purchaseOrderDeliverySchema,
   purchaseOrderStatusUpdateSchema
 } from '@shared/schemas'
+import { formatValidationError } from '@shared/validation'
 import { isId } from '@shared/validators'
 import { ipcMain } from 'electron'
 import {
@@ -23,7 +24,7 @@ ipcMain.handle(channels.purchaseOrder.getAll, async () => {
     authorize((session) => accessControl.can(session.account.role).readAny(resources.purchaseOrder))
     return { success: true, orders: await findAll() }
   } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : String(error) }
+    return { success: false, error: formatValidationError(error) }
   }
 })
 
@@ -44,7 +45,7 @@ ipcMain.handle(channels.purchaseOrder.createOne, async (_, payload: unknown) => 
     state.database.stale = true
     return { success: true, order }
   } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : String(error) }
+    return { success: false, error: formatValidationError(error) }
   }
 })
 
@@ -75,7 +76,7 @@ ipcMain.handle(
       state.database.stale = true
       return { success: true, order }
     } catch (error) {
-      return { success: false, error: error instanceof Error ? error.message : String(error) }
+      return { success: false, error: formatValidationError(error) }
     }
   }
 )
@@ -98,7 +99,7 @@ ipcMain.handle(
       state.database.stale = true
       return { success: true, order }
     } catch (error) {
-      return { success: false, error: error instanceof Error ? error.message : String(error) }
+      return { success: false, error: formatValidationError(error) }
     }
   }
 )
@@ -118,6 +119,6 @@ ipcMain.handle(channels.purchaseOrder.removeOneById, async (_, id: unknown) => {
     state.database.stale = true
     return { success: true }
   } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : String(error) }
+    return { success: false, error: formatValidationError(error) }
   }
 })

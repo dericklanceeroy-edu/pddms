@@ -2,6 +2,7 @@ import { accessControl, authorize } from '@main/access-control'
 import { state } from '@main/api'
 import { channels, resources } from '@shared/constants'
 import { newSupplierSchema, supplierUpdateSchema } from '@shared/schemas'
+import { formatValidationError } from '@shared/validation'
 import { isId } from '@shared/validators'
 import { ipcMain } from 'electron'
 import {
@@ -18,7 +19,7 @@ ipcMain.handle(channels.supplier.getAll, async () => {
     authorize((session) => accessControl.can(session.account.role).readAny(resources.supplier))
     return { success: true, suppliers: await findAll() }
   } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : String(error) }
+    return { success: false, error: formatValidationError(error) }
   }
 })
 
@@ -29,7 +30,7 @@ ipcMain.handle(channels.supplier.createOne, async (_, payload: unknown) => {
     state.database.stale = true
     return { success: true, supplier }
   } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : String(error) }
+    return { success: false, error: formatValidationError(error) }
   }
 })
 
@@ -41,7 +42,7 @@ ipcMain.handle(channels.supplier.updateOneById, async (_, id: unknown, payload: 
     state.database.stale = true
     return { success: true, supplier }
   } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : String(error) }
+    return { success: false, error: formatValidationError(error) }
   }
 })
 
@@ -56,6 +57,6 @@ ipcMain.handle(channels.supplier.removeOneById, async (_, id: unknown) => {
     state.database.stale = true
     return { success: true }
   } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : String(error) }
+    return { success: false, error: formatValidationError(error) }
   }
 })

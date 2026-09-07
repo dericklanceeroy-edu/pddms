@@ -3,6 +3,7 @@ import { state } from '@main/api'
 import { channels, roles } from '@shared/constants'
 import { masterSetupSchema, newAccountSchema } from '@shared/schemas'
 import type { Account, AccountWithoutPassword } from '@shared/types'
+import { formatValidationError } from '@shared/validation'
 import { hash } from 'argon2'
 import { ipcMain } from 'electron'
 
@@ -34,6 +35,6 @@ ipcMain.handle(channels.setup.createMaster, async (_, payload: unknown) => {
 
     return { success: true, account: getPublicAccount(account) }
   } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : String(error) }
+    return { success: false, error: formatValidationError(error) }
   }
 })

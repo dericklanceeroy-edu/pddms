@@ -52,7 +52,7 @@ function PanelHeader({
   tone: string
 }): ReactElement {
   return (
-    <header className="flex items-start justify-between gap-4 border-b border-white/60 bg-white/30 px-5 py-5 sm:px-6">
+    <header className="surface-header flex items-start justify-between gap-4 px-5 py-5 sm:px-6">
       <div className="flex min-w-0 gap-3">
         <div
           className={`grid size-10 shrink-0 place-items-center rounded-2xl ring-1 ring-white/60 ${tone}`}

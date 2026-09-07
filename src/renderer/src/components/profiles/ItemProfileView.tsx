@@ -48,10 +48,6 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
       const category = draft.category.trim()
       const formulation = draft.formulation.trim()
 
-      if (!genericName || !brandName || !category || !formulation) {
-        setError('Complete all required product details.')
-        return
-      }
       if (
         items.some(
           (value) =>
@@ -91,7 +87,7 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
           >
             <FiArrowLeft /> Back to inventory
           </Link>
-          <form onSubmit={save} className="panel mx-auto max-w-3xl space-y-6 p-6 sm:p-7">
+          <form noValidate onSubmit={save} className="panel mx-auto max-w-3xl space-y-6 p-6 sm:p-7">
             <div>
               <p className="eyebrow">Item details</p>
               <h2 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">
@@ -151,10 +147,6 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
     const brandName = draft.brandName.trim()
     const category = draft.category.trim()
     const formulation = draft.formulation.trim()
-    if (!genericName || !brandName || !category || !formulation) {
-      setError('Complete all required product details.')
-      return
-    }
     if (
       items.some(
         (value) =>
@@ -256,6 +248,7 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
         </section>
         {isEditing && (
           <form
+            noValidate
             onSubmit={(event) => void saveEdit(event)}
             className="panel mx-auto max-w-3xl space-y-6 p-6 sm:p-7"
           >
@@ -323,7 +316,7 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
             />
             <div className="overflow-x-auto">
               <table className="w-full min-w-[620px] text-sm">
-                <thead className="bg-white/35 text-left">
+                <thead className="surface-header text-left">
                   <tr>
                     <th className="px-5 py-3">Batch</th>
                     <th className="px-5 py-3">Supplier</th>
@@ -425,6 +418,7 @@ function ProductFields({
         <input
           required
           className="field"
+          placeholder={'e.g. Biogesic'}
           value={draft.brandName}
           onChange={(event) => update('brandName', event.target.value)}
         />
@@ -433,6 +427,7 @@ function ProductFields({
         <input
           required
           className="field"
+          placeholder={'e.g. Paracetamol'}
           value={draft.genericName}
           onChange={(event) => update('genericName', event.target.value)}
         />
@@ -441,6 +436,7 @@ function ProductFields({
         <input
           required
           className="field"
+          placeholder={'e.g. Analgesics'}
           value={draft.category}
           onChange={(event) => update('category', event.target.value)}
         />
@@ -461,8 +457,14 @@ function ProductFields({
           min="0"
           step="1"
           className="field"
+          placeholder={'e.g. 10'}
           value={draft.reorderLevel}
-          onChange={(event) => update('reorderLevel', Number(event.target.value))}
+          onChange={(event) =>
+            update(
+              'reorderLevel',
+              event.target.value === '' ? Number.NaN : Number(event.target.value)
+            )
+          }
         />
       </Field>
       <section className="rounded-2xl border border-white/80 bg-white/40 p-4 shadow-inner shadow-white/50 sm:col-span-2">

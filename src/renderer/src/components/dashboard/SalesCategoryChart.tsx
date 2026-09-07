@@ -38,7 +38,7 @@ export default function SalesCategoryChart({
       aria-labelledby="sales-category-title"
       className="panel flex h-full min-w-0 flex-col overflow-hidden"
     >
-      <header className="flex items-start justify-between gap-4 border-b border-white/60 bg-white/30 px-5 py-5 sm:px-6">
+      <header className="surface-header flex items-start justify-between gap-4 px-5 py-5 sm:px-6">
         <div className="flex min-w-0 gap-3">
           <div className="grid size-10 shrink-0 place-items-center rounded-2xl bg-indigo-50 text-indigo-700 ring-1 ring-indigo-100">
             <FiPieChart className="size-4.5" aria-hidden="true" />

@@ -2,6 +2,7 @@ import { accessControl, authorize } from '@main/access-control'
 import { state } from '@main/api'
 import { channels, resources } from '@shared/constants'
 import { newDrugSchema, productUpdateSchema } from '@shared/schemas'
+import { formatValidationError } from '@shared/validation'
 import { isId } from '@shared/validators'
 import { ipcMain } from 'electron'
 import { findAll, insertOne, removeOneById, updateOneById } from './repository'
@@ -11,7 +12,7 @@ ipcMain.handle(channels.product.getAll, async () => {
     authorize((session) => accessControl.can(session.account.role).readAny(resources.product))
     return { success: true, products: await findAll() }
   } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : String(error) }
+    return { success: false, error: formatValidationError(error) }
   }
 })
 
@@ -22,7 +23,7 @@ ipcMain.handle(channels.product.createOne, async (_, payload: unknown) => {
     state.database.stale = true
     return { success: true, product: { ...product, batches: [] } }
   } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : String(error) }
+    return { success: false, error: formatValidationError(error) }
   }
 })
 
@@ -34,7 +35,7 @@ ipcMain.handle(channels.product.updateOneById, async (_, id: unknown, payload: u
     state.database.stale = true
     return { success: true, product: { ...product, batches: [] } }
   } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : String(error) }
+    return { success: false, error: formatValidationError(error) }
   }
 })
 
@@ -46,6 +47,6 @@ ipcMain.handle(channels.product.removeOneById, async (_, id: unknown) => {
     state.database.stale = true
     return { success: true }
   } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : String(error) }
+    return { success: false, error: formatValidationError(error) }
   }
 })

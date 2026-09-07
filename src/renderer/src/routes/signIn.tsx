@@ -37,10 +37,10 @@ function RouteComponent(): ReactElement {
       <p className="mb-5 text-center text-sm text-neutral-500">
         If you encounter any issues, contact the master account holder.
       </p>
-      <Form<Credentials> onSubmit={submit} className="space-y-4">
+      <Form<Credentials> noValidate onSubmit={submit} className="space-y-4">
         <Form.Text
           name="username"
-          placeholder="Username"
+          placeholder="e.g. juan.delacruz"
           autoComplete="username"
           required
           minLength={4}
@@ -48,7 +48,7 @@ function RouteComponent(): ReactElement {
         />
         <Form.Password
           name="password"
-          placeholder="Password"
+          placeholder="Your password"
           autoComplete="current-password"
           required
           minLength={8}
@@ -57,7 +57,10 @@ function RouteComponent(): ReactElement {
           hide={BsEyeSlashFill}
         />
         {error && (
-          <p role="alert" className="rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          <p
+            role="alert"
+            className="status-message border-rose-200/80 bg-rose-50/75 text-rose-700 backdrop-blur-md"
+          >
             {error}
           </p>
         )}

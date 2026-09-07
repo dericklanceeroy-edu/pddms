@@ -89,10 +89,10 @@ export default function AdminDashboard(): ReactElement {
             </div>
           )}
           <section id="overview" className="scroll-mt-28">
-            <div className="panel relative overflow-hidden p-6 sm:p-7">
+            <div className="page-intro p-6 sm:p-7">
               <div className="pointer-events-none absolute -top-24 right-10 size-56 rounded-full bg-mauve-300/25 blur-3xl" />
               <div className="pointer-events-none absolute right-1/4 -bottom-28 size-52 rounded-full bg-indigo-200/30 blur-3xl" />
-              <div className="relative">
+              <div className="page-intro-content">
                 <p className="eyebrow">Operational overview</p>
                 <h2 className="mt-2 text-2xl font-semibold tracking-tight text-neutral-950 sm:text-3xl">
                   Dashboard

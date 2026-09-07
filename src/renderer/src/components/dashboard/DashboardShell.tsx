@@ -123,7 +123,7 @@ function Sidebar({
                 onClick={onClose}
                 className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
                   isActive
-                    ? 'bg-gradient-to-r from-mauve-600/95 to-indigo-600/80 text-white shadow-lg ring-1 shadow-mauve-950/35 ring-white/10'
+                    ? 'bg-white/15 text-white shadow-lg ring-1 shadow-black/20 ring-white/15'
                     : 'text-neutral-400 hover:bg-white/10 hover:text-white'
                 }`}
               >
@@ -237,9 +237,10 @@ export default function DashboardShell({
   return (
     <div className="admin-dashboard relative isolate min-h-screen overflow-hidden font-sans text-neutral-950">
       <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden" aria-hidden="true">
-        <div className="mesh-glow -top-52 left-[18%] size-[28rem] bg-mauve-300/20" />
-        <div className="mesh-glow top-[35%] -right-48 size-[30rem] bg-indigo-300/15" />
-        <div className="mesh-glow -bottom-56 left-[38%] size-[24rem] bg-violet-300/10" />
+        <div className="mesh-glow bg-aurora-lilac/35 -top-52 left-[18%] size-[28rem]" />
+        <div className="mesh-glow bg-aurora-blue/30 top-[35%] -right-48 size-[30rem]" />
+        <div className="mesh-glow bg-aurora-peach/35 -bottom-56 left-[38%] size-[24rem]" />
+        <div className="mesh-glow bg-aurora-mint/20 top-[48%] left-[12%] size-[20rem]" />
       </div>
       {isNavigationOpen && (
         <>

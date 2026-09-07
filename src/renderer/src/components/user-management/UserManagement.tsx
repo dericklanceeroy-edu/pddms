@@ -3,11 +3,12 @@ import {
   roleLabels,
   type ManagedUser,
   type UserFormValues,
-  type UserRole
+  type UserRole,
+  type UserUpdateValues
 } from '@renderer/data/userManagement'
 import { useUserManagement } from '@renderer/hooks/useUserManagement'
 import { useMemo, useState, type FormEvent, type ReactElement } from 'react'
-import { FiPlus, FiSearch, FiShield, FiTrash2, FiUsers, FiX } from 'react-icons/fi'
+import { FiEdit2, FiPlus, FiSearch, FiShield, FiTrash2, FiUsers, FiX } from 'react-icons/fi'
 
 const date = new Intl.DateTimeFormat('en-PH', { dateStyle: 'medium' })
 
@@ -22,6 +23,7 @@ export default function UserManagement(): ReactElement {
   const [query, setQuery] = useState('')
   const [role, setRole] = useState<UserRole | 'all'>('all')
   const [creating, setCreating] = useState(false)
+  const [editing, setEditing] = useState<ManagedUser | null>(null)
   const [selected, setSelected] = useState<ManagedUser | null>(null)
   const [deleteUser, setDeleteUser] = useState<ManagedUser | null>(null)
   const [feedback, setFeedback] = useState('')
@@ -37,7 +39,7 @@ export default function UserManagement(): ReactElement {
   return (
     <DashboardShell pageTitle="User management">
       <div className="space-y-5 lg:space-y-6">
-        <section className="relative isolate overflow-hidden rounded-[2rem] border border-white/70 bg-white/70 p-6 shadow-xl shadow-slate-200/40 backdrop-blur-xl sm:p-7">
+        <section className="page-intro p-6 sm:p-7">
           <div
             aria-hidden="true"
             className="pointer-events-none absolute -top-20 right-0 size-64 rounded-full bg-indigo-400/20 blur-3xl"
@@ -46,7 +48,7 @@ export default function UserManagement(): ReactElement {
             aria-hidden="true"
             className="pointer-events-none absolute right-1/4 -bottom-24 size-52 rounded-full bg-mauve-400/15 blur-3xl"
           />
-          <div className="relative flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
+          <div className="page-intro-content flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
             <div>
               <p className="eyebrow">System administration</p>
               <h2 className="mt-1 text-3xl font-semibold tracking-tight text-neutral-950 sm:text-[2rem]">
@@ -87,8 +89,8 @@ export default function UserManagement(): ReactElement {
             {management.error || feedback}
           </p>
         )}
-        <section className="overflow-hidden rounded-[2rem] border border-neutral-200/80 bg-white/90 shadow-[0_18px_42px_-32px_rgba(23,18,33,0.36)]">
-          <div className="flex flex-col gap-3 border-b border-neutral-200/70 bg-neutral-50/55 p-4 sm:flex-row sm:p-5">
+        <section className="table-surface">
+          <div className="surface-header flex flex-col gap-3 p-4 sm:flex-row sm:p-5">
             <label className="relative flex-1">
               <span className="sr-only">Search users</span>
               <FiSearch className="absolute top-3 left-3.5 text-neutral-400" />
@@ -113,7 +115,7 @@ export default function UserManagement(): ReactElement {
           </div>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[720px] text-sm">
-              <thead className="bg-neutral-50/85 text-left text-neutral-500">
+              <thead className="surface-header text-left text-neutral-500">
                 <tr>
                   <th className="px-5 py-3">User</th>
                   <th className="px-5 py-3">Role</th>
@@ -165,10 +167,22 @@ export default function UserManagement(): ReactElement {
                           disabled={user.role === 'master'}
                           onClick={(event) => {
                             event.stopPropagation()
+                            setEditing(user)
+                          }}
+                          onKeyDown={(event) => event.stopPropagation()}
+                          className={'icon-button text-mauve-700 disabled:opacity-40'}
+                          aria-label={'Edit user'}
+                        >
+                          <FiEdit2 />
+                        </button>
+                        <button
+                          disabled={user.role === 'master'}
+                          onClick={(event) => {
+                            event.stopPropagation()
                             setDeleteUser(user)
                           }}
                           onKeyDown={(event) => event.stopPropagation()}
-                          className="icon-button text-rose-700 disabled:opacity-40"
+                          className={'icon-button text-rose-700 disabled:opacity-40'}
                           aria-label={`Delete ${user.fullName}`}
                         >
                           <FiTrash2 />
@@ -226,6 +240,18 @@ export default function UserManagement(): ReactElement {
           }}
         />
       )}
+      {editing && (
+        <EditUserDialog
+          user={editing}
+          close={() => setEditing(null)}
+          save={async (values) => {
+            await management.updateUser(editing, values)
+            setEditing(null)
+            setSelected(null)
+            setFeedback('User account updated.')
+          }}
+        />
+      )}
       {selected && <UserDetails user={selected} close={() => setSelected(null)} />}
       {deleteUser && (
         <DeleteUserDialog
@@ -274,12 +300,13 @@ function CreateUserDialog({
   }
   return (
     <Dialog title="Create user account" close={close}>
-      <form onSubmit={(event) => void submit(event)} className="space-y-4">
+      <form noValidate onSubmit={(event) => void submit(event)} className="space-y-4">
         <Field label="Full name">
           <input
             required
             minLength={2}
             className="field"
+            placeholder={'e.g. Juan Dela Cruz'}
             value={values.fullName}
             onChange={(event) => setValues({ ...values, fullName: event.target.value })}
           />
@@ -290,6 +317,8 @@ function CreateUserDialog({
             minLength={4}
             autoComplete="username"
             className="field"
+            maxLength={32}
+            placeholder={'e.g. juan.delacruz'}
             value={values.username}
             onChange={(event) => setValues({ ...values, username: event.target.value })}
           />
@@ -300,11 +329,13 @@ function CreateUserDialog({
             value={values.role}
             onChange={(event) => setValues({ ...values, role: event.target.value as UserRole })}
           >
-            {(Object.keys(roleLabels) as UserRole[]).map((role) => (
-              <option key={role} value={role}>
-                {roleLabels[role]}
-              </option>
-            ))}
+            {(Object.keys(roleLabels) as UserRole[])
+              .filter((role) => role !== 'master')
+              .map((role) => (
+                <option key={role} value={role}>
+                  {roleLabels[role]}
+                </option>
+              ))}
           </select>
         </Field>
         <Field label="Temporary password">
@@ -314,6 +345,7 @@ function CreateUserDialog({
             type="password"
             autoComplete="new-password"
             className="field"
+            placeholder={'At least 8 characters'}
             value={values.password}
             onChange={(event) => setValues({ ...values, password: event.target.value })}
           />
@@ -332,6 +364,109 @@ function CreateUserDialog({
           </button>
           <button disabled={saving} className="primary-button">
             {saving ? 'Creating…' : 'Create account'}
+          </button>
+        </div>
+      </form>
+    </Dialog>
+  )
+}
+
+function EditUserDialog({
+  user,
+  close,
+  save
+}: {
+  user: ManagedUser
+  close: VoidFunction
+  save: (values: UserUpdateValues) => Promise<void>
+}): ReactElement {
+  const [values, setValues] = useState<UserUpdateValues>({
+    fullName: user.fullName,
+    username: user.username,
+    role: user.role,
+    password: ''
+  })
+  const [error, setError] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  const submit = async (event: FormEvent): Promise<void> => {
+    event.preventDefault()
+    setSaving(true)
+    setError('')
+    try {
+      await save({
+        ...values,
+        fullName: values.fullName.trim(),
+        username: values.username.trim().toLowerCase()
+      })
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Unable to update the account.')
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Dialog title={'Edit user account'} close={close}>
+      <form noValidate onSubmit={(event) => void submit(event)} className={'space-y-4'}>
+        <Field label={'Full name'}>
+          <input
+            required
+            minLength={2}
+            className={'field'}
+            placeholder={'e.g. Juan Dela Cruz'}
+            value={values.fullName}
+            onChange={(event) => setValues({ ...values, fullName: event.target.value })}
+          />
+        </Field>
+        <Field label={'Username'}>
+          <input
+            required
+            minLength={4}
+            maxLength={32}
+            autoComplete={'username'}
+            className={'field'}
+            placeholder={'e.g. juan.delacruz'}
+            value={values.username}
+            onChange={(event) => setValues({ ...values, username: event.target.value })}
+          />
+        </Field>
+        <Field label={'Role'}>
+          <select
+            className={'field'}
+            value={values.role}
+            onChange={(event) => setValues({ ...values, role: event.target.value as UserRole })}
+          >
+            <option value={'staff'}>{roleLabels.staff}</option>
+            <option value={'cashier'}>{roleLabels.cashier}</option>
+          </select>
+        </Field>
+        <Field label={'New password (optional)'}>
+          <input
+            minLength={8}
+            type={'password'}
+            autoComplete={'new-password'}
+            className={'field'}
+            placeholder={'Leave blank to keep the current password'}
+            value={values.password}
+            onChange={(event) => setValues({ ...values, password: event.target.value })}
+          />
+        </Field>
+        {error && (
+          <p
+            role={'alert'}
+            className={
+              'rounded-2xl border border-rose-200/80 bg-rose-50/75 p-3 text-sm text-rose-700'
+            }
+          >
+            {error}
+          </p>
+        )}
+        <div className={'flex justify-end gap-2 pt-2'}>
+          <button type={'button'} onClick={close} className={'secondary-button'}>
+            Cancel
+          </button>
+          <button disabled={saving} className={'primary-button'}>
+            {saving ? 'Saving…' : 'Save changes'}
           </button>
         </div>
       </form>

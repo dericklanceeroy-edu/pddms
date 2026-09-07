@@ -58,8 +58,8 @@ export default function AccountProvider({ children }: PropsWithChildren): ReactE
 
   if (statusError) {
     return (
-      <main className="grid min-h-screen place-items-center bg-neutral-50 p-6 text-center">
-        <div>
+      <main className="setup-stage p-6 text-center">
+        <div className="setup-frame max-w-lg">
           <h1 className="text-xl font-semibold">Unable to start authentication</h1>
           <p role="alert" className="mt-2 text-sm text-rose-700">
             {statusError}
@@ -70,11 +70,7 @@ export default function AccountProvider({ children }: PropsWithChildren): ReactE
   }
 
   if (isInitializing) {
-    return (
-      <main className="grid min-h-screen place-items-center bg-neutral-50 text-sm text-neutral-500">
-        Starting Med Prix…
-      </main>
-    )
+    return <main className="setup-stage text-sm text-neutral-500">Starting Med Prix…</main>
   }
 
   const isSetupRoute = path === '/new' || path.startsWith('/new/')

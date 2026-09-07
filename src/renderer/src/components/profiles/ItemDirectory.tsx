@@ -67,10 +67,10 @@ export default function ItemDirectory(): ReactElement {
   return (
     <DashboardShell pageTitle="Inventory">
       <div className="space-y-5 sm:space-y-6">
-        <section className="panel relative overflow-hidden p-6 sm:p-7">
+        <section className="page-intro p-6 sm:p-7">
           <div className="mesh-glow -top-28 right-0 size-72 bg-indigo-300/30" />
           <div className="mesh-glow -bottom-36 left-1/4 size-72 bg-mauve-300/25" />
-          <div className="relative flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
+          <div className="page-intro-content flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
             <div className="max-w-2xl">
               <p className="eyebrow">Item profiles</p>
               <h2 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">

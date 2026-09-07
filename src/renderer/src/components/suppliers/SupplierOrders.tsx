@@ -118,7 +118,7 @@ export default function SupplierOrders(): ReactElement {
   return (
     <DashboardShell pageTitle="Suppliers & orders">
       <div className="space-y-5 lg:space-y-6">
-        <section className="relative isolate overflow-hidden rounded-[2rem] border border-white/70 bg-white/70 p-6 shadow-xl shadow-slate-200/40 backdrop-blur-xl sm:p-7">
+        <section className="page-intro p-6 sm:p-7">
           <div
             aria-hidden="true"
             className="pointer-events-none absolute -top-20 right-0 size-64 rounded-full bg-mauve-400/20 blur-3xl"
@@ -127,7 +127,7 @@ export default function SupplierOrders(): ReactElement {
             aria-hidden="true"
             className="pointer-events-none absolute right-1/4 -bottom-24 size-52 rounded-full bg-indigo-400/15 blur-3xl"
           />
-          <div className="relative flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
+          <div className="page-intro-content flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
             <div>
               <p className="eyebrow">Supplier & procurement</p>
               <h2 className="mt-1 text-3xl font-semibold tracking-tight text-neutral-950 sm:text-[2rem]">
@@ -192,8 +192,8 @@ export default function SupplierOrders(): ReactElement {
             </button>
           </div>
         )}
-        <section className="overflow-hidden rounded-[2rem] border border-neutral-200/80 bg-white/90 shadow-[0_18px_42px_-32px_rgba(23,18,33,0.36)]">
-          <div className="flex flex-col gap-4 border-b border-neutral-200/70 bg-neutral-50/55 p-4 sm:p-5 lg:flex-row lg:items-center lg:justify-between">
+        <section className="table-surface">
+          <div className="surface-header flex flex-col gap-4 p-4 sm:p-5 lg:flex-row lg:items-center lg:justify-between">
             <div
               className="flex w-full rounded-2xl border border-neutral-200/80 bg-white p-1 shadow-sm sm:w-auto"
               role="tablist"
@@ -208,7 +208,7 @@ export default function SupplierOrders(): ReactElement {
                   setQuery('')
                   setStatus('all')
                 }}
-                className={`flex-1 rounded-xl px-4 py-2 text-sm font-semibold transition sm:flex-none ${tab === 'suppliers' ? 'bg-mauve-700 text-white shadow-sm shadow-mauve-950/15' : 'text-neutral-500 hover:bg-neutral-50 hover:text-neutral-800'}`}
+                className={`flex-1 rounded-xl px-4 py-2 text-sm font-semibold transition sm:flex-none ${tab === 'suppliers' ? 'bg-plum-900 shadow-plum-950/15 text-white shadow-sm' : 'text-neutral-500 hover:bg-neutral-50 hover:text-neutral-800'}`}
               >
                 Suppliers
               </button>
@@ -221,7 +221,7 @@ export default function SupplierOrders(): ReactElement {
                   setQuery('')
                   setStatus('all')
                 }}
-                className={`flex-1 rounded-xl px-4 py-2 text-sm font-semibold transition sm:flex-none ${tab === 'orders' ? 'bg-mauve-700 text-white shadow-sm shadow-mauve-950/15' : 'text-neutral-500 hover:bg-neutral-50 hover:text-neutral-800'}`}
+                className={`flex-1 rounded-xl px-4 py-2 text-sm font-semibold transition sm:flex-none ${tab === 'orders' ? 'bg-plum-900 shadow-plum-950/15 text-white shadow-sm' : 'text-neutral-500 hover:bg-neutral-50 hover:text-neutral-800'}`}
               >
                 Purchase orders
               </button>
@@ -330,7 +330,7 @@ function SupplierTable({
   return (
     <div className="overflow-x-auto">
       <table className="w-full min-w-[760px] text-sm">
-        <thead className="bg-neutral-50/85 text-left text-neutral-500">
+        <thead className="surface-header text-left text-neutral-500">
           <tr>
             <th className="px-5 py-3">Supplier</th>
             <th className="px-5 py-3">Contact</th>
@@ -423,7 +423,7 @@ function OrderTable({
   return (
     <div className="overflow-x-auto">
       <table className="w-full min-w-[980px] text-sm">
-        <thead className="bg-neutral-50/85 text-left text-neutral-500">
+        <thead className="surface-header text-left text-neutral-500">
           <tr>
             <th className="px-5 py-3">Order</th>
             <th className="px-5 py-3">Supplier</th>
@@ -536,12 +536,13 @@ function SupplierDialog({
   }
   return (
     <Dialog title={initial ? 'Edit supplier' : 'Add supplier'} close={close}>
-      <form onSubmit={(event) => void submit(event)} className="space-y-4">
+      <form noValidate onSubmit={(event) => void submit(event)} className="space-y-4">
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Organization">
             <input
               required
               className="field"
+              placeholder={'e.g. MedSupply Distribution'}
               value={values.organization}
               onChange={(event) => set('organization', event.target.value)}
             />
@@ -550,6 +551,7 @@ function SupplierDialog({
             <input
               required
               className="field"
+              placeholder={'e.g. Juan Dela Cruz'}
               value={values.person}
               onChange={(event) => set('person', event.target.value)}
             />
@@ -558,6 +560,9 @@ function SupplierDialog({
             <input
               required
               className="field"
+              inputMode={'numeric'}
+              maxLength={11}
+              placeholder={'e.g. 09171234567'}
               value={values.phone}
               onChange={(event) => set('phone', event.target.value)}
             />
@@ -566,6 +571,7 @@ function SupplierDialog({
             <input
               type="email"
               className="field"
+              placeholder={'e.g. juan@example.com'}
               value={values.email ?? ''}
               onChange={(event) => set('email', event.target.value)}
             />
@@ -574,6 +580,7 @@ function SupplierDialog({
             <input
               required
               className="field"
+              placeholder={'e.g. 123 Rizal Street'}
               value={values.street}
               onChange={(event) => set('street', event.target.value)}
             />
@@ -582,6 +589,7 @@ function SupplierDialog({
             <input
               required
               className="field"
+              placeholder={'e.g. Davao City'}
               value={values.city}
               onChange={(event) => set('city', event.target.value)}
             />
@@ -590,6 +598,7 @@ function SupplierDialog({
             <input
               required
               className="field"
+              placeholder={'e.g. Davao del Sur'}
               value={values.province}
               onChange={(event) => set('province', event.target.value)}
             />
@@ -598,6 +607,7 @@ function SupplierDialog({
             <input
               required
               className="field"
+              placeholder={'e.g. 8000'}
               value={values.postalCode}
               onChange={(event) => set('postalCode', event.target.value)}
             />
@@ -652,21 +662,6 @@ function OrderDialog({
       quantity: Number(line.quantity),
       unitCost: Number(line.unitCost)
     }))
-    if (
-      !supplierId ||
-      items.some(
-        (item) =>
-          !item.drugId ||
-          item.quantity < 1 ||
-          item.unitCost < 0 ||
-          !Number.isFinite(item.quantity) ||
-          !Number.isFinite(item.unitCost)
-      )
-    ) {
-      setError('Choose a supplier and provide valid order lines.')
-      setSaving(false)
-      return
-    }
     try {
       await save({ supplierId, expectedAt: expectedAt || null, notes: notes || null, items })
     } catch (cause) {
@@ -676,7 +671,7 @@ function OrderDialog({
   }
   return (
     <Dialog title="Create purchase order" close={close}>
-      <form onSubmit={(event) => void submit(event)} className="space-y-4">
+      <form noValidate onSubmit={(event) => void submit(event)} className="space-y-4">
         <Field label="Supplier">
           <select
             required
@@ -748,6 +743,7 @@ function OrderDialog({
                   type="number"
                   className="field mt-0"
                   aria-label="Quantity"
+                  placeholder={'e.g. 10'}
                   value={line.quantity}
                   onChange={(event) =>
                     setLines((current) =>
@@ -764,6 +760,7 @@ function OrderDialog({
                   type="number"
                   className="field mt-0"
                   aria-label="Unit cost"
+                  placeholder={'e.g. 25.50'}
                   value={line.unitCost}
                   onChange={(event) =>
                     setLines((current) =>
@@ -791,6 +788,7 @@ function OrderDialog({
         <Field label="Notes">
           <textarea
             className="field min-h-20"
+            placeholder={'e.g. Deliver before month end'}
             value={notes}
             onChange={(event) => setNotes(event.target.value)}
           />
@@ -859,7 +857,7 @@ function ReceiveDialog({
   }
   return (
     <Dialog title={`Receive ${order.orderNumber}`} close={close}>
-      <form onSubmit={(event) => void submit(event)} className="space-y-4">
+      <form noValidate onSubmit={(event) => void submit(event)} className="space-y-4">
         <p className="text-sm leading-6 text-neutral-600">
           Enter the units delivered for each line. The order status is updated from the recorded
           quantities.

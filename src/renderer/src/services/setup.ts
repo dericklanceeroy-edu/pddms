@@ -1,5 +1,7 @@
 import { channels } from '@shared/constants'
+import { masterSetupSchema } from '@shared/schemas'
 import type { AccountWithoutPassword } from '@shared/types'
+import { formatValidationError } from '@shared/validation'
 
 export interface MasterSetup {
   fullName: string
@@ -28,10 +30,13 @@ export async function getSetupStatus(): Promise<SetupStatusResult> {
 }
 
 export async function createMaster(credentials: MasterSetup): Promise<CreateMasterResult> {
+  const validation = masterSetupSchema.safeParse(credentials)
+  if (!validation.success) return { success: false, error: formatValidationError(validation.error) }
+
   try {
     return (await window.electron.ipcRenderer.invoke(
       channels.setup.createMaster,
-      credentials
+      validation.data
     )) as CreateMasterResult
   } catch {
     return { success: false, error: 'Unable to create the master account.' }

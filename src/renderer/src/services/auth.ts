@@ -1,5 +1,7 @@
 import { channels } from '@shared/constants'
+import { credentialsSchema } from '@shared/schemas'
 import type { AccountWithoutPassword, Credentials } from '@shared/types'
+import { formatValidationError } from '@shared/validation'
 
 export interface AuthActionResult {
   success: boolean
@@ -39,10 +41,13 @@ export async function getAuthStatus(): Promise<AuthActionResult> {
 }
 
 export async function signIn(credentials: Credentials): Promise<AuthActionResult> {
+  const validation = credentialsSchema.safeParse(credentials)
+  if (!validation.success) return { success: false, error: formatValidationError(validation.error) }
+
   try {
     const response = (await window.electron.ipcRenderer.invoke(
       channels.auth.signIn,
-      credentials
+      validation.data
     )) as SignInResponse
 
     if (!response.success || !response.account) {

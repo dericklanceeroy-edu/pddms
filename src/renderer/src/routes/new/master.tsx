@@ -37,10 +37,10 @@ function RouteComponent(): ReactElement {
         title="Set up master account"
         description="This first account controls system access and administration."
       />
-      <Form<MasterSetup> onSubmit={submit} className="space-y-4">
+      <Form<MasterSetup> noValidate onSubmit={submit} className="space-y-4">
         <Form.Text
           name="fullName"
-          placeholder="Full name"
+          placeholder="e.g. Juan Dela Cruz"
           autoComplete="name"
           required
           minLength={2}
@@ -48,7 +48,7 @@ function RouteComponent(): ReactElement {
         />
         <Form.Text
           name="username"
-          placeholder="Username"
+          placeholder="e.g. juan.delacruz"
           autoComplete="username"
           required
           minLength={4}
@@ -56,7 +56,7 @@ function RouteComponent(): ReactElement {
         />
         <Form.Password
           name="password"
-          placeholder="Password"
+          placeholder="At least 8 characters"
           autoComplete="new-password"
           show={BsEyeFill}
           hide={BsEyeSlashFill}
@@ -65,7 +65,10 @@ function RouteComponent(): ReactElement {
           disabled={isSubmitting}
         />
         {error && (
-          <p role="alert" className="rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          <p
+            role="alert"
+            className="status-message border-rose-200/80 bg-rose-50/75 text-rose-700 backdrop-blur-md"
+          >
             {error}
           </p>
         )}
