@@ -1,6 +1,8 @@
 import DashboardShell from '@renderer/components/dashboard/DashboardShell'
+import ProcurementRecords from '@renderer/components/suppliers/ProcurementRecords'
 import type { ItemProfile } from '@renderer/data/profiles'
 import type {
+  DeliveryFormValues,
   OrderStatus,
   PurchaseOrderFormValues,
   SupplierFormValues
@@ -26,10 +28,22 @@ import {
   FiX
 } from 'react-icons/fi'
 
-type Tab = 'suppliers' | 'orders'
+type Tab = 'suppliers' | 'orders' | 'invoices' | 'history'
 
 const currency = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' })
 const date = new Intl.DateTimeFormat('en-PH', { dateStyle: 'medium' })
+const orderStatusTransitions: Record<OrderStatus, OrderStatus[]> = {
+  draft: ['draft', 'submitted', 'cancelled'],
+  submitted: ['submitted', 'cancelled'],
+  partially_received: ['partially_received', 'cancelled'],
+  received: ['received'],
+  cancelled: ['cancelled']
+}
+
+const today = (): string => {
+  const current = new Date()
+  return `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}-${String(current.getDate()).padStart(2, '0')}`
+}
 
 const blankSupplier: SupplierFormValues = {
   organization: '',
@@ -70,7 +84,7 @@ export default function SupplierOrders(): ReactElement {
       const matchesStatus = status === 'all' || order.status === status
       const matchesQuery =
         !normalized ||
-        `${order.orderNumber} ${order.supplierName} ${order.createdByName}`
+        `${order.orderNumber} ${order.supplierName} ${order.createdByName} ${order.items.map((item) => item.productName).join(' ')}`
           .toLowerCase()
           .includes(normalized)
       return matchesStatus && matchesQuery
@@ -142,16 +156,18 @@ export default function SupplierOrders(): ReactElement {
               <p className="rounded-full border border-white/80 bg-white/55 px-3 py-1.5 text-xs font-medium text-neutral-500 shadow-sm backdrop-blur-md">
                 Live procurement workspace
               </p>
-              <button
-                type="button"
-                className="primary-button"
-                onClick={() =>
-                  tab === 'suppliers' ? setSupplierDialog('new') : setOrderDialog(true)
-                }
-              >
-                <FiPlus aria-hidden="true" />{' '}
-                {tab === 'suppliers' ? 'Add supplier' : 'Create order'}
-              </button>
+              {(tab === 'suppliers' || tab === 'orders') && (
+                <button
+                  type="button"
+                  className="primary-button"
+                  onClick={() =>
+                    tab === 'suppliers' ? setSupplierDialog('new') : setOrderDialog(true)
+                  }
+                >
+                  <FiPlus aria-hidden="true" />{' '}
+                  {tab === 'suppliers' ? 'Add supplier' : 'Create order'}
+                </button>
+              )}
             </div>
           </div>
         </section>
@@ -225,6 +241,32 @@ export default function SupplierOrders(): ReactElement {
               >
                 Purchase orders
               </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={tab === 'invoices'}
+                onClick={() => {
+                  setTab('invoices')
+                  setQuery('')
+                  setStatus('all')
+                }}
+                className={`flex-1 rounded-xl px-4 py-2 text-sm font-semibold transition sm:flex-none ${tab === 'invoices' ? 'bg-plum-900 shadow-plum-950/15 text-white shadow-sm' : 'text-neutral-500 hover:bg-neutral-50 hover:text-neutral-800'}`}
+              >
+                Invoices
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={tab === 'history'}
+                onClick={() => {
+                  setTab('history')
+                  setQuery('')
+                  setStatus('all')
+                }}
+                className={`flex-1 rounded-xl px-4 py-2 text-sm font-semibold transition sm:flex-none ${tab === 'history' ? 'bg-plum-900 shadow-plum-950/15 text-white shadow-sm' : 'text-neutral-500 hover:bg-neutral-50 hover:text-neutral-800'}`}
+              >
+                History
+              </button>
             </div>
             <div className="flex flex-col gap-3 sm:flex-row lg:justify-end">
               <label className="relative min-w-0 sm:w-72">
@@ -235,7 +277,11 @@ export default function SupplierOrders(): ReactElement {
                   onChange={(event) => setQuery(event.target.value)}
                   className="field mt-0 pl-10"
                   placeholder={
-                    tab === 'suppliers' ? 'Search suppliers' : 'Search order number or supplier'
+                    tab === 'suppliers'
+                      ? 'Search suppliers'
+                      : tab === 'orders'
+                        ? 'Search order number or supplier'
+                        : 'Search procurement records'
                   }
                 />
               </label>
@@ -271,13 +317,20 @@ export default function SupplierOrders(): ReactElement {
               edit={setSupplierDialog}
               isLoading={procurement.isLoading}
             />
-          ) : (
+          ) : tab === 'orders' ? (
             <OrderTable
               orders={filteredOrders}
               isLoading={procurement.isLoading}
               updateStatus={(order, nextStatus) => void updateOrderStatus(order, nextStatus)}
               receive={setReceiveDialog}
               remove={(order) => void removeOrder(order)}
+            />
+          ) : (
+            <ProcurementRecords
+              view={tab}
+              query={query}
+              procurement={procurement}
+              feedback={setFeedback}
             />
           )}
         </section>
@@ -443,8 +496,13 @@ function OrderTable({
                 <td className="px-5 py-4">
                   <p className="font-semibold text-neutral-900">{order.orderNumber}</p>
                   <p className="text-xs text-neutral-500">
-                    {date.format(new Date(order.orderedAt))}
+                    Ordered {date.format(new Date(order.orderedAt))}
                   </p>
+                  {order.expectedAt && (
+                    <p className="text-xs text-neutral-500">
+                      Expected {date.format(new Date(order.expectedAt))}
+                    </p>
+                  )}
                 </td>
                 <td className="px-5 py-4">{order.supplierName}</td>
                 <td className="px-5 py-4">
@@ -454,15 +512,29 @@ function OrderTable({
                     className={`rounded-full border border-white/80 px-2.5 py-1 text-xs font-semibold shadow-sm ${orderStatusTone[order.status]}`}
                     aria-label={`Status for ${order.orderNumber}`}
                   >
-                    <option value="draft">Draft</option>
-                    <option value="submitted">Submitted</option>
-                    <option value="partially_received">Partially received</option>
-                    <option value="received">Received</option>
-                    <option value="cancelled">Cancelled</option>
+                    {orderStatusTransitions[order.status].map((status) => (
+                      <option key={status} value={status}>
+                        {orderStatusLabels[status]}
+                      </option>
+                    ))}
                   </select>
                 </td>
                 <td className="px-5 py-4 text-neutral-600">
-                  {order.items.reduce((total, item) => total + item.quantity, 0)} units
+                  <ul className="space-y-1">
+                    {order.items.map((item) => (
+                      <li key={item.id}>
+                        <span className="font-medium text-neutral-800">{item.productName}</span>
+                        <span className="block text-xs text-neutral-500">
+                          {item.quantity} ordered · {item.receivedQuantity} received
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                  {order.notes && (
+                    <p className="mt-2 max-w-64 text-xs text-neutral-500" title={order.notes}>
+                      {order.notes}
+                    </p>
+                  )}
                 </td>
                 <td className="px-5 py-4 font-semibold">{currency.format(order.totalAmount)}</td>
                 <td className="px-5 py-4">
@@ -824,13 +896,25 @@ function ReceiveDialog({
 }: {
   order: PurchaseOrderRecord
   close: VoidFunction
-  save: (items: Array<{ itemId: number; receivedQuantity: number }>) => Promise<void>
+  save: (values: DeliveryFormValues) => Promise<void>
 }): ReactElement {
-  const [quantities, setQuantities] = useState<Record<number, string>>(() =>
+  const [deliveredAt, setDeliveredAt] = useState(today())
+  const [notes, setNotes] = useState('')
+  const [lines, setLines] = useState<
+    Record<
+      number,
+      { receivedQuantity: string; batchNumber: string; sellPrice: string; expiresAt: string }
+    >
+  >(() =>
     Object.fromEntries(
       order.items.map((item) => [
         item.id,
-        String(Math.max(item.quantity - item.receivedQuantity, 0))
+        {
+          receivedQuantity: String(Math.max(item.quantity - item.receivedQuantity, 0)),
+          batchNumber: '',
+          sellPrice: String(item.unitCost),
+          expiresAt: ''
+        }
       ])
     )
   )
@@ -840,16 +924,31 @@ function ReceiveDialog({
     event.preventDefault()
     setSaving(true)
     setError('')
-    const deliveries = Object.entries(quantities)
-      .map(([itemId, value]) => ({ itemId: Number(itemId), receivedQuantity: Number(value) }))
+    const deliveries = Object.entries(lines)
+      .map(([itemId, value]) => ({
+        itemId: Number(itemId),
+        receivedQuantity: Number(value.receivedQuantity),
+        batchNumber: value.batchNumber.trim(),
+        sellPrice: Number(value.sellPrice),
+        expiresAt: value.expiresAt
+      }))
       .filter((item) => item.receivedQuantity > 0)
     if (deliveries.length === 0) {
       setError('Enter at least one delivered quantity.')
       setSaving(false)
       return
     }
+    if (
+      deliveries.some(
+        (item) => !item.batchNumber || !item.expiresAt || Number.isNaN(item.sellPrice)
+      )
+    ) {
+      setError('Enter a batch number, selling price, and expiry date for each delivered line.')
+      setSaving(false)
+      return
+    }
     try {
-      await save(deliveries)
+      await save({ deliveredAt, notes: notes.trim() || null, items: deliveries })
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Unable to record the delivery.')
       setSaving(false)
@@ -857,36 +956,94 @@ function ReceiveDialog({
   }
   return (
     <Dialog title={`Receive ${order.orderNumber}`} close={close}>
-      <form noValidate onSubmit={(event) => void submit(event)} className="space-y-4">
+      <form onSubmit={(event) => void submit(event)} className="space-y-4">
         <p className="text-sm leading-6 text-neutral-600">
-          Enter the units delivered for each line. The order status is updated from the recorded
-          quantities.
+          Record the delivered units and stock batch details. Inventory and the order status update
+          together when this delivery is saved.
         </p>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Delivery date">
+            <input
+              required
+              type="date"
+              className="field"
+              value={deliveredAt}
+              onChange={(event) => setDeliveredAt(event.target.value)}
+            />
+          </Field>
+          <Field label="Delivery notes">
+            <input
+              className="field"
+              value={notes}
+              placeholder="Optional reference or remarks"
+              onChange={(event) => setNotes(event.target.value)}
+            />
+          </Field>
+        </div>
         <div className="space-y-3">
-          {order.items.map((item) => (
-            <label
-              key={item.id}
-              className="grid grid-cols-[1fr_6rem] items-center gap-3 rounded-2xl border border-neutral-200/80 bg-white/70 p-3 text-sm"
-            >
-              <span>
-                <span className="block font-medium text-neutral-800">{item.productName}</span>
-                <span className="text-xs text-neutral-500">
-                  {item.receivedQuantity} of {item.quantity} already received
-                </span>
-              </span>
-              <input
-                required
-                min="0"
-                max={item.quantity - item.receivedQuantity}
-                type="number"
-                className="field mt-0"
-                value={quantities[item.id] ?? '0'}
-                onChange={(event) =>
-                  setQuantities((current) => ({ ...current, [item.id]: event.target.value }))
-                }
-              />
-            </label>
-          ))}
+          {order.items.map((item) => {
+            const line = lines[item.id]
+            const updateLine = (field: keyof typeof line, value: string): void =>
+              setLines((current) => ({
+                ...current,
+                [item.id]: { ...current[item.id], [field]: value }
+              }))
+            return (
+              <section
+                key={item.id}
+                className="rounded-2xl border border-neutral-200/80 bg-white/70 p-3 text-sm"
+              >
+                <div>
+                  <span className="block font-medium text-neutral-800">{item.productName}</span>
+                  <span className="text-xs text-neutral-500">
+                    {item.receivedQuantity} of {item.quantity} already received
+                  </span>
+                </div>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  <Field label="Delivered quantity">
+                    <input
+                      required
+                      min="0"
+                      max={item.quantity - item.receivedQuantity}
+                      type="number"
+                      className="field"
+                      value={line?.receivedQuantity ?? '0'}
+                      onChange={(event) => updateLine('receivedQuantity', event.target.value)}
+                    />
+                  </Field>
+                  <Field label="Batch number">
+                    <input
+                      required={Number(line?.receivedQuantity) > 0}
+                      className="field"
+                      value={line?.batchNumber ?? ''}
+                      onChange={(event) => updateLine('batchNumber', event.target.value)}
+                    />
+                  </Field>
+                  <Field label="Selling price">
+                    <input
+                      required={Number(line?.receivedQuantity) > 0}
+                      min="0"
+                      step="0.01"
+                      type="number"
+                      className="field"
+                      value={line?.sellPrice ?? ''}
+                      onChange={(event) => updateLine('sellPrice', event.target.value)}
+                    />
+                  </Field>
+                  <Field label="Expiry date">
+                    <input
+                      required={Number(line?.receivedQuantity) > 0}
+                      min={deliveredAt}
+                      type="date"
+                      className="field"
+                      value={line?.expiresAt ?? ''}
+                      onChange={(event) => updateLine('expiresAt', event.target.value)}
+                    />
+                  </Field>
+                </div>
+              </section>
+            )
+          })}
         </div>
         {error && (
           <p

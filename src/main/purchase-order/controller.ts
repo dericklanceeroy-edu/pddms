@@ -60,17 +60,19 @@ ipcMain.handle(
       const currentOrder = await findOneById(id)
       if (!currentOrder) return { success: false, error: 'Purchase order not found.' }
       const nextStatus = purchaseOrderStatusUpdateSchema.parse(payload).status
-      if (currentOrder.status === 'received' && nextStatus !== 'received') {
-        return { success: false, error: 'A received order cannot move backwards.' }
-      }
-      if (currentOrder.status === 'cancelled' && nextStatus !== 'cancelled') {
-        return { success: false, error: 'A cancelled order cannot be reopened.' }
-      }
-      if (
-        nextStatus === 'received' &&
-        currentOrder.items.some((item) => item.receivedQuantity < item.quantity)
-      ) {
-        return { success: false, error: 'Receive all order lines before marking it received.' }
+      const allowedTransitions = {
+        draft: ['draft', 'submitted', 'cancelled'],
+        submitted: ['submitted', 'cancelled'],
+        partially_received: ['partially_received', 'cancelled'],
+        received: ['received'],
+        cancelled: ['cancelled']
+      } as const
+      if (!(allowedTransitions[currentOrder.status] as readonly string[]).includes(nextStatus)) {
+        return {
+          success: false,
+          error:
+            'That status change is not allowed. Received quantities control receiving statuses.'
+        }
       }
       const order = await updateStatusById(id, nextStatus)
       state.database.stale = true
@@ -91,11 +93,18 @@ ipcMain.handle(
       if (!isId(id)) return { success: false, error: 'Invalid purchase order.' }
       const currentOrder = await findOneById(id)
       if (!currentOrder) return { success: false, error: 'Purchase order not found.' }
-      if (['cancelled', 'received'].includes(currentOrder.status)) {
-        return { success: false, error: 'This order cannot receive another delivery.' }
+      if (!['submitted', 'partially_received'].includes(currentOrder.status)) {
+        return { success: false, error: 'Submit the order before recording a delivery.' }
       }
       const data = purchaseOrderDeliverySchema.parse(payload)
-      const order = await recordDelivery(id, data.items)
+      const accountId = state.session?.account.id
+      if (!accountId) return { success: false, error: 'Session not found.' }
+      const order = await recordDelivery(id, {
+        deliveredAt: data.deliveredAt,
+        notes: data.notes ?? null,
+        recordedBy: accountId,
+        items: data.items
+      })
       state.database.stale = true
       return { success: true, order }
     } catch (error) {

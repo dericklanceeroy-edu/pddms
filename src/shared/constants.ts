@@ -40,6 +40,12 @@ export const channels = {
     recordDeliveryById: 'purchaseOrder.recordDeliveryById',
     removeOneById: 'purchaseOrder.removeOneById'
   },
+  procurement: {
+    getRecords: 'procurement.getRecords',
+    uploadInvoice: 'procurement.uploadInvoice',
+    openInvoice: 'procurement.openInvoice',
+    recordPayment: 'procurement.recordPayment'
+  },
   auth: {
     getStatus: 'auth.getStatus',
     signIn: 'auth.signIn',

@@ -9,6 +9,10 @@ export interface Database {
   drugs: DrugsTable
   purchaseOrderItems: PurchaseOrderItemsTable
   purchaseOrders: PurchaseOrdersTable
+  supplierDeliveries: SupplierDeliveriesTable
+  supplierDeliveryItems: SupplierDeliveryItemsTable
+  supplierInvoices: SupplierInvoicesTable
+  supplierPayments: SupplierPaymentsTable
   suppliers: SuppliersTable
 }
 
@@ -43,7 +47,7 @@ export interface BatchesTable {
   sellPrice: number
   initialStock: number
   currentStock: number
-  expiresAt: Date
+  expiresAt: ColumnType<Date, string, string>
 }
 
 export interface DrugsTable {
@@ -112,6 +116,58 @@ export interface PurchaseOrderItemsTable {
   receivedQuantity: number
 }
 
+export interface SupplierDeliveriesTable {
+  id: ColumnType<Id, Id | undefined, never>
+  purchaseOrderId: Id
+  supplierId: Id
+  deliveredAt: string
+  notes: string | null
+  recordedBy: Id
+  createdAt: ColumnType<string, string | undefined, never>
+}
+
+export interface SupplierDeliveryItemsTable {
+  id: ColumnType<Id, Id | undefined, never>
+  deliveryId: Id
+  purchaseOrderItemId: Id
+  drugId: Id
+  batchId: Id
+  quantity: number
+}
+
+export type SupplierInvoiceStatus = 'unpaid' | 'partially_paid' | 'paid'
+
+export interface SupplierInvoicesTable {
+  id: ColumnType<Id, Id | undefined, never>
+  supplierId: Id
+  purchaseOrderId: Id
+  invoiceNumber: string
+  invoiceDate: string
+  dueDate: string
+  amount: number
+  status: SupplierInvoiceStatus
+  originalFilename: string
+  storedFilename: string
+  mimeType: string
+  fileSize: number
+  uploadedBy: Id
+  createdAt: ColumnType<string, string | undefined, never>
+}
+
+export interface SupplierPaymentsTable {
+  id: ColumnType<Id, Id | undefined, never>
+  supplierId: Id
+  purchaseOrderId: Id
+  invoiceId: Id | null
+  amount: number
+  paidAt: string
+  method: string
+  referenceNumber: string | null
+  notes: string | null
+  recordedBy: Id
+  createdAt: ColumnType<string, string | undefined, never>
+}
+
 export type Account = Selectable<AccountsTable>
 export type NewAccount = Insertable<AccountsTable>
 export type AccountUpdate = Updateable<AccountsTable>
@@ -169,6 +225,49 @@ export interface PurchaseOrderWithDetails extends PurchaseOrder {
   supplierName: string
   createdByName: string
   items: PurchaseOrderLine[]
+}
+
+export type SupplierDelivery = Selectable<SupplierDeliveriesTable>
+export type SupplierInvoice = Selectable<SupplierInvoicesTable>
+export type SupplierPayment = Selectable<SupplierPaymentsTable>
+
+export interface SupplierDeliveryWithDetails extends SupplierDelivery {
+  orderNumber: string
+  supplierName: string
+  recordedByName: string
+  items: Array<{
+    id: Id
+    productName: string
+    batchNumber: string
+    quantity: number
+  }>
+}
+
+export interface SupplierInvoiceWithDetails extends SupplierInvoice {
+  orderNumber: string
+  supplierName: string
+  uploadedByName: string
+  paidAmount: number
+  outstandingAmount: number
+  deadlineStatus: 'overdue' | 'due_soon' | 'upcoming' | 'paid'
+}
+
+export interface SupplierPaymentWithDetails extends SupplierPayment {
+  invoiceNumber: string | null
+  orderNumber: string
+  supplierName: string
+  recordedByName: string
+}
+
+export interface PurchaseOrderPaymentSummary {
+  purchaseOrderId: Id
+  supplierId: Id
+  orderNumber: string
+  supplierName: string
+  totalAmount: number
+  paidAmount: number
+  outstandingAmount: number
+  status: SupplierInvoiceStatus
 }
 
 export type Role = ValueOf<typeof roles>

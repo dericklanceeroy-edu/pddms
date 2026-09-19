@@ -30,6 +30,20 @@ const namePattern = /^\p{L}[\p{L} .,'-]*$/u
 const usernamePattern = /^[A-Za-z0-9._-]+$/
 const phonePattern = /^09\d{9}$/
 const catalogTextPattern = /^[\p{L}0-9][\p{L}0-9 .,&()/'-]*$/u
+const isoDatePattern = /^\d{4}-\d{2}-\d{2}$/
+
+const isCalendarDate = (value: string): boolean => {
+  const [year, month, day] = value.split('-').map(Number)
+  const parsed = new Date(Date.UTC(year, month - 1, day))
+  return (
+    parsed.getUTCFullYear() === year &&
+    parsed.getUTCMonth() === month - 1 &&
+    parsed.getUTCDate() === day
+  )
+}
+
+const isoDateSchema = (message: string): z.ZodType<string> =>
+  z.string().regex(isoDatePattern, message).refine(isCalendarDate, message)
 
 export const newAccountSchema = z.strictObject({
   role: z.enum(Object.values(roles)),
@@ -125,7 +139,7 @@ export const purchaseOrderStatusSchema = z.enum([
 
 export const newPurchaseOrderSchema = z.strictObject({
   supplierId: z.number().int().positive(),
-  expectedAt: z.string().trim().nullable().optional(),
+  expectedAt: isoDateSchema('Enter a valid expected delivery date.').nullable().optional(),
   notes: z.string().trim().nullable().optional(),
   items: z
     .array(
@@ -143,12 +157,40 @@ export const purchaseOrderStatusUpdateSchema = z.strictObject({
 })
 
 export const purchaseOrderDeliverySchema = z.strictObject({
+  deliveredAt: isoDateSchema('Enter a valid delivery date.'),
+  notes: z.string().trim().max(500).nullable().optional(),
   items: z
     .array(
       z.strictObject({
         itemId: z.number().int().positive(),
-        receivedQuantity: z.number().int().nonnegative()
+        receivedQuantity: z.number().int().positive(),
+        batchNumber: z.string().trim().min(1).max(80),
+        sellPrice: z.number().nonnegative(),
+        expiresAt: isoDateSchema('Enter a valid expiry date.')
       })
     )
     .min(1)
+})
+
+export const supplierInvoiceUploadSchema = z
+  .strictObject({
+    purchaseOrderId: z.number().int().positive(),
+    invoiceNumber: z.string().trim().min(1).max(80),
+    invoiceDate: isoDateSchema('Enter a valid invoice date.'),
+    dueDate: isoDateSchema('Enter a valid due date.'),
+    amount: z.number().positive()
+  })
+  .refine((value) => value.dueDate >= value.invoiceDate, {
+    path: ['dueDate'],
+    message: 'The payment due date cannot be before the invoice date.'
+  })
+
+export const supplierPaymentSchema = z.strictObject({
+  purchaseOrderId: z.number().int().positive(),
+  invoiceId: z.number().int().positive().nullable().optional(),
+  amount: z.number().positive(),
+  paidAt: isoDateSchema('Enter a valid payment date.'),
+  method: z.string().trim().min(1).max(80),
+  referenceNumber: z.string().trim().max(120).nullable().optional(),
+  notes: z.string().trim().max(500).nullable().optional()
 })

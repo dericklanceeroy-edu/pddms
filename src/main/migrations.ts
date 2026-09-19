@@ -7,6 +7,8 @@ import { up as completeProfilesSchema } from '../../migrations/1788278400000_com
 import { up as refineAccountRoles } from '../../migrations/1789000000000_refine_account_roles'
 import { up as createPurchaseOrders } from '../../migrations/1789000100000_create_purchase_orders_tables'
 import { up as enforceAccountRoles } from '../../migrations/1789000200000_enforce_account_roles'
+import { up as createProcurementTables } from '../../migrations/1789000300000_create_procurement_tables'
+import { up as allowOptionalSupplierPaymentInvoice } from '../../migrations/1789000400000_allow_optional_supplier_payment_invoice'
 
 export async function initializeDatabase(): Promise<void> {
   const existingTables = new Set((await db.introspection.getTables()).map((table) => table.name))
@@ -19,4 +21,6 @@ export async function initializeDatabase(): Promise<void> {
   await refineAccountRoles(db)
   await enforceAccountRoles(db)
   await createPurchaseOrders(db)
+  await createProcurementTables(db)
+  await allowOptionalSupplierPaymentInvoice(db)
 }

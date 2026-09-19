@@ -19,6 +19,16 @@ interface CreateOrderInput {
 interface DeliveryInput {
   itemId: number
   receivedQuantity: number
+  batchNumber: string
+  sellPrice: number
+  expiresAt: string
+}
+
+interface RecordDeliveryInput {
+  deliveredAt: string
+  notes: string | null
+  recordedBy: number
+  items: DeliveryInput[]
 }
 
 export async function findAll(): Promise<PurchaseOrderWithDetails[]> {
@@ -155,27 +165,102 @@ export async function updateStatusById(
 
 export async function recordDelivery(
   id: number,
-  deliveries: DeliveryInput[]
+  data: RecordDeliveryInput
 ): Promise<PurchaseOrderWithDetails> {
   await db.transaction().execute(async (transaction) => {
+    const order = await transaction
+      .selectFrom('purchaseOrders')
+      .select(['supplierId', 'status'])
+      .where('id', '=', id)
+      .executeTakeFirstOrThrow()
+    if (!['submitted', 'partially_received'].includes(order.status)) {
+      throw new Error('Submit the purchase order before recording a delivery.')
+    }
+
     const orderItems = await transaction
       .selectFrom('purchaseOrderItems')
       .selectAll()
       .where('purchaseOrderId', '=', id)
       .execute()
     const itemMap = new Map(orderItems.map((item) => [item.id, item]))
+    const delivery = await transaction
+      .insertInto('supplierDeliveries')
+      .values({
+        purchaseOrderId: id,
+        supplierId: order.supplierId,
+        deliveredAt: data.deliveredAt,
+        notes: data.notes,
+        recordedBy: data.recordedBy
+      })
+      .returning('id')
+      .executeTakeFirstOrThrow()
 
-    for (const delivery of deliveries) {
-      const item = itemMap.get(delivery.itemId)
+    for (const deliveredItem of data.items) {
+      const item = itemMap.get(deliveredItem.itemId)
       if (!item) throw new Error('The delivery line does not belong to this order.')
-      if (item.receivedQuantity + delivery.receivedQuantity > item.quantity) {
+      if (item.receivedQuantity + deliveredItem.receivedQuantity > item.quantity) {
         throw new Error('Received quantity cannot exceed the ordered quantity.')
       }
-      item.receivedQuantity += delivery.receivedQuantity
+      if (deliveredItem.expiresAt <= data.deliveredAt) {
+        throw new Error('Delivered stock must expire after the delivery date.')
+      }
+
+      const existingBatch = await transaction
+        .selectFrom('batches')
+        .selectAll()
+        .where('physicalTag', '=', deliveredItem.batchNumber)
+        .executeTakeFirst()
+      let batchId: number
+      if (existingBatch) {
+        const sameBatch =
+          existingBatch.drugId === item.drugId &&
+          existingBatch.supplierId === order.supplierId &&
+          existingBatch.buyPrice === item.unitCost &&
+          existingBatch.sellPrice === deliveredItem.sellPrice &&
+          String(existingBatch.expiresAt) === deliveredItem.expiresAt
+        if (!sameBatch) throw new Error('That batch number is already used by different stock.')
+        await transaction
+          .updateTable('batches')
+          .set({
+            initialStock: existingBatch.initialStock + deliveredItem.receivedQuantity,
+            currentStock: existingBatch.currentStock + deliveredItem.receivedQuantity
+          })
+          .where('id', '=', existingBatch.id)
+          .executeTakeFirstOrThrow()
+        batchId = existingBatch.id
+      } else {
+        const batch = await transaction
+          .insertInto('batches')
+          .values({
+            drugId: item.drugId,
+            supplierId: order.supplierId,
+            physicalTag: deliveredItem.batchNumber,
+            buyPrice: item.unitCost,
+            sellPrice: deliveredItem.sellPrice,
+            initialStock: deliveredItem.receivedQuantity,
+            currentStock: deliveredItem.receivedQuantity,
+            expiresAt: deliveredItem.expiresAt
+          })
+          .returning('id')
+          .executeTakeFirstOrThrow()
+        batchId = batch.id
+      }
+
+      item.receivedQuantity += deliveredItem.receivedQuantity
       await transaction
         .updateTable('purchaseOrderItems')
         .set({ receivedQuantity: item.receivedQuantity })
-        .where('id', '=', delivery.itemId)
+        .where('id', '=', deliveredItem.itemId)
+        .executeTakeFirstOrThrow()
+      await transaction
+        .insertInto('supplierDeliveryItems')
+        .values({
+          deliveryId: delivery.id,
+          purchaseOrderItemId: item.id,
+          drugId: item.drugId,
+          batchId,
+          quantity: deliveredItem.receivedQuantity
+        })
         .executeTakeFirstOrThrow()
     }
 
@@ -197,7 +282,7 @@ export async function recordDelivery(
       .updateTable('purchaseOrders')
       .set({
         status,
-        receivedAt: status === 'received' ? sql`CURRENT_TIMESTAMP` : null,
+        receivedAt: status === 'received' ? data.deliveredAt : null,
         updatedAt: sql`CURRENT_TIMESTAMP`
       })
       .where('id', '=', id)
