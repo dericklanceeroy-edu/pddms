@@ -4,6 +4,13 @@ import { sql } from 'kysely'
 
 const millisecondsPerDay = 86_400_000
 
+const localDate = (value: Date): string => {
+  const year = value.getFullYear()
+  const month = String(value.getMonth() + 1).padStart(2, '0')
+  const day = String(value.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 const getSeverity = (ratio: number): DashboardAlertSeverity => {
   if (ratio <= 0.35) return 'critical'
   if (ratio <= 0.7) return 'warning'
@@ -13,6 +20,7 @@ const getSeverity = (ratio: number): DashboardAlertSeverity => {
 export async function getAdminDashboard(): Promise<AdminDashboardData> {
   const generatedAt = new Date()
   const expiryLimit = new Date(generatedAt.getTime() + 90 * millisecondsPerDay)
+  const paymentDeadlineLimit = localDate(new Date(generatedAt.getTime() + 7 * millisecondsPerDay))
   const products = await db
     .selectFrom('drugs')
     .select(['id', 'genericName', 'formulation', 'reorderLevel'])
@@ -98,6 +106,24 @@ export async function getAdminDashboard(): Promise<AdminDashboardData> {
     .select(({ fn }) => fn.count<number>('id').as('count'))
     .where('status', 'not in', ['received', 'cancelled'])
     .executeTakeFirstOrThrow()
+  const invoices = await db
+    .selectFrom('supplierInvoices')
+    .select(['purchaseOrderId', 'amount', 'dueDate'])
+    .execute()
+  const supplierPayments = await db
+    .selectFrom('supplierPayments')
+    .select('purchaseOrderId')
+    .select(({ fn }) => fn.sum<number>('amount').as('paidAmount'))
+    .groupBy('purchaseOrderId')
+    .execute()
+  const paidByOrder = new Map(
+    supplierPayments.map((payment) => [payment.purchaseOrderId, Number(payment.paidAmount)])
+  )
+  const supplierPaymentsDue = invoices.filter(
+    (invoice) =>
+      invoice.dueDate <= paymentDeadlineLimit &&
+      (paidByOrder.get(invoice.purchaseOrderId) ?? 0) < invoice.amount
+  ).length
 
   return {
     source: { kind: 'database', label: 'Live database', generatedAt: generatedAt.toISOString() },
@@ -155,10 +181,10 @@ export async function getAdminDashboard(): Promise<AdminDashboardData> {
       {
         id: 'supplier-payments',
         label: 'Supplier payments due',
-        value: 0,
+        value: supplierPaymentsDue,
         format: 'integer',
-        detail: 'Supplier payment records are not available yet.',
-        status: 'healthy'
+        detail: 'Unpaid or partially paid invoices overdue or due within seven days.',
+        status: supplierPaymentsDue > 0 ? 'attention' : 'healthy'
       },
       {
         id: 'stock-valuation',

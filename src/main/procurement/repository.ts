@@ -75,16 +75,23 @@ export async function findDeliveries(): Promise<SupplierDeliveryWithDetails[]> {
     .execute()
   const items = await db
     .selectFrom('supplierDeliveryItems')
+    .innerJoin(
+      'purchaseOrderItems',
+      'purchaseOrderItems.id',
+      'supplierDeliveryItems.purchaseOrderItemId'
+    )
     .innerJoin('drugs', 'drugs.id', 'supplierDeliveryItems.drugId')
     .innerJoin('batches', 'batches.id', 'supplierDeliveryItems.batchId')
     .select([
       'supplierDeliveryItems.id',
       'supplierDeliveryItems.deliveryId',
       'supplierDeliveryItems.quantity',
+      'purchaseOrderItems.quantity as orderedQuantity',
       'drugs.brandName',
       'drugs.genericName',
       'batches.id as batchId',
-      'batches.physicalTag'
+      'batches.physicalTag',
+      'batches.expiresAt'
     ])
     .execute()
 
@@ -96,7 +103,9 @@ export async function findDeliveries(): Promise<SupplierDeliveryWithDetails[]> {
         id: item.id,
         productName: `${item.brandName} (${item.genericName})`,
         batchNumber: item.physicalTag ?? `Batch ${item.batchId}`,
-        quantity: item.quantity
+        quantity: item.quantity,
+        orderedQuantity: item.orderedQuantity,
+        expiresAt: String(item.expiresAt)
       }))
   }))
 }

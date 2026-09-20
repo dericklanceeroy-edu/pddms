@@ -240,6 +240,8 @@ export interface SupplierDeliveryWithDetails extends SupplierDelivery {
     productName: string
     batchNumber: string
     quantity: number
+    orderedQuantity: number
+    expiresAt: string
   }>
 }
 

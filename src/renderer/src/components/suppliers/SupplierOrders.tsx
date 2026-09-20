@@ -28,7 +28,7 @@ import {
   FiX
 } from 'react-icons/fi'
 
-type Tab = 'suppliers' | 'orders' | 'invoices' | 'history'
+type Tab = 'suppliers' | 'orders' | 'receiving' | 'invoices' | 'history'
 
 const currency = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' })
 const date = new Intl.DateTimeFormat('en-PH', { dateStyle: 'medium' })
@@ -211,7 +211,7 @@ export default function SupplierOrders(): ReactElement {
         <section className="table-surface">
           <div className="surface-header flex flex-col gap-4 p-4 sm:p-5 lg:flex-row lg:items-center lg:justify-between">
             <div
-              className="flex w-full rounded-2xl border border-neutral-200/80 bg-white p-1 shadow-sm sm:w-auto"
+              className="flex w-full overflow-x-auto rounded-2xl border border-neutral-200/80 bg-white p-1 shadow-sm lg:w-auto"
               role="tablist"
               aria-label="Procurement views"
             >
@@ -224,7 +224,7 @@ export default function SupplierOrders(): ReactElement {
                   setQuery('')
                   setStatus('all')
                 }}
-                className={`flex-1 rounded-xl px-4 py-2 text-sm font-semibold transition sm:flex-none ${tab === 'suppliers' ? 'bg-plum-900 shadow-plum-950/15 text-white shadow-sm' : 'text-neutral-500 hover:bg-neutral-50 hover:text-neutral-800'}`}
+                className={`flex-1 shrink-0 rounded-xl px-4 py-2 text-sm font-semibold transition sm:flex-none ${tab === 'suppliers' ? 'bg-plum-900 shadow-plum-950/15 text-white shadow-sm' : 'text-neutral-500 hover:bg-neutral-50 hover:text-neutral-800'}`}
               >
                 Suppliers
               </button>
@@ -237,9 +237,22 @@ export default function SupplierOrders(): ReactElement {
                   setQuery('')
                   setStatus('all')
                 }}
-                className={`flex-1 rounded-xl px-4 py-2 text-sm font-semibold transition sm:flex-none ${tab === 'orders' ? 'bg-plum-900 shadow-plum-950/15 text-white shadow-sm' : 'text-neutral-500 hover:bg-neutral-50 hover:text-neutral-800'}`}
+                className={`flex-1 shrink-0 rounded-xl px-4 py-2 text-sm font-semibold transition sm:flex-none ${tab === 'orders' ? 'bg-plum-900 shadow-plum-950/15 text-white shadow-sm' : 'text-neutral-500 hover:bg-neutral-50 hover:text-neutral-800'}`}
               >
                 Purchase orders
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={tab === 'receiving'}
+                onClick={() => {
+                  setTab('receiving')
+                  setQuery('')
+                  setStatus('all')
+                }}
+                className={`flex-1 shrink-0 rounded-xl px-4 py-2 text-sm font-semibold transition sm:flex-none ${tab === 'receiving' ? 'bg-plum-900 shadow-plum-950/15 text-white shadow-sm' : 'text-neutral-500 hover:bg-neutral-50 hover:text-neutral-800'}`}
+              >
+                Receiving reports
               </button>
               <button
                 type="button"
@@ -250,7 +263,7 @@ export default function SupplierOrders(): ReactElement {
                   setQuery('')
                   setStatus('all')
                 }}
-                className={`flex-1 rounded-xl px-4 py-2 text-sm font-semibold transition sm:flex-none ${tab === 'invoices' ? 'bg-plum-900 shadow-plum-950/15 text-white shadow-sm' : 'text-neutral-500 hover:bg-neutral-50 hover:text-neutral-800'}`}
+                className={`flex-1 shrink-0 rounded-xl px-4 py-2 text-sm font-semibold transition sm:flex-none ${tab === 'invoices' ? 'bg-plum-900 shadow-plum-950/15 text-white shadow-sm' : 'text-neutral-500 hover:bg-neutral-50 hover:text-neutral-800'}`}
               >
                 Invoices
               </button>
@@ -263,7 +276,7 @@ export default function SupplierOrders(): ReactElement {
                   setQuery('')
                   setStatus('all')
                 }}
-                className={`flex-1 rounded-xl px-4 py-2 text-sm font-semibold transition sm:flex-none ${tab === 'history' ? 'bg-plum-900 shadow-plum-950/15 text-white shadow-sm' : 'text-neutral-500 hover:bg-neutral-50 hover:text-neutral-800'}`}
+                className={`flex-1 shrink-0 rounded-xl px-4 py-2 text-sm font-semibold transition sm:flex-none ${tab === 'history' ? 'bg-plum-900 shadow-plum-950/15 text-white shadow-sm' : 'text-neutral-500 hover:bg-neutral-50 hover:text-neutral-800'}`}
               >
                 History
               </button>
@@ -474,16 +487,24 @@ function OrderTable({
   remove: (order: PurchaseOrderRecord) => void
 }): ReactElement {
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[980px] text-sm">
+    <div className="min-w-0 overflow-x-auto">
+      <table className="w-full table-fixed text-sm">
+        <colgroup>
+          <col className="w-[20%]" />
+          <col className="w-[17%]" />
+          <col className="w-[17%]" />
+          <col className="w-[31%]" />
+          <col className="hidden w-[15%] xl:table-column" />
+          <col className="w-24" />
+        </colgroup>
         <thead className="surface-header text-left text-neutral-500">
           <tr>
             <th className="px-5 py-3">Order</th>
             <th className="px-5 py-3">Supplier</th>
             <th className="px-5 py-3">Status</th>
             <th className="px-5 py-3">Items</th>
-            <th className="px-5 py-3">Total</th>
-            <th className="px-5 py-3 text-right">Actions</th>
+            <th className="hidden px-3 py-3 xl:table-cell">Total</th>
+            <th className="px-3 py-3 text-right">Actions</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-neutral-100/90">
@@ -493,8 +514,10 @@ function OrderTable({
               order.items.some((item) => item.receivedQuantity < item.quantity)
             return (
               <tr key={order.id} className="transition-colors hover:bg-mauve-50/50">
-                <td className="px-5 py-4">
-                  <p className="font-semibold text-neutral-900">{order.orderNumber}</p>
+                <td className="min-w-0 px-3 py-4 align-top">
+                  <p className="truncate font-semibold text-neutral-900" title={order.orderNumber}>
+                    {order.orderNumber}
+                  </p>
                   <p className="text-xs text-neutral-500">
                     Ordered {date.format(new Date(order.orderedAt))}
                   </p>
@@ -503,9 +526,16 @@ function OrderTable({
                       Expected {date.format(new Date(order.expectedAt))}
                     </p>
                   )}
+                  <p className="mt-1 text-xs font-semibold xl:hidden">
+                    {currency.format(order.totalAmount)}
+                  </p>
                 </td>
-                <td className="px-5 py-4">{order.supplierName}</td>
-                <td className="px-5 py-4">
+                <td className="min-w-0 px-3 py-4 align-top">
+                  <p className="truncate" title={order.supplierName}>
+                    {order.supplierName}
+                  </p>
+                </td>
+                <td className="px-3 py-4 align-top">
                   <select
                     value={order.status}
                     onChange={(event) => updateStatus(order, event.target.value as OrderStatus)}
@@ -519,11 +549,16 @@ function OrderTable({
                     ))}
                   </select>
                 </td>
-                <td className="px-5 py-4 text-neutral-600">
+                <td className="min-w-0 px-3 py-4 text-neutral-600">
                   <ul className="space-y-1">
                     {order.items.map((item) => (
                       <li key={item.id}>
-                        <span className="font-medium text-neutral-800">{item.productName}</span>
+                        <span
+                          className="block truncate font-medium text-neutral-800"
+                          title={item.productName}
+                        >
+                          {item.productName}
+                        </span>
                         <span className="block text-xs text-neutral-500">
                           {item.quantity} ordered · {item.receivedQuantity} received
                         </span>
@@ -531,18 +566,23 @@ function OrderTable({
                     ))}
                   </ul>
                   {order.notes && (
-                    <p className="mt-2 max-w-64 text-xs text-neutral-500" title={order.notes}>
+                    <p
+                      className="mt-2 line-clamp-2 text-xs break-words text-neutral-500"
+                      title={order.notes}
+                    >
                       {order.notes}
                     </p>
                   )}
                 </td>
-                <td className="px-5 py-4 font-semibold">{currency.format(order.totalAmount)}</td>
-                <td className="px-5 py-4">
-                  <div className="flex justify-end gap-2">
+                <td className="hidden px-3 py-4 font-semibold xl:table-cell">
+                  {currency.format(order.totalAmount)}
+                </td>
+                <td className="px-3 py-4 align-top">
+                  <div className="flex flex-col items-stretch gap-2">
                     {canReceive && (
                       <button
                         type="button"
-                        className="secondary-button text-xs"
+                        className="secondary-button justify-center px-2 text-xs"
                         onClick={() => receive(order)}
                       >
                         <FiCheck /> Receive

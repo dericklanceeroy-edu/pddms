@@ -34,7 +34,7 @@ export default function ProcurementRecords({
   procurement,
   feedback
 }: {
-  view: 'invoices' | 'history'
+  view: 'receiving' | 'invoices' | 'history'
   query: string
   procurement: SupplierOrdersState
   feedback: (message: string) => void
@@ -53,6 +53,9 @@ export default function ProcurementRecords({
 
   if (view === 'history') {
     return <TransactionHistory procurement={procurement} query={normalized} />
+  }
+  if (view === 'receiving') {
+    return <ReceivingReports procurement={procurement} query={normalized} />
   }
 
   const overdue = procurement.invoices.filter((invoice) => invoice.deadlineStatus === 'overdue')
@@ -311,6 +314,105 @@ export default function ProcurementRecords({
             feedback('Supplier payment recorded.')
           }}
         />
+      )}
+    </div>
+  )
+}
+
+function ReceivingReports({
+  procurement,
+  query
+}: {
+  procurement: SupplierOrdersState
+  query: string
+}): ReactElement {
+  const deliveries = procurement.deliveries.filter((delivery) =>
+    `${delivery.orderNumber} ${delivery.supplierName} ${delivery.recordedByName} ${delivery.items
+      .map((item) => `${item.productName} ${item.batchNumber} ${item.expiresAt}`)
+      .join(' ')}`
+      .toLowerCase()
+      .includes(query)
+  )
+
+  return (
+    <div className="space-y-4 p-4 sm:p-5">
+      <div>
+        <h3 className="font-semibold text-neutral-900">Receiving reports</h3>
+        <p className="text-sm text-neutral-500">
+          Live stock-in records linked to purchase orders and inventory batches.
+        </p>
+      </div>
+      {deliveries.map((delivery) => {
+        const order = procurement.orders.find((record) => record.id === delivery.purchaseOrderId)
+        return (
+          <article
+            key={delivery.id}
+            className="min-w-0 overflow-hidden rounded-2xl border border-neutral-200 bg-white"
+          >
+            <header className="flex flex-col gap-3 border-b border-neutral-200 bg-neutral-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <p className="truncate font-semibold text-neutral-900">
+                  Receiving report #{delivery.id} · {delivery.orderNumber}
+                </p>
+                <p className="truncate text-sm text-neutral-500">{delivery.supplierName}</p>
+              </div>
+              <div className="shrink-0 text-sm sm:text-right">
+                <p>{date.format(new Date(delivery.deliveredAt))}</p>
+                <p className="text-xs text-neutral-500">
+                  Recorded by {delivery.recordedByName}
+                  {order ? ` · ${orderStatusLabels[order.status]}` : ''}
+                </p>
+              </div>
+            </header>
+            <div className="divide-y divide-neutral-100">
+              {delivery.items.map((item) => {
+                const expired = item.expiresAt < today()
+                return (
+                  <div
+                    key={item.id}
+                    className="grid min-w-0 gap-3 px-4 py-4 sm:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1fr)] sm:items-center"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate font-medium text-neutral-900" title={item.productName}>
+                        {item.productName}
+                      </p>
+                      <p className="text-xs text-neutral-500">
+                        {item.orderedQuantity} ordered · {item.quantity} received in this report
+                      </p>
+                    </div>
+                    <div className="min-w-0 text-sm">
+                      <p className="text-xs text-neutral-500">Inventory batch</p>
+                      <p className="truncate font-medium" title={item.batchNumber}>
+                        {item.batchNumber}
+                      </p>
+                    </div>
+                    <div className="text-sm">
+                      <p className="text-xs text-neutral-500">Expiry</p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-medium">{date.format(new Date(item.expiresAt))}</p>
+                        {expired && (
+                          <span className="rounded-full bg-rose-50 px-2 py-0.5 text-xs font-semibold text-rose-700">
+                            Expired
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+            {delivery.notes && (
+              <p className="border-t border-neutral-100 px-4 py-3 text-sm break-words text-neutral-600">
+                {delivery.notes}
+              </p>
+            )}
+          </article>
+        )
+      })}
+      {!procurement.isLoading && deliveries.length === 0 && (
+        <p className="py-10 text-center text-sm text-neutral-500">
+          No receiving reports match this search.
+        </p>
       )}
     </div>
   )
