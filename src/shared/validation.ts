@@ -28,6 +28,20 @@ export function formatValidationError(error: unknown): string {
     const input = (issue as { input?: unknown } | undefined)?.input
 
     if (
+      [
+        'category',
+        'genericName',
+        'brandName',
+        'formulation',
+        'reorderLevel',
+        'quantity',
+        'batchId'
+      ].includes(field)
+    ) {
+      return fieldLabels[field] ?? 'Select an inventory batch.'
+    }
+
+    if (
       issue &&
       ((issue.code === 'invalid_type' && input === undefined) ||
         (typeof input === 'string' && input.trim() === ''))

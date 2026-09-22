@@ -8,15 +8,15 @@ export const Route = createFileRoute('/customers/$customerId')({ component: Rout
 
 function RouteComponent(): ReactElement {
   const { customerId } = Route.useParams()
-  const isLoaded = useProfileStore((state) => state.isLoaded)
+  const isLoaded = useProfileStore((state) => state.areCustomersLoaded)
   const error = useProfileStore((state) => state.error)
-  const load = useProfileStore((state) => state.load)
+  const loadCustomers = useProfileStore((state) => state.loadCustomers)
   const customer = useProfileStore((state) =>
     state.customers.find((value) => value.id === Number(customerId))
   )
   useEffect(() => {
-    void load()
-  }, [load])
+    void loadCustomers()
+  }, [loadCustomers])
   if (error) return <DashboardShell pageTitle="Customer profile">{error}</DashboardShell>
   if (!isLoaded)
     return <DashboardShell pageTitle="Customer profile">Loading customer…</DashboardShell>

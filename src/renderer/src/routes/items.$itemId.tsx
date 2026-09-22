@@ -8,13 +8,13 @@ export const Route = createFileRoute('/items/$itemId')({ component: RouteCompone
 
 function RouteComponent(): ReactElement {
   const { itemId } = Route.useParams()
-  const isLoaded = useProfileStore((state) => state.isLoaded)
+  const isLoaded = useProfileStore((state) => state.areItemsLoaded)
   const error = useProfileStore((state) => state.error)
-  const load = useProfileStore((state) => state.load)
+  const loadItems = useProfileStore((state) => state.loadItems)
   const item = useProfileStore((state) => state.items.find((value) => value.id === Number(itemId)))
   useEffect(() => {
-    void load()
-  }, [load])
+    void loadItems(true)
+  }, [loadItems, itemId])
   if (error) return <DashboardShell pageTitle="Item profile">{error}</DashboardShell>
   if (!isLoaded) return <DashboardShell pageTitle="Item profile">Loading product…</DashboardShell>
   if (itemId === 'new') return <ItemProfileView item={null} />

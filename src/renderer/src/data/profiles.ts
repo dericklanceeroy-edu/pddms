@@ -1,3 +1,5 @@
+import { isBatchSellable } from '@shared/inventory'
+
 export type StockStatus = 'in-stock' | 'low-stock' | 'out-of-stock'
 export type CustomerDiscount = 'none' | 'senior' | 'pwd'
 
@@ -8,6 +10,7 @@ export interface ItemBatch {
   stock: number
   sellPrice: number
   expiresAt: string
+  receipts: Array<{ orderNumber: string; deliveredAt: string; quantity: number }>
 }
 
 export interface ItemProfile {
@@ -49,8 +52,13 @@ export type ItemDraft = Omit<ItemProfile, 'id' | 'genericEquivalentIds' | 'batch
 export const getItemStock = (item: ItemProfile): number =>
   item.batches.reduce((total, batch) => total + batch.stock, 0)
 
+export const getSellableStock = (item: ItemProfile): number =>
+  item.batches
+    .filter((batch) => isBatchSellable(batch.stock, batch.expiresAt))
+    .reduce((total, batch) => total + batch.stock, 0)
+
 export const getStockStatus = (item: ItemProfile): StockStatus => {
-  const stock = getItemStock(item)
+  const stock = getSellableStock(item)
   if (stock === 0) return 'out-of-stock'
   return stock <= item.reorderLevel ? 'low-stock' : 'in-stock'
 }

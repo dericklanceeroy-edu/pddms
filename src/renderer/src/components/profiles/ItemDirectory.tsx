@@ -1,7 +1,9 @@
 import DashboardShell from '@renderer/components/dashboard/DashboardShell'
-import { getItemStock, getStockStatus } from '@renderer/data/profiles'
+import { getItemStock, getSellableStock, getStockStatus } from '@renderer/data/profiles'
 import { useAccount } from '@renderer/hooks/useAccount'
+import { exportInventory } from '@renderer/services/inventory'
 import { useProfileStore } from '@renderer/stores/useProfileStore'
+import { getExpiryStatus } from '@shared/inventory'
 import { Link } from '@tanstack/react-router'
 import { useEffect, useMemo, useState, type ReactElement } from 'react'
 import {
@@ -12,6 +14,7 @@ import {
   FiPlus,
   FiSearch
 } from 'react-icons/fi'
+import InventoryReport from './InventoryReport'
 
 const statusLabels = {
   'in-stock': 'In stock',
@@ -22,8 +25,12 @@ const statusLabels = {
 export default function ItemDirectory(): ReactElement {
   const { account } = useAccount()
   const items = useProfileStore((state) => state.items)
-  const load = useProfileStore((state) => state.load)
+  const loadItems = useProfileStore((state) => state.loadItems)
   const loadError = useProfileStore((state) => state.error)
+  const isLoading = useProfileStore((state) => state.isLoading)
+  const [report, setReport] = useState(false)
+  const [message, setMessage] = useState('')
+  const [exporting, setExporting] = useState(false)
 
   const [query, setQuery] = useState('')
 
@@ -61,8 +68,13 @@ export default function ItemDirectory(): ReactElement {
   }, [items])
 
   useEffect(() => {
-    void load()
-  }, [load])
+    void loadItems(true)
+    const refresh = (): void => {
+      void loadItems(true)
+    }
+    window.addEventListener('focus', refresh)
+    return () => window.removeEventListener('focus', refresh)
+  }, [loadItems])
 
   return (
     <DashboardShell pageTitle="Inventory">
@@ -82,6 +94,42 @@ export default function ItemDirectory(): ReactElement {
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                className="secondary-button"
+                disabled={isLoading}
+                onClick={() => void loadItems(true)}
+              >
+                {isLoading ? 'Loading…' : 'Refresh'}
+              </button>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => {
+                  setReport(!report)
+                  void loadItems(true)
+                }}
+              >
+                {report ? 'Hide report' : 'View inventory report'}
+              </button>
+              {account?.role === 'master' && (
+                <button
+                  type="button"
+                  className="secondary-button"
+                  disabled={exporting}
+                  onClick={() => {
+                    setExporting(true)
+                    void exportInventory()
+                      .then((saved) => setMessage(saved ? 'Inventory report exported.' : ''))
+                      .catch((cause: unknown) =>
+                        setMessage(cause instanceof Error ? cause.message : 'Export failed.')
+                      )
+                      .finally(() => setExporting(false))
+                  }}
+                >
+                  {exporting ? 'Exporting…' : 'Export CSV'}
+                </button>
+              )}
               <div className="glass-surface rounded-2xl px-4 py-2.5">
                 <p className="text-[0.68rem] font-semibold tracking-[0.14em] text-neutral-500 uppercase">
                   Products
@@ -98,6 +146,13 @@ export default function ItemDirectory(): ReactElement {
             </div>
           </div>
         </section>
+
+        {message && (
+          <p role="status" className="text-sm">
+            {message}
+          </p>
+        )}
+        {report && !loadError && <InventoryReport items={items} />}
 
         <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_18rem]">
           <section className="panel min-w-0 overflow-hidden">
@@ -164,18 +219,39 @@ export default function ItemDirectory(): ReactElement {
                       <p className="mt-1 truncate text-sm text-neutral-500">
                         {item.genericName} · {item.formulation}
                       </p>
+                      {item.batches.some(
+                        (batch) => batch.stock > 0 && getExpiryStatus(batch.expiresAt) === 'expired'
+                      ) && (
+                        <p className="mt-1 text-xs font-semibold text-rose-700">
+                          Expired stock — excluded from sellable units
+                        </p>
+                      )}
+                      {item.batches.some(
+                        (batch) =>
+                          batch.stock > 0 && getExpiryStatus(batch.expiresAt) === 'near-expiry'
+                      ) && (
+                        <p className="mt-1 text-xs font-semibold text-amber-700">
+                          Stock nearing expiry
+                        </p>
+                      )}
                     </div>
                     <div className="hidden text-right sm:block">
-                      <p className="font-semibold text-neutral-900">{stock} units</p>
+                      <p className="font-semibold text-neutral-900">{stock} on hand</p>
+                      <p className="text-xs text-neutral-500">{getSellableStock(item)} sellable</p>
                       <p className="mt-1 text-xs text-neutral-500">
-                        {item.batches.length} active batches
+                        {item.batches.length} recorded batches
                       </p>
                     </div>
                     <FiChevronRight className="shrink-0 text-neutral-400 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-mauve-700" />
                   </Link>
                 )
               })}
-              {filteredItems.length === 0 && (
+              {isLoading && (
+                <p role="status" className="p-5 text-sm text-neutral-500">
+                  Loading current inventory…
+                </p>
+              )}
+              {!isLoading && filteredItems.length === 0 && (
                 <div className="px-5 py-14 text-center sm:px-6">
                   <div className="mx-auto grid size-12 place-items-center rounded-2xl bg-neutral-100/80 text-neutral-400">
                     <FiArchive />
@@ -200,9 +276,9 @@ export default function ItemDirectory(): ReactElement {
             />
             <InventoryMetric
               icon={<FiLayers />}
-              label="Available units"
+              label="Units on hand"
               value={String(inventoryMetrics.availableUnits)}
-              description="Units across active batches"
+              description="Includes expired stock awaiting removal"
             />
             <InventoryMetric
               icon={<FiAlertTriangle />}

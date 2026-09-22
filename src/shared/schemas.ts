@@ -1,5 +1,6 @@
 import z from 'zod'
 import { roles } from './constants'
+import { localDate } from './inventory'
 import type {
   Account,
   AccountUpdate,
@@ -109,6 +110,12 @@ export const newDrugSchema = z.strictObject({
 
 export const productUpdateSchema = newDrugSchema.partial() satisfies z.ZodType<ProductUpdate>
 
+export const stockOutSchema = z.strictObject({
+  batchId: z.number().int().positive(),
+  quantity: z.number().int().positive(),
+  reason: z.string().trim().min(3, 'Enter a stock-out reason (at least 3 characters).').max(500)
+})
+
 const supplierFields = {
   organization: z.string().trim().min(2),
   person: z.string().trim().min(2).regex(namePattern),
@@ -185,12 +192,17 @@ export const supplierInvoiceUploadSchema = z
     message: 'The payment due date cannot be before the invoice date.'
   })
 
-export const supplierPaymentSchema = z.strictObject({
-  purchaseOrderId: z.number().int().positive(),
-  invoiceId: z.number().int().positive().nullable().optional(),
-  amount: z.number().positive(),
-  paidAt: isoDateSchema('Enter a valid payment date.'),
-  method: z.string().trim().min(1).max(80),
-  referenceNumber: z.string().trim().max(120).nullable().optional(),
-  notes: z.string().trim().max(500).nullable().optional()
-})
+export const supplierPaymentSchema = z
+  .strictObject({
+    purchaseOrderId: z.number().int().positive(),
+    invoiceId: z.number().int().positive().nullable().optional(),
+    amount: z.number().positive(),
+    paidAt: isoDateSchema('Enter a valid payment date.'),
+    method: z.string().trim().min(1).max(80),
+    referenceNumber: z.string().trim().max(120).nullable().optional(),
+    notes: z.string().trim().max(500).nullable().optional()
+  })
+  .refine((value) => value.paidAt <= localDate(), {
+    path: ['paidAt'],
+    message: 'The payment date cannot be in the future.'
+  })

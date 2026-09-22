@@ -13,7 +13,7 @@ function RootComponent(): ReactElement {
       <AccountProvider>
         <Outlet />
       </AccountProvider>
-      <TanStackRouterDevtools position="bottom-left" />
+      {import.meta.env.DEV && <TanStackRouterDevtools position="bottom-left" />}
     </>
   )
 }

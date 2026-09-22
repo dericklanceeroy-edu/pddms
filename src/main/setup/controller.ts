@@ -32,6 +32,7 @@ ipcMain.handle(channels.setup.createMaster, async (_, payload: unknown) => {
     if (!account) return { success: false, error: 'Initial setup has already been completed.' }
 
     state.session = { account }
+    state.database.stale = true
 
     return { success: true, account: getPublicAccount(account) }
   } catch (error) {

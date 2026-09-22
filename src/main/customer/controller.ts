@@ -10,7 +10,12 @@ import { findAll, insertOne, removeOneById, updateOneById } from './repository'
 ipcMain.handle(channels.customer.getAll, async () => {
   try {
     authorize((session) => accessControl.can(session.account.role).readAny(resources.customer))
-    return { success: true, customers: await findAll() }
+    return {
+      success: true,
+      customers: await findAll(
+        state.session!.account.role === 'master' ? undefined : state.session!.account.id
+      )
+    }
   } catch (error) {
     return { success: false, error: formatValidationError(error) }
   }

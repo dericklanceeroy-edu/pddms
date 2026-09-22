@@ -6,7 +6,7 @@ import { formatValidationError } from '@shared/validation'
 import { verify } from 'argon2'
 import { ipcMain } from 'electron'
 import z from 'zod'
-import { findOneByUsername } from '../account/repository'
+import { findOneById, findOneByUsername } from '../account/repository'
 
 const maxSignInAttempts = 5
 const signInWindowMs = 5 * 60 * 1000
@@ -41,10 +41,16 @@ const getPublicAccount = ({ password, ...account }: Account): AccountWithoutPass
   return account
 }
 
-ipcMain.handle(channels.auth.getStatus, () => ({
-  success: true,
-  account: state.session ? getPublicAccount(state.session.account) : null
-}))
+ipcMain.handle(channels.auth.getStatus, async () => {
+  if (!state.session) return { success: true, account: null }
+  const account = await findOneById(state.session.account.id)
+  if (!account || account.isArchived === 1 || account.isVerified !== 1) {
+    state.session = undefined
+    return { success: true, account: null }
+  }
+  state.session = { account }
+  return { success: true, account: getPublicAccount(account) }
+})
 
 ipcMain.handle(channels.auth.signIn, async (_, payload: unknown) => {
   try {

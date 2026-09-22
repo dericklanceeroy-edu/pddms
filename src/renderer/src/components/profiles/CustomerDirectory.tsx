@@ -14,7 +14,7 @@ import {
 
 export default function CustomerDirectory(): ReactElement {
   const customers = useProfileStore((state) => state.customers)
-  const load = useProfileStore((state) => state.load)
+  const loadCustomers = useProfileStore((state) => state.loadCustomers)
   const loadError = useProfileStore((state) => state.error)
 
   const [query, setQuery] = useState('')
@@ -43,8 +43,8 @@ export default function CustomerDirectory(): ReactElement {
   }, [customers])
 
   useEffect(() => {
-    void load()
-  }, [load])
+    void loadCustomers()
+  }, [loadCustomers])
 
   return (
     <DashboardShell pageTitle="Customer profiles">

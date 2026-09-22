@@ -1,8 +1,12 @@
 import type { ColumnType, Insertable, Selectable, Updateable } from 'kysely'
 import type { ValueOf } from 'type-fest'
 import { resources, roles } from './constants'
+import type { SaleLine, SaleRecord } from './sales'
 
 export interface Database {
+  sales: Omit<SaleRecord, 'id' | 'items'> & { id: ColumnType<number, number | undefined, never> }
+  saleItems: SaleLine & { id: ColumnType<number, number | undefined, never>; saleId: number }
+  stockOuts: StockOutsTable
   accounts: AccountsTable
   batches: BatchesTable
   customers: CustomersTable
@@ -14,6 +18,15 @@ export interface Database {
   supplierInvoices: SupplierInvoicesTable
   supplierPayments: SupplierPaymentsTable
   suppliers: SuppliersTable
+}
+
+export interface StockOutsTable {
+  id: ColumnType<number, number | undefined, never>
+  batchId: number
+  quantity: number
+  reason: string
+  recordedBy: number
+  createdAt: ColumnType<string, string | undefined, never>
 }
 
 /**

@@ -551,12 +551,12 @@ function Dialog({
   children: ReactElement
 }): ReactElement {
   return (
-    <div className="bg-ink-950/55 fixed inset-0 z-[70] grid place-items-center p-4 backdrop-blur-md">
+    <div className="bg-ink-950/55 fixed inset-0 z-[70] grid place-items-center overflow-y-auto p-4 backdrop-blur-md">
       <button className="absolute inset-0" aria-label="Close dialog" onClick={close} />
       <section
         role="dialog"
         aria-modal="true"
-        className="glass-surface relative z-10 w-full max-w-lg rounded-[2rem] border-white/80 p-5 sm:p-6"
+        className="glass-surface relative z-10 max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-x-hidden overflow-y-auto rounded-[2rem] border-white/80 p-5 sm:p-6"
       >
         <div
           aria-hidden="true"

@@ -1,4 +1,16 @@
 export const channels = {
+  sales: {
+    quote: 'sales.quote',
+    checkout: 'sales.checkout',
+    history: 'sales.history',
+    getOne: 'sales.getOne',
+    exportReceipt: 'sales.exportReceipt'
+  },
+  inventory: {
+    recordStockOut: 'inventory.recordStockOut',
+    getStockOuts: 'inventory.getStockOuts',
+    exportReport: 'inventory.exportReport'
+  },
   setup: {
     getStatus: 'setup.getStatus',
     createMaster: 'setup.createMaster'
@@ -60,6 +72,8 @@ export const roles = {
 } as const
 
 export const resources = {
+  sale: 'sale',
+  inventoryAdjustment: 'inventoryAdjustment',
   account: 'account',
   customer: 'customer',
   product: 'product',

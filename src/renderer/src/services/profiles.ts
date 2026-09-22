@@ -40,7 +40,7 @@ const mapCustomer = (customer: CustomerProfile): CustomerProfile => ({
   email: customer.email ?? '',
   address: customer.address ?? '',
   discountId: customer.discountId ?? '',
-  transactions: []
+  transactions: customer.transactions ?? []
 })
 
 const mapProduct = (

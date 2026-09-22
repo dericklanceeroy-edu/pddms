@@ -1,4 +1,5 @@
 import { accessControl, authorize } from '@main/access-control'
+import { state } from '@main/api'
 import { channels, resources } from '@shared/constants'
 import { accountUpdateSchema, newAccountSchema } from '@shared/schemas'
 import type { Account, AccountWithoutPassword } from '@shared/types'
@@ -36,6 +37,7 @@ ipcMain.handle(channels.account.createOne, async (_, payload: unknown) => {
       ...data,
       password: await hash(data.password)
     })
+    state.database.stale = true
 
     return {
       success: true,
@@ -130,6 +132,7 @@ ipcMain.handle(channels.account.updateOneById, async (_, id: unknown, payload: u
       ...data,
       password: data.password ? await hash(data.password) : undefined
     })
+    state.database.stale = true
 
     return { success: true }
   } catch (error) {
@@ -157,6 +160,7 @@ ipcMain.handle(channels.account.setBlockedById, async (_, id: unknown, blocked: 
     }
 
     await setBlockedById(id, blocked)
+    state.database.stale = true
 
     return { success: true }
   } catch (error) {
@@ -179,6 +183,7 @@ ipcMain.handle(channels.account.removeOneById, async (_, id: unknown) => {
     }
 
     await removeOneById(id)
+    state.database.stale = true
     return { success: true }
   } catch (error) {
     return { success: false, error: formatValidationError(error) }

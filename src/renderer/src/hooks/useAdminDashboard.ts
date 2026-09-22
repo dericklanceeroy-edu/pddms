@@ -50,19 +50,14 @@ export function useAdminDashboard(): UseAdminDashboardResult {
     void fetchAdminDashboardData(controller.signal)
       .then((dashboard) => setData(dashboard))
       .catch((cause: unknown) => {
-        if (cause instanceof DOMException && cause.name === 'AbortError') {
-          return
-        }
-
+        if (cause instanceof DOMException && cause.name === 'AbortError') return
         setError(cause instanceof Error ? cause.message : 'The dashboard could not be loaded.')
       })
       .finally(() => {
-        if (controllerRef.current === controller) {
-          setIsLoading(false)
-        }
+        if (controllerRef.current === controller) setIsLoading(false)
       })
 
-    return () => controllerRef.current?.abort()
+    return () => controller.abort()
   }, [])
 
   return { data, error, isLoading, reload }

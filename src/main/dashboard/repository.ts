@@ -1,5 +1,7 @@
 import { db } from '@main/db'
+import { findInvoices } from '@main/procurement/repository'
 import type { AdminDashboardData, DashboardAlertSeverity } from '@shared/dashboard'
+import { EXPIRY_WARNING_DAYS, getExpiryStatus } from '@shared/inventory'
 import { sql } from 'kysely'
 
 const millisecondsPerDay = 86_400_000
@@ -12,6 +14,7 @@ const localDate = (value: Date): string => {
 }
 
 const getSeverity = (ratio: number): DashboardAlertSeverity => {
+  if (!Number.isFinite(ratio)) return 'critical'
   if (ratio <= 0.35) return 'critical'
   if (ratio <= 0.7) return 'warning'
   return 'watch'
@@ -19,7 +22,6 @@ const getSeverity = (ratio: number): DashboardAlertSeverity => {
 
 export async function getAdminDashboard(): Promise<AdminDashboardData> {
   const generatedAt = new Date()
-  const expiryLimit = new Date(generatedAt.getTime() + 90 * millisecondsPerDay)
   const paymentDeadlineLimit = localDate(new Date(generatedAt.getTime() + 7 * millisecondsPerDay))
   const products = await db
     .selectFrom('drugs')
@@ -54,17 +56,23 @@ export async function getAdminDashboard(): Promise<AdminDashboardData> {
   }
   for (const batch of batches) {
     const current = stockByDrug.get(batch.drugId)
+    const expiryStatus = getExpiryStatus(String(batch.expiresAt), generatedAt)
     stockByDrug.set(batch.drugId, {
       name: `${batch.genericName} ${batch.formulation}`,
-      stock: (current?.stock ?? 0) + batch.currentStock,
+      stock:
+        (current?.stock ?? 0) +
+        (batch.currentStock > 0 && expiryStatus !== 'expired' && expiryStatus !== 'unknown'
+          ? batch.currentStock
+          : 0),
       reorderLevel: batch.reorderLevel
     })
   }
 
   const expiryAlerts = batches
     .filter((batch) => {
-      const expiresAt = new Date(batch.expiresAt)
-      return batch.currentStock > 0 && expiresAt <= expiryLimit
+      return (
+        batch.currentStock > 0 && getExpiryStatus(String(batch.expiresAt), generatedAt) !== 'valid'
+      )
     })
     .map((batch) => {
       const daysRemaining = Math.max(
@@ -78,8 +86,9 @@ export async function getAdminDashboard(): Promise<AdminDashboardData> {
         productName: `${batch.brandName} (${batch.genericName})`,
         batchNumber: batch.physicalTag ?? `Batch ${batch.id}`,
         stockRemaining: batch.currentStock,
-        expiresAt: new Date(batch.expiresAt).toISOString(),
-        severity: getSeverity(daysRemaining / 90)
+        expiresAt: String(batch.expiresAt),
+        expiryStatus: getExpiryStatus(String(batch.expiresAt), generatedAt),
+        severity: getSeverity(daysRemaining / EXPIRY_WARNING_DAYS)
       }
     })
     .sort((first, second) => first.expiresAt.localeCompare(second.expiresAt))
@@ -106,24 +115,42 @@ export async function getAdminDashboard(): Promise<AdminDashboardData> {
     .select(({ fn }) => fn.count<number>('id').as('count'))
     .where('status', 'not in', ['received', 'cancelled'])
     .executeTakeFirstOrThrow()
-  const invoices = await db
-    .selectFrom('supplierInvoices')
-    .select(['purchaseOrderId', 'amount', 'dueDate'])
-    .execute()
-  const supplierPayments = await db
-    .selectFrom('supplierPayments')
-    .select('purchaseOrderId')
-    .select(({ fn }) => fn.sum<number>('amount').as('paidAmount'))
-    .groupBy('purchaseOrderId')
-    .execute()
-  const paidByOrder = new Map(
-    supplierPayments.map((payment) => [payment.purchaseOrderId, Number(payment.paidAmount)])
-  )
-  const supplierPaymentsDue = invoices.filter(
-    (invoice) =>
-      invoice.dueDate <= paymentDeadlineLimit &&
-      (paidByOrder.get(invoice.purchaseOrderId) ?? 0) < invoice.amount
+  const supplierPaymentsDue = (await findInvoices()).filter(
+    (invoice) => invoice.dueDate <= paymentDeadlineLimit && invoice.status !== 'paid'
   ).length
+  const start = new Date(generatedAt)
+  start.setHours(0, 0, 0, 0)
+  const end = new Date(start)
+  end.setDate(end.getDate() + 1)
+  const dailySales = await db
+    .selectFrom('sales')
+    .select(({ fn }) => fn.sum<number>('totalCents').as('total'))
+    .where('createdAt', '>=', start.toISOString())
+    .where('createdAt', '<', end.toISOString())
+    .executeTakeFirstOrThrow()
+  const dailyItems = await db
+    .selectFrom('saleItems')
+    .innerJoin('sales', 'sales.id', 'saleItems.saleId')
+    .select(({ fn }) => fn.sum<number>('saleItems.quantity').as('quantity'))
+    .where('sales.createdAt', '>=', start.toISOString())
+    .where('sales.createdAt', '<', end.toISOString())
+    .executeTakeFirstOrThrow()
+  const recentSales = await db
+    .selectFrom('sales')
+    .innerJoin('saleItems', 'saleItems.saleId', 'sales.id')
+    .select([
+      'sales.id',
+      'sales.reference',
+      'sales.createdAt',
+      'sales.totalCents',
+      'sales.discountType',
+      'sales.cashierName'
+    ])
+    .select(({ fn }) => fn.sum<number>('saleItems.quantity').as('itemCount'))
+    .groupBy('sales.id')
+    .orderBy('sales.id', 'desc')
+    .limit(10)
+    .execute()
 
   return {
     source: { kind: 'database', label: 'Live database', generatedAt: generatedAt.toISOString() },
@@ -131,17 +158,17 @@ export async function getAdminDashboard(): Promise<AdminDashboardData> {
       {
         id: 'daily-sales',
         label: 'Daily sales',
-        value: 0,
+        value: Number(dailySales.total ?? 0) / 100,
         format: 'currency',
-        trend: { direction: 'flat', percentage: 0, label: 'No sales records yet' },
+        trend: { direction: 'flat', percentage: 0, label: 'Completed sales today' },
         sparkline: []
       },
       {
         id: 'items-sold',
         label: 'Items sold',
-        value: 0,
+        value: Number(dailyItems.quantity ?? 0),
         format: 'integer',
-        trend: { direction: 'flat', percentage: 0, label: 'No sales records yet' },
+        trend: { direction: 'flat', percentage: 0, label: 'Units sold today' },
         sparkline: []
       },
       {
@@ -168,7 +195,20 @@ export async function getAdminDashboard(): Promise<AdminDashboardData> {
     expiryAlerts,
     lowStockAlerts,
     categorySales: [],
-    recentTransactions: [],
+    recentTransactions: recentSales.map((sale) => ({
+      id: sale.reference,
+      occurredAt: sale.createdAt,
+      itemCount: Number(sale.itemCount),
+      amount: sale.totalCents / 100,
+      paymentMethod: 'Cash',
+      discountType:
+        sale.discountType === 'senior'
+          ? 'Senior Citizen'
+          : sale.discountType === 'pwd'
+            ? 'PWD'
+            : 'None',
+      cashierName: sale.cashierName
+    })),
     operationsPulse: [
       {
         id: 'purchase-orders',

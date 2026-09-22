@@ -4,7 +4,6 @@ import { FiAlertCircle, FiRefreshCw } from 'react-icons/fi'
 import DashboardShell from './DashboardShell'
 import { ExpiryWatchlist, LowStockWatchlist, RecentTransactions } from './DashboardTables'
 import OperationsPulse from './OperationsPulse'
-import SalesCategoryChart from './SalesCategoryChart'
 import SummaryCard from './SummaryCard'
 
 function DashboardLoading(): ReactElement {
@@ -16,8 +15,8 @@ function DashboardLoading(): ReactElement {
         <div className="skeleton h-8 w-72 max-w-full rounded-xl" />
         <div className="skeleton h-4 w-[32rem] max-w-full rounded-full" />
       </div>
-      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-        {Array.from({ length: 4 }, (_, index) => (
+      <div className="grid gap-5 sm:grid-cols-2">
+        {Array.from({ length: 2 }, (_, index) => (
           <div key={index} className="skeleton h-44 rounded-3xl" />
         ))}
       </div>
@@ -110,15 +109,12 @@ export default function AdminDashboard(): ReactElement {
             </div>
           </section>
           <section id="inventory-alerts" className="scroll-mt-28">
-            <div className="grid gap-5 xl:grid-cols-2 2xl:grid-cols-12">
-              <div className="min-w-0 2xl:col-span-5">
+            <div className="grid gap-5 xl:grid-cols-2">
+              <div className="min-w-0">
                 <ExpiryWatchlist alerts={data.expiryAlerts} />
               </div>
-              <div className="min-w-0 2xl:col-span-4">
+              <div className="min-w-0">
                 <LowStockWatchlist alerts={data.lowStockAlerts} />
-              </div>
-              <div className="min-w-0 xl:col-span-2 2xl:col-span-3">
-                <SalesCategoryChart categories={data.categorySales} />
               </div>
             </div>
           </section>

@@ -1,10 +1,17 @@
 import DashboardShell from '@renderer/components/dashboard/DashboardShell'
-import { getItemStock, getStockStatus, type ItemProfile } from '@renderer/data/profiles'
+import {
+  getItemStock,
+  getSellableStock,
+  getStockStatus,
+  type ItemProfile
+} from '@renderer/data/profiles'
 import { useAccount } from '@renderer/hooks/useAccount'
 import { useProfileStore } from '@renderer/stores/useProfileStore'
+import { expiryLabels, getExpiryStatus } from '@shared/inventory'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { useState, type FormEvent, type ReactElement } from 'react'
 import { FiArrowLeft, FiEdit2, FiPackage, FiTrash2, FiX } from 'react-icons/fi'
+import StockOutPanel from './StockOutPanel'
 
 const currency = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' })
 const date = new Intl.DateTimeFormat('en-PH', { dateStyle: 'medium' })
@@ -41,6 +48,12 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
   const canEdit = account?.role === 'master' || account?.role === 'staff'
 
   if (isNew) {
+    if (!canEdit)
+      return (
+        <DashboardShell pageTitle="New product">
+          You do not have permission to add products.
+        </DashboardShell>
+      )
     const save = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
       event.preventDefault()
       const genericName = draft.genericName.trim()
@@ -301,7 +314,10 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
           </form>
         )}
         <section className="grid gap-5 md:grid-cols-3">
-          <Metric label="Available stock" value={`${stock} units`} />
+          <Metric
+            label="Stock on hand / sellable"
+            value={`${stock} / ${getSellableStock(item)} units`}
+          />
           <Metric label="Reorder level" value={`${item.reorderLevel} units`} />
           <Metric
             label="Current price"
@@ -312,7 +328,7 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
           <div className="panel min-w-0 overflow-hidden">
             <Header
               title="Stock batches"
-              description="Batch-level stock follows first-expiry, first-out dispensing."
+              description="Stock received through supplier deliveries. Expired batches are not sellable."
             />
             <div className="overflow-x-auto">
               <table className="w-full min-w-[620px] text-sm">
@@ -328,11 +344,30 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
                 <tbody className="divide-y divide-white/65">
                   {item.batches.map((batch) => (
                     <tr key={batch.id} className="transition hover:bg-white/30">
-                      <td className="px-5 py-4 font-medium">{batch.batchNumber}</td>
-                      <td className="px-5 py-4 text-neutral-500">{batch.supplier}</td>
+                      <td className="max-w-64 px-5 py-4 font-medium break-words">
+                        {batch.batchNumber}
+                        {batch.receipts.map((receipt, index) => (
+                          <p key={index} className="mt-1 text-xs font-normal text-neutral-500">
+                            {receipt.deliveredAt} · {receipt.orderNumber} · {receipt.quantity}{' '}
+                            received
+                          </p>
+                        ))}
+                      </td>
+                      <td className="max-w-48 px-5 py-4 break-words text-neutral-500">
+                        {batch.supplier}
+                      </td>
                       <td className="px-5 py-4">{batch.stock}</td>
                       <td className="px-5 py-4">{currency.format(batch.sellPrice)}</td>
-                      <td className="px-5 py-4">{date.format(new Date(batch.expiresAt))}</td>
+                      <td className="px-5 py-4">
+                        {getExpiryStatus(batch.expiresAt) === 'unknown'
+                          ? batch.expiresAt
+                          : date.format(new Date(batch.expiresAt))}
+                        <p
+                          className={`mt-1 text-xs font-semibold ${getExpiryStatus(batch.expiresAt) === 'expired' || getExpiryStatus(batch.expiresAt) === 'unknown' ? 'text-rose-700' : getExpiryStatus(batch.expiresAt) === 'near-expiry' ? 'text-amber-700' : 'text-emerald-700'}`}
+                        >
+                          {expiryLabels[getExpiryStatus(batch.expiresAt)]}
+                        </p>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -372,6 +407,12 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
             </div>
           </div>
         </section>
+        {canEdit && (
+          <Link to="/suppliers" className="secondary-button w-fit">
+            Record stock-in through supplier receiving
+          </Link>
+        )}
+        {account?.role === 'master' && <StockOutPanel item={item} />}
       </div>
       {confirmRemove && (
         <ConfirmationDialog

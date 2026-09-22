@@ -31,6 +31,18 @@ interface PaymentInput {
   recordedBy: number
 }
 
+interface InvoiceAllocationInput {
+  id: number
+  purchaseOrderId: number
+  amount: number
+}
+
+interface PaymentAllocationInput {
+  purchaseOrderId: number
+  invoiceId: number | null
+  amount: number
+}
+
 const localDate = (): string => {
   const now = new Date()
   const year = now.getFullYear()
@@ -51,6 +63,36 @@ const deadlineStatus = (
   if (daysRemaining < 0) return 'overdue'
   if (daysRemaining <= 7) return 'due_soon'
   return 'upcoming'
+}
+
+const allocatePayments = (
+  invoices: InvoiceAllocationInput[],
+  payments: PaymentAllocationInput[]
+): Map<number, number> => {
+  const directByInvoice = new Map<number, number>()
+  const unassignedByOrder = new Map<number, number>()
+  for (const payment of payments) {
+    if (payment.invoiceId) {
+      directByInvoice.set(
+        payment.invoiceId,
+        (directByInvoice.get(payment.invoiceId) ?? 0) + payment.amount
+      )
+    } else {
+      unassignedByOrder.set(
+        payment.purchaseOrderId,
+        (unassignedByOrder.get(payment.purchaseOrderId) ?? 0) + payment.amount
+      )
+    }
+  }
+  const paidByInvoice = new Map<number, number>()
+  for (const invoice of invoices) {
+    const direct = Math.min(invoice.amount, directByInvoice.get(invoice.id) ?? 0)
+    const pool = unassignedByOrder.get(invoice.purchaseOrderId) ?? 0
+    const allocated = Math.min(invoice.amount - direct, pool)
+    paidByInvoice.set(invoice.id, Number((direct + allocated).toFixed(2)))
+    unassignedByOrder.set(invoice.purchaseOrderId, Number((pool - allocated).toFixed(2)))
+  }
+  return paidByInvoice
 }
 
 export async function findDeliveries(): Promise<SupplierDeliveryWithDetails[]> {
@@ -136,17 +178,17 @@ export async function findInvoices(): Promise<SupplierInvoiceWithDetails[]> {
       'accounts.fullName as uploadedByName'
     ])
     .orderBy('supplierInvoices.dueDate')
+    .orderBy('supplierInvoices.id')
     .execute()
-  const paidRows = await db
+  const payments = await db
     .selectFrom('supplierPayments')
-    .select(['purchaseOrderId'])
-    .select(({ fn }) => fn.sum<number>('amount').as('paidAmount'))
-    .groupBy('purchaseOrderId')
+    .select(['purchaseOrderId', 'invoiceId', 'amount'])
+    .orderBy('id')
     .execute()
-  const paidByOrder = new Map(paidRows.map((row) => [row.purchaseOrderId, Number(row.paidAmount)]))
+  const paidByInvoice = allocatePayments(invoices, payments)
 
   return invoices.map((invoice) => {
-    const paidAmount = Math.min(invoice.amount, paidByOrder.get(invoice.purchaseOrderId) ?? 0)
+    const paidAmount = paidByInvoice.get(invoice.id) ?? 0
     const outstandingAmount = Math.max(0, Number((invoice.amount - paidAmount).toFixed(2)))
     const status: SupplierInvoiceStatus =
       paidAmount === 0 ? 'unpaid' : outstandingAmount === 0 ? 'paid' : 'partially_paid'
@@ -233,41 +275,60 @@ export async function findPayments(): Promise<SupplierPaymentWithDetails[]> {
 }
 
 export async function insertInvoice(data: InvoiceFileInput): Promise<SupplierInvoiceWithDetails> {
-  const order = await db
-    .selectFrom('purchaseOrders')
-    .select(['supplierId', 'status'])
-    .where('id', '=', data.purchaseOrderId)
-    .executeTakeFirst()
-  if (!order) throw new Error('Purchase order not found.')
-  if (!['submitted', 'partially_received', 'received'].includes(order.status)) {
-    throw new Error('Submit the purchase order before attaching an invoice.')
-  }
-  if (data.dueDate < data.invoiceDate) {
-    throw new Error('The payment due date cannot be before the invoice date.')
-  }
-  const duplicate = await db
-    .selectFrom('supplierInvoices')
-    .select('id')
-    .where('supplierId', '=', order.supplierId)
-    .where('invoiceNumber', '=', data.invoiceNumber)
-    .executeTakeFirst()
-  if (duplicate) throw new Error('That invoice number already exists for this supplier.')
+  const invoiceId = await db.transaction().execute(async (transaction) => {
+    const order = await transaction
+      .selectFrom('purchaseOrders')
+      .select(['supplierId', 'status'])
+      .where('id', '=', data.purchaseOrderId)
+      .executeTakeFirst()
+    if (!order) throw new Error('Purchase order not found.')
+    if (!['submitted', 'partially_received', 'received'].includes(order.status)) {
+      throw new Error('Submit the purchase order before attaching an invoice.')
+    }
+    if (data.dueDate < data.invoiceDate) {
+      throw new Error('The payment due date cannot be before the invoice date.')
+    }
+    const duplicate = await transaction
+      .selectFrom('supplierInvoices')
+      .select('id')
+      .where('supplierId', '=', order.supplierId)
+      .where('invoiceNumber', '=', data.invoiceNumber)
+      .executeTakeFirst()
+    if (duplicate) throw new Error('That invoice number already exists for this supplier.')
 
-  const paid = await db
-    .selectFrom('supplierPayments')
-    .select(({ fn }) => fn.sum<number>('amount').as('amount'))
-    .where('purchaseOrderId', '=', data.purchaseOrderId)
-    .executeTakeFirstOrThrow()
-  const paidAmount = Number(paid.amount ?? 0)
-  const status: SupplierInvoiceStatus =
-    paidAmount <= 0 ? 'unpaid' : paidAmount >= data.amount ? 'paid' : 'partially_paid'
-  const invoice = await db
-    .insertInto('supplierInvoices')
-    .values({ ...data, supplierId: order.supplierId, status })
-    .returning('id')
-    .executeTakeFirstOrThrow()
+    const invoice = await transaction
+      .insertInto('supplierInvoices')
+      .values({ ...data, supplierId: order.supplierId, status: 'unpaid' })
+      .returning('id')
+      .executeTakeFirstOrThrow()
+    const invoices = await transaction
+      .selectFrom('supplierInvoices')
+      .select(['id', 'purchaseOrderId', 'amount'])
+      .where('purchaseOrderId', '=', data.purchaseOrderId)
+      .orderBy('dueDate')
+      .orderBy('id')
+      .execute()
+    const payments = await transaction
+      .selectFrom('supplierPayments')
+      .select(['purchaseOrderId', 'invoiceId', 'amount'])
+      .where('purchaseOrderId', '=', data.purchaseOrderId)
+      .orderBy('id')
+      .execute()
+    const paidByInvoice = allocatePayments(invoices, payments)
+    for (const record of invoices) {
+      const paid = paidByInvoice.get(record.id) ?? 0
+      const status: SupplierInvoiceStatus =
+        paid <= 0 ? 'unpaid' : paid >= record.amount ? 'paid' : 'partially_paid'
+      await transaction
+        .updateTable('supplierInvoices')
+        .set({ status })
+        .where('id', '=', record.id)
+        .executeTakeFirstOrThrow()
+    }
+    return invoice.id
+  })
   return (await findInvoices()).find(
-    (record) => record.id === invoice.id
+    (record) => record.id === invoiceId
   ) as SupplierInvoiceWithDetails
 }
 
@@ -296,12 +357,29 @@ export async function insertPayment(data: PaymentInput): Promise<SupplierPayment
     if (data.invoiceId) {
       const invoice = await transaction
         .selectFrom('supplierInvoices')
-        .select(['purchaseOrderId', 'supplierId'])
+        .select(['id', 'purchaseOrderId', 'supplierId', 'amount'])
         .where('id', '=', data.invoiceId)
         .executeTakeFirst()
       if (!invoice) throw new Error('Supplier invoice not found.')
       if (invoice.purchaseOrderId !== order.id || invoice.supplierId !== order.supplierId) {
         throw new Error('The supplier invoice does not belong to this purchase order.')
+      }
+      const orderInvoices = await transaction
+        .selectFrom('supplierInvoices')
+        .select(['id', 'purchaseOrderId', 'amount'])
+        .where('purchaseOrderId', '=', order.id)
+        .orderBy('dueDate')
+        .orderBy('id')
+        .execute()
+      const orderPayments = await transaction
+        .selectFrom('supplierPayments')
+        .select(['purchaseOrderId', 'invoiceId', 'amount'])
+        .where('purchaseOrderId', '=', order.id)
+        .orderBy('id')
+        .execute()
+      const invoicePaid = allocatePayments(orderInvoices, orderPayments).get(invoice.id) ?? 0
+      if (data.amount > Number((invoice.amount - invoicePaid).toFixed(2))) {
+        throw new Error('Payment cannot exceed the selected invoice balance.')
       }
     }
 
@@ -344,15 +422,28 @@ export async function insertPayment(data: PaymentInput): Promise<SupplierPayment
       })
       .returning('id')
       .executeTakeFirstOrThrow()
-    const nextPaidAmount = Number((paidAmount + amount).toFixed(2))
     const invoices = await transaction
       .selectFrom('supplierInvoices')
-      .select(['id', 'amount'])
+      .select(['id', 'purchaseOrderId', 'amount'])
       .where('purchaseOrderId', '=', order.id)
+      .orderBy('dueDate')
+      .orderBy('id')
       .execute()
+    const payments = await transaction
+      .selectFrom('supplierPayments')
+      .select(['purchaseOrderId', 'invoiceId', 'amount'])
+      .where('purchaseOrderId', '=', order.id)
+      .orderBy('id')
+      .execute()
+    const paidByInvoice = allocatePayments(invoices, payments)
     for (const invoice of invoices) {
+      const invoicePaid = paidByInvoice.get(invoice.id) ?? 0
       const status: SupplierInvoiceStatus =
-        nextPaidAmount >= invoice.amount ? 'paid' : 'partially_paid'
+        invoicePaid <= 0
+          ? 'unpaid'
+          : invoicePaid >= invoice.amount
+            ? 'paid'
+            : 'partially_paid'
       await transaction
         .updateTable('supplierInvoices')
         .set({ status })

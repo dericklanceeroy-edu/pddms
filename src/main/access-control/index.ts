@@ -10,6 +10,10 @@ export const accessControl = new AccessControl(undefined, {
 
 accessControl
   .grant(roles.master)
+  .createAny(resources.sale)
+  .readAny(resources.sale)
+  .createAny(resources.inventoryAdjustment)
+  .readAny(resources.inventoryAdjustment)
   .createAny(resources.account)
   .readAny(resources.account, ['!password'])
   .updateOwn(resources.account, ['*'])
@@ -34,6 +38,8 @@ accessControl
 
 accessControl
   .grant(roles.staff)
+  .createAny(resources.sale)
+  .readOwn(resources.sale)
   .readOwn(resources.account, ['*'])
   .updateOwn(resources.account, ['*'])
   .readAny(resources.customer)
@@ -54,6 +60,8 @@ accessControl
 
 accessControl
   .grant(roles.cashier)
+  .createAny(resources.sale)
+  .readOwn(resources.sale)
   .readOwn(resources.account, ['*'])
   .updateOwn(resources.account, ['*'])
   .readAny(resources.customer)

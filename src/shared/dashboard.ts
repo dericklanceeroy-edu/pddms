@@ -24,6 +24,7 @@ export interface DashboardSummaryMetric {
 }
 
 export interface DashboardExpiryAlert {
+  expiryStatus: import('./inventory').ExpiryStatus
   id: string
   productName: string
   batchNumber: string
@@ -69,12 +70,7 @@ export interface DashboardOperationsPulseItem {
 
 export interface AdminDashboardData {
   source: DashboardSourceMetadata
-  summaryMetrics: [
-    DashboardSummaryMetric,
-    DashboardSummaryMetric,
-    DashboardSummaryMetric,
-    DashboardSummaryMetric
-  ]
+  summaryMetrics: DashboardSummaryMetric[]
   expiryAlerts: DashboardExpiryAlert[]
   lowStockAlerts: DashboardLowStockAlert[]
   categorySales: DashboardCategorySale[]

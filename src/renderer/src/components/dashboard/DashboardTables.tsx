@@ -148,10 +148,20 @@ export function ExpiryWatchlist({ alerts }: { alerts: DashboardExpiryAlert[] }):
                     {alert.stockRemaining}
                   </td>
                   <td className="px-4 py-4 whitespace-nowrap text-neutral-600">
-                    {dateFormatter.format(new Date(alert.expiresAt))}
+                    {alert.expiryStatus === 'unknown'
+                      ? 'Invalid expiry date'
+                      : dateFormatter.format(new Date(alert.expiresAt))}
                   </td>
                   <td className="px-5 py-4 text-right sm:px-6">
-                    <SeverityPill severity={alert.severity} />
+                    <span
+                      className={`rounded-full px-2.5 py-1 text-xs font-semibold ${alert.expiryStatus === 'expired' || alert.expiryStatus === 'unknown' ? 'bg-rose-50 text-rose-700' : 'bg-amber-50 text-amber-800'}`}
+                    >
+                      {alert.expiryStatus === 'expired'
+                        ? 'Expired'
+                        : alert.expiryStatus === 'unknown'
+                          ? 'Invalid expiry'
+                          : 'Nearing expiry'}
+                    </span>
                   </td>
                 </tr>
               ))

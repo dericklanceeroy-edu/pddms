@@ -604,6 +604,7 @@ function InvoiceDialog({
             <input
               required
               type="date"
+              max={today()}
               className="field"
               value={invoiceDate}
               onChange={(event) => setInvoiceDate(event.target.value)}

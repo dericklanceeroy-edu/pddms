@@ -33,13 +33,14 @@ export default function ModulePage({
         <aside className="panel relative overflow-hidden p-6 sm:p-7">
           <div className="pointer-events-none absolute -right-16 -bottom-20 size-40 rounded-full bg-violet-300/25 blur-3xl" />
           <div className="relative">
-            <p className="eyebrow">Workspace state</p>
-            <div className="mt-5 grid size-11 place-items-center rounded-2xl bg-emerald-50/80 text-emerald-700 ring-1 ring-emerald-100">
-              <span className="size-2 rounded-full bg-emerald-500" aria-hidden="true" />
+            <p className="eyebrow">Availability</p>
+            <div className="mt-5 grid size-11 place-items-center rounded-2xl bg-amber-50/80 text-amber-700 ring-1 ring-amber-100">
+              <span className="size-2 rounded-full bg-amber-500" aria-hidden="true" />
             </div>
-            <p className="mt-5 text-sm font-semibold text-neutral-800">Module workspace ready</p>
+            <p className="mt-5 text-sm font-semibold text-neutral-800">Not yet implemented</p>
             <p className="mt-2 text-sm leading-6 text-neutral-500">
-              Features for this module can now be added without changing navigation.
+              This page is reserved for a future implementation. It does not currently display or
+              record production data.
             </p>
           </div>
         </aside>

@@ -19,9 +19,13 @@ interface ProfileStore {
   items: ItemProfile[]
   customers: CustomerProfile[]
   isLoaded: boolean
+  areItemsLoaded: boolean
+  areCustomersLoaded: boolean
   isLoading: boolean
   error: string
-  load: () => Promise<void>
+  load: (force?: boolean) => Promise<void>
+  loadItems: (force?: boolean) => Promise<void>
+  loadCustomers: (force?: boolean) => Promise<void>
   addItem: (item: ItemDraft) => Promise<ItemProfile>
   updateItem: (id: number, item: ItemDraft) => Promise<ItemProfile>
   removeItem: (id: number) => Promise<void>
@@ -34,18 +38,53 @@ export const useProfileStore = create<ProfileStore>((set, get) => ({
   items: [],
   customers: [],
   isLoaded: false,
+  areItemsLoaded: false,
+  areCustomersLoaded: false,
   isLoading: false,
   error: '',
-  load: async () => {
-    if (get().isLoading || get().isLoaded) return
+  load: async (force = false) => {
+    if (get().isLoading || (get().isLoaded && !force)) return
     set({ isLoading: true, error: '' })
     try {
       const [items, customers] = await Promise.all([getProducts(), getCustomers()])
-      set({ items, customers, isLoaded: true, isLoading: false })
+      set({
+        items,
+        customers,
+        isLoaded: true,
+        areItemsLoaded: true,
+        areCustomersLoaded: true,
+        isLoading: false
+      })
     } catch (error) {
       set({
         isLoading: false,
         error: error instanceof Error ? error.message : 'Unable to load profile data.'
+      })
+    }
+  },
+  loadItems: async (force = false) => {
+    if (get().isLoading || (get().areItemsLoaded && !force)) return
+    set({ isLoading: true, error: '' })
+    try {
+      const items = await getProducts()
+      set({ items, areItemsLoaded: true, isLoading: false })
+    } catch (error) {
+      set({
+        isLoading: false,
+        error: error instanceof Error ? error.message : 'Unable to load inventory data.'
+      })
+    }
+  },
+  loadCustomers: async (force = false) => {
+    if (get().isLoading || (get().areCustomersLoaded && !force)) return
+    set({ isLoading: true, error: '' })
+    try {
+      const customers = await getCustomers()
+      set({ customers, areCustomersLoaded: true, isLoading: false })
+    } catch (error) {
+      set({
+        isLoading: false,
+        error: error instanceof Error ? error.message : 'Unable to load customer data.'
       })
     }
   },
@@ -55,13 +94,10 @@ export const useProfileStore = create<ProfileStore>((set, get) => ({
     return item
   },
   updateItem: async (id, draft) => {
-    const item = await updateProduct(id, draft)
-    const currentItem = get().items.find((value) => value.id === id)
-    const updatedItem = { ...item, batches: currentItem?.batches ?? [] }
-    set((state) => ({
-      items: state.items.map((value) => (value.id === id ? updatedItem : value))
-    }))
-    return updatedItem
+    await updateProduct(id, draft)
+    const items = await getProducts()
+    set({ items })
+    return items.find((item) => item.id === id)!
   },
   removeItem: async (id) => {
     await removeProduct(id)
@@ -69,6 +105,8 @@ export const useProfileStore = create<ProfileStore>((set, get) => ({
   },
   saveCustomer: async (draft, id) => {
     const customer = await requestSaveCustomer(draft, id)
+    customer.transactions =
+      get().customers.find((value) => value.id === customer.id)?.transactions ?? []
     set((state) => ({
       customers: state.customers.some((value) => value.id === customer.id)
         ? state.customers.map((value) => (value.id === customer.id ? customer : value))
@@ -80,5 +118,14 @@ export const useProfileStore = create<ProfileStore>((set, get) => ({
     await requestRemoveCustomer(id)
     set((state) => ({ customers: state.customers.filter((value) => value.id !== id) }))
   },
-  reset: () => set({ items: [], customers: [], isLoaded: false, isLoading: false, error: '' })
+  reset: () =>
+    set({
+      items: [],
+      customers: [],
+      isLoaded: false,
+      areItemsLoaded: false,
+      areCustomersLoaded: false,
+      isLoading: false,
+      error: ''
+    })
 }))
