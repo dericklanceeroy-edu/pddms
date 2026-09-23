@@ -1,7 +1,7 @@
 import type { Role } from '@shared/types'
 
 const cashierPaths = ['/sales', '/customers']
-const staffPaths = ['/', '/sales', '/customers', '/inventory', '/items', '/suppliers']
+const staffPaths = ['/', '/sales', '/customers', '/inventory', '/items', '/suppliers', '/wholesale']
 
 export function canAccessPath(role: Role, path: string): boolean {
   if (role === 'master') return true

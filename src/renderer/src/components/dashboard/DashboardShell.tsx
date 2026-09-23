@@ -28,6 +28,7 @@ import {
 const navigation: Array<{ label: string; to: string; icon: IconType }> = [
   { label: 'Overview', to: '/', icon: FiGrid },
   { label: 'Sales & dispensing', to: '/sales', icon: FiShoppingBag },
+  { label: 'Wholesale & deliveries', to: '/wholesale', icon: FiTruck },
   { label: 'Customers', to: '/customers', icon: FiUser },
   { label: 'Inventory', to: '/inventory', icon: FiArchive },
   { label: 'Suppliers & orders', to: '/suppliers', icon: FiTruck },

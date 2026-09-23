@@ -1,4 +1,15 @@
 export const channels = {
+  wholesale: {
+    create: 'wholesale.create',
+    list: 'wholesale.list',
+    get: 'wholesale.get',
+    schedule: 'wholesale.schedule',
+    deliver: 'wholesale.deliver',
+    cancel: 'wholesale.cancel',
+    pay: 'wholesale.pay',
+    alerts: 'wholesale.alerts',
+    exportReceipt: 'wholesale.exportReceipt'
+  },
   sales: {
     quote: 'sales.quote',
     checkout: 'sales.checkout',
@@ -72,6 +83,8 @@ export const roles = {
 } as const
 
 export const resources = {
+  wholesale: 'wholesale',
+  receivable: 'receivable',
   sale: 'sale',
   inventoryAdjustment: 'inventoryAdjustment',
   account: 'account',

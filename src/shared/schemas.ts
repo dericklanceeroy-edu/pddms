@@ -43,7 +43,7 @@ const isCalendarDate = (value: string): boolean => {
   )
 }
 
-const isoDateSchema = (message: string): z.ZodType<string> =>
+export const isoDateSchema = (message: string): z.ZodType<string> =>
   z.string().regex(isoDatePattern, message).refine(isCalendarDate, message)
 
 export const newAccountSchema = z.strictObject({

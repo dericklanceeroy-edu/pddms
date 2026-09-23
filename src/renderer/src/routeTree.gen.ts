@@ -18,6 +18,7 @@ import { Route as SalesRouteImport } from './routes/sales'
 import { Route as SignInRouteImport } from './routes/signIn'
 import { Route as SuppliersRouteImport } from './routes/suppliers'
 import { Route as UsersRouteImport } from './routes/users'
+import { Route as WholesaleRouteImport } from './routes/wholesale'
 import { Route as CustomersCustomerIdRouteImport } from './routes/customers.$customerId'
 import { Route as ItemsItemIdRouteImport } from './routes/items.$itemId'
 import { Route as NewIndexRouteImport } from './routes/new/index'
@@ -69,6 +70,11 @@ const UsersRoute = UsersRouteImport.update({
   path: '/users',
   getParentRoute: () => rootRouteImport,
 } as any)
+const WholesaleRoute = WholesaleRouteImport.update({
+  id: '/wholesale',
+  path: '/wholesale',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CustomersCustomerIdRoute = CustomersCustomerIdRouteImport.update({
   id: '/$customerId',
   path: '/$customerId',
@@ -105,6 +111,7 @@ export interface FileRoutesByFullPath {
   '/signIn': typeof SignInRoute
   '/suppliers': typeof SuppliersRoute
   '/users': typeof UsersRoute
+  '/wholesale': typeof WholesaleRoute
   '/customers/$customerId': typeof CustomersCustomerIdRoute
   '/items/$itemId': typeof ItemsItemIdRoute
   '/new/completion': typeof NewCompletionRoute
@@ -120,6 +127,7 @@ export interface FileRoutesByTo {
   '/signIn': typeof SignInRoute
   '/suppliers': typeof SuppliersRoute
   '/users': typeof UsersRoute
+  '/wholesale': typeof WholesaleRoute
   '/customers/$customerId': typeof CustomersCustomerIdRoute
   '/items/$itemId': typeof ItemsItemIdRoute
   '/new/completion': typeof NewCompletionRoute
@@ -137,6 +145,7 @@ export interface FileRoutesById {
   '/signIn': typeof SignInRoute
   '/suppliers': typeof SuppliersRoute
   '/users': typeof UsersRoute
+  '/wholesale': typeof WholesaleRoute
   '/customers/$customerId': typeof CustomersCustomerIdRoute
   '/items/$itemId': typeof ItemsItemIdRoute
   '/new/completion': typeof NewCompletionRoute
@@ -155,6 +164,7 @@ export interface FileRouteTypes {
     | '/signIn'
     | '/suppliers'
     | '/users'
+    | '/wholesale'
     | '/customers/$customerId'
     | '/items/$itemId'
     | '/new/completion'
@@ -170,6 +180,7 @@ export interface FileRouteTypes {
     | '/signIn'
     | '/suppliers'
     | '/users'
+    | '/wholesale'
     | '/customers/$customerId'
     | '/items/$itemId'
     | '/new/completion'
@@ -186,6 +197,7 @@ export interface FileRouteTypes {
     | '/signIn'
     | '/suppliers'
     | '/users'
+    | '/wholesale'
     | '/customers/$customerId'
     | '/items/$itemId'
     | '/new/completion'
@@ -203,6 +215,7 @@ export interface RootRouteChildren {
   SignInRoute: typeof SignInRoute
   SuppliersRoute: typeof SuppliersRoute
   UsersRoute: typeof UsersRoute
+  WholesaleRoute: typeof WholesaleRoute
   ItemsItemIdRoute: typeof ItemsItemIdRoute
 }
 
@@ -269,6 +282,13 @@ declare module '@tanstack/react-router' {
       path: '/users'
       fullPath: '/users'
       preLoaderRoute: typeof UsersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/wholesale': {
+      id: '/wholesale'
+      path: '/wholesale'
+      fullPath: '/wholesale'
+      preLoaderRoute: typeof WholesaleRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/customers/$customerId': {
@@ -347,6 +367,7 @@ const rootRouteChildren: RootRouteChildren = {
   SignInRoute: SignInRoute,
   SuppliersRoute: SuppliersRoute,
   UsersRoute: UsersRoute,
+  WholesaleRoute: WholesaleRoute,
   ItemsItemIdRoute: ItemsItemIdRoute,
 }
 export const routeTree = rootRouteImport

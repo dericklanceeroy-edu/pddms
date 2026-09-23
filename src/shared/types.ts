@@ -2,8 +2,19 @@ import type { ColumnType, Insertable, Selectable, Updateable } from 'kysely'
 import type { ValueOf } from 'type-fest'
 import { resources, roles } from './constants'
 import type { SaleLine, SaleRecord } from './sales'
+import type { WholesaleOrder, WholesalePayment } from './wholesale'
 
 export interface Database {
+  wholesaleOrders: Omit<WholesaleOrder, 'id'> & {
+    id: ColumnType<number, number | undefined, never>
+  }
+  wholesaleOrderItems: SaleLine & {
+    id: ColumnType<number, number | undefined, never>
+    orderId: number
+  }
+  wholesalePayments: Omit<WholesalePayment, 'id'> & {
+    id: ColumnType<number, number | undefined, never>
+  }
   sales: Omit<SaleRecord, 'id' | 'items'> & { id: ColumnType<number, number | undefined, never> }
   saleItems: SaleLine & { id: ColumnType<number, number | undefined, never>; saleId: number }
   stockOuts: StockOutsTable

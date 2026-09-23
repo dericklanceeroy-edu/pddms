@@ -11,9 +11,10 @@ import { initializeDatabase } from './migrations'
 import './procurement/controller'
 import './product/controller'
 import './purchase-order/controller'
+import './sales/controller'
 import './setup/controller'
 import './supplier/controller'
-import './sales/controller'
+import './wholesale/controller'
 
 function createWindow(): void {
   // Create the browser window.
