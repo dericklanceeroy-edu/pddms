@@ -1,8 +1,8 @@
 import { db } from '@main/db'
 import { findInvoices } from '@main/procurement/repository'
+import { stockValuation } from '@main/reporting/repository'
 import type { AdminDashboardData, DashboardAlertSeverity } from '@shared/dashboard'
 import { EXPIRY_WARNING_DAYS, getExpiryStatus } from '@shared/inventory'
-import { sql } from 'kysely'
 
 const millisecondsPerDay = 86_400_000
 
@@ -104,12 +104,7 @@ export async function getAdminDashboard(): Promise<AdminDashboardData> {
       severity: getSeverity(item.stock / item.reorderLevel)
     }))
 
-  const valuation = await db
-    .selectFrom('batches')
-    .innerJoin('drugs', 'drugs.id', 'batches.drugId')
-    .select(sql<number>`coalesce(sum(current_stock * sell_price), 0)`.as('value'))
-    .where('drugs.isArchived', '=', 0)
-    .executeTakeFirstOrThrow()
+  const valuation = await stockValuation()
   const openOrders = await db
     .selectFrom('purchaseOrders')
     .select(({ fn }) => fn.count<number>('id').as('count'))
@@ -229,9 +224,9 @@ export async function getAdminDashboard(): Promise<AdminDashboardData> {
       {
         id: 'stock-valuation',
         label: 'Inventory valuation',
-        value: Number(valuation.value),
+        value: valuation / 100,
         format: 'currency',
-        detail: 'Current retail value from active database batches.',
+        detail: 'Current batch stock at purchase cost, including expired stock on hand.',
         status: 'healthy'
       },
       {

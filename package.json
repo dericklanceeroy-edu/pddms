@@ -18,6 +18,7 @@
     "test:inventory": "node scripts/verify-inventory.mjs",
     "test:sales": "node scripts/verify-sales.mjs",
     "test:wholesale": "node scripts/verify-wholesale.mjs",
+    "test:reporting": "node scripts/verify-reporting.mjs",
     "start": "node scripts/run-electron-vite.mjs preview",
     "dev": "node scripts/run-electron-vite.mjs dev",
     "build": "npm run typecheck && electron-vite build",

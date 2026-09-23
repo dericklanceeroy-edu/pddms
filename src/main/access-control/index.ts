@@ -10,6 +10,7 @@ export const accessControl = new AccessControl(undefined, {
 
 accessControl
   .grant(roles.master)
+  .readAny(resources.report)
   .createAny(resources.wholesale)
   .readAny(resources.wholesale)
   .updateAny(resources.wholesale)

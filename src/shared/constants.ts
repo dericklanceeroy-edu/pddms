@@ -1,4 +1,5 @@
 export const channels = {
+  reporting: { generate: 'reporting.generate', export: 'reporting.export' },
   wholesale: {
     create: 'wholesale.create',
     list: 'wholesale.list',
@@ -83,6 +84,7 @@ export const roles = {
 } as const
 
 export const resources = {
+  report: 'report',
   wholesale: 'wholesale',
   receivable: 'receivable',
   sale: 'sale',

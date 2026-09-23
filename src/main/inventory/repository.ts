@@ -62,7 +62,7 @@ export async function findStockOuts(drugId: number): Promise<StockOutRecord[]> {
   }))
 }
 
-const csvCell = (value: unknown): string => {
+export const csvCell = (value: unknown): string => {
   const text = String(value ?? '')
   const safe = /^[=+\-@\t\r\n]/.test(text) ? `'${text}` : text
   return `"${safe.replaceAll('"', '""')}"`
