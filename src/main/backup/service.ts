@@ -1,12 +1,14 @@
 import { env } from '@main/env'
-import { drive } from '@main/google/drive'
 import { createReadStream } from 'node:fs'
 import { join } from 'node:path'
+import { createBackup } from './local'
 
 /**
  * Creates or updates database backup in Google Drive.
  */
 export async function backupDatabase(): Promise<void> {
+  const snapshot = await createBackup()
+  const { drive } = await import('@main/google/drive')
   const { data } = await drive.files.list({
     q: `name = '${env.DATABASE_BACKUP}' and trashed = false`,
     fields: 'files(id)'
@@ -16,7 +18,7 @@ export async function backupDatabase(): Promise<void> {
 
   const media = {
     mimeType: 'application/octet-stream',
-    body: createReadStream(join(process.cwd(), env.DATABASE))
+    body: createReadStream(join(snapshot.directory, 'database.sqlite'))
   }
 
   if (fileId) {

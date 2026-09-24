@@ -1,4 +1,11 @@
 export const channels = {
+  administration: {
+    logs: 'administration.logs',
+    permissions: 'administration.permissions',
+    backups: 'administration.backups',
+    backup: 'administration.backup',
+    restore: 'administration.restore'
+  },
   reporting: { generate: 'reporting.generate', export: 'reporting.export' },
   wholesale: {
     create: 'wholesale.create',
@@ -31,6 +38,7 @@ export const channels = {
     getAdmin: 'dashboard.getAdmin'
   },
   account: {
+    updateProfile: 'account.updateProfile',
     createOne: 'account.createOne',
     getAll: 'account.getAll',
     getOneById: 'account.getOneById',
@@ -84,6 +92,7 @@ export const roles = {
 } as const
 
 export const resources = {
+  administration: 'administration',
   report: 'report',
   wholesale: 'wholesale',
   receivable: 'receivable',

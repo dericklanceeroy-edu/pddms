@@ -1,12 +1,12 @@
 import { accessControl, authorize } from '@main/access-control'
 import { state } from '@main/api'
+import { ipcMain } from '@main/api/ipc'
 import { channels, resources } from '@shared/constants'
-import { accountUpdateSchema, newAccountSchema } from '@shared/schemas'
-import type { Account, AccountWithoutPassword } from '@shared/types'
+import { accountUpdateSchema, newAccountSchema, profileUpdateSchema } from '@shared/schemas'
+import { publicAccount } from '@shared/security'
 import { formatValidationError } from '@shared/validation'
 import { isId } from '@shared/validators'
-import { hash } from 'argon2'
-import { ipcMain } from 'electron'
+import { hash, verify } from 'argon2'
 import {
   findAll,
   findOneById,
@@ -17,10 +17,7 @@ import {
   updateOneById
 } from './repository'
 
-const withoutPassword = ({ password, ...account }: Account): AccountWithoutPassword => {
-  void password
-  return account
-}
+const withoutPassword = publicAccount
 
 ipcMain.handle(channels.account.createOne, async (_, payload: unknown) => {
   try {
@@ -56,7 +53,11 @@ ipcMain.handle(channels.account.getAll, async () => {
     const permission = authorize((session) =>
       accessControl.can(session.account.role).readAny(resources.account)
     )
-    const accounts = (await findAll()).map(withoutPassword)
+    const accounts = (await findAll()).map((account) => ({
+      ...withoutPassword(account),
+      failedAttempts: account.failedAttempts,
+      lockedUntil: account.lockedUntil
+    }))
     return { success: true, accounts: permission.filter(accounts) }
   } catch (error) {
     return { success: false, error: formatValidationError(error) }
@@ -117,6 +118,14 @@ ipcMain.handle(channels.account.updateOneById, async (_, id: unknown, payload: u
 
     const data = accountUpdateSchema.parse(payload)
 
+    const target = await findOneById(id)
+    if (!target) return { success: false, error: 'Account not found.' }
+    if (target.role === 'master')
+      return {
+        success: false,
+        error: 'The master account cannot be reassigned. Use My profile for personal updates.'
+      }
+
     if (data.role === 'master') {
       return { success: false }
     }
@@ -130,7 +139,8 @@ ipcMain.handle(channels.account.updateOneById, async (_, id: unknown, payload: u
 
     await updateOneById(id, {
       ...data,
-      password: data.password ? await hash(data.password) : undefined
+      password: data.password ? await hash(data.password) : undefined,
+      ...(data.password ? { failedAttempts: 0, lockedUntil: null, lastFailedAt: null } : {})
     })
     state.database.stale = true
 
@@ -140,6 +150,33 @@ ipcMain.handle(channels.account.updateOneById, async (_, id: unknown, payload: u
       success: false,
       error: formatValidationError(error)
     }
+  }
+})
+
+ipcMain.handle(channels.account.updateProfile, async (_, payload: unknown) => {
+  try {
+    const id = state.session!.account.id
+    authorize((session) =>
+      accessControl
+        .can(session.account.role, { user: { id }, account: { accountId: id } })
+        .updateOwn(resources.account)
+    )
+    const data = profileUpdateSchema.parse(payload)
+    const current = await findOneById(id)
+    if (!current || !(await verify(current.password, data.currentPassword)))
+      return { success: false, error: 'Current password is incorrect.' }
+    const duplicate = await findOneByUsername(data.username)
+    if (duplicate && duplicate.id !== id)
+      return { success: false, error: 'That username is already in use.' }
+    await updateOneById(id, {
+      fullName: data.fullName,
+      username: data.username,
+      ...(data.password ? { password: await hash(data.password) } : {})
+    })
+    state.session = undefined
+    return { success: true, signInRequired: true }
+  } catch {
+    return { success: false, error: 'Unable to update profile. Check the fields and try again.' }
   }
 })
 

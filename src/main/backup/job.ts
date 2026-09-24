@@ -4,8 +4,12 @@ import { backupDatabase } from './service'
 export function startDatabaseBackupJob(): NodeJS.Timeout {
   const run = async (): Promise<void> => {
     if (state.database.stale) {
-      await backupDatabase()
-      state.database.stale = false
+      try {
+        await backupDatabase()
+        state.database.stale = false
+      } catch {
+        console.error('Scheduled database backup failed.')
+      }
     }
   }
 

@@ -12,6 +12,7 @@ import { up as allowOptionalSupplierPaymentInvoice } from '../../migrations/1789
 import { up as createStockOuts } from '../../migrations/1789000500000_create_stock_outs'
 import { up as createSales } from '../../migrations/1789000600000_create_sales'
 import { up as createWholesale } from '../../migrations/1789000700000_create_wholesale'
+import { up as accountSecurityAudit } from '../../migrations/1789000800000_account_security_audit'
 
 export async function initializeDatabase(): Promise<void> {
   const existingTables = new Set((await db.introspection.getTables()).map((table) => table.name))
@@ -29,4 +30,5 @@ export async function initializeDatabase(): Promise<void> {
   await createStockOuts(db)
   await createSales(db)
   await createWholesale(db)
+  await accountSecurityAudit(db)
 }

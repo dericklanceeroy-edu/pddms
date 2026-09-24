@@ -1,16 +1,11 @@
 import { countAll, insertMasterIfEmpty } from '@main/account/repository'
 import { state } from '@main/api'
+import { ipcMain } from '@main/api/ipc'
 import { channels, roles } from '@shared/constants'
 import { masterSetupSchema, newAccountSchema } from '@shared/schemas'
-import type { Account, AccountWithoutPassword } from '@shared/types'
+import { publicAccount } from '@shared/security'
 import { formatValidationError } from '@shared/validation'
 import { hash } from 'argon2'
-import { ipcMain } from 'electron'
-
-const getPublicAccount = ({ password, ...account }: Account): AccountWithoutPassword => {
-  void password
-  return account
-}
 
 ipcMain.handle(channels.setup.getStatus, async () => ({
   success: true,
@@ -34,7 +29,7 @@ ipcMain.handle(channels.setup.createMaster, async (_, payload: unknown) => {
     state.session = { account }
     state.database.stale = true
 
-    return { success: true, account: getPublicAccount(account) }
+    return { success: true, account: publicAccount(account) }
   } catch (error) {
     return { success: false, error: formatValidationError(error) }
   }

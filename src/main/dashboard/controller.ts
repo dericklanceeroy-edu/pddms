@@ -1,6 +1,6 @@
 import { state } from '@main/api'
 import { channels } from '@shared/constants'
-import { ipcMain } from 'electron'
+import { ipcMain } from '@main/api/ipc'
 import { getAdminDashboard } from './repository'
 
 ipcMain.handle(channels.dashboard.getAdmin, async () => {

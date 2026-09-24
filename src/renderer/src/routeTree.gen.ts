@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as CustomersRouteImport } from './routes/customers'
 import { Route as InventoryRouteImport } from './routes/inventory'
 import { Route as NewRouteRouteImport } from './routes/new/route'
+import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as ReportsRouteImport } from './routes/reports'
 import { Route as SalesRouteImport } from './routes/sales'
 import { Route as SignInRouteImport } from './routes/signIn'
@@ -43,6 +44,11 @@ const InventoryRoute = InventoryRouteImport.update({
 const NewRouteRoute = NewRouteRouteImport.update({
   id: '/new',
   path: '/new',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProfileRoute = ProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ReportsRoute = ReportsRouteImport.update({
@@ -106,6 +112,7 @@ export interface FileRoutesByFullPath {
   '/new': typeof NewRouteRouteWithChildren
   '/customers': typeof CustomersRouteWithChildren
   '/inventory': typeof InventoryRoute
+  '/profile': typeof ProfileRoute
   '/reports': typeof ReportsRoute
   '/sales': typeof SalesRoute
   '/signIn': typeof SignInRoute
@@ -122,6 +129,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/customers': typeof CustomersRouteWithChildren
   '/inventory': typeof InventoryRoute
+  '/profile': typeof ProfileRoute
   '/reports': typeof ReportsRoute
   '/sales': typeof SalesRoute
   '/signIn': typeof SignInRoute
@@ -140,6 +148,7 @@ export interface FileRoutesById {
   '/new': typeof NewRouteRouteWithChildren
   '/customers': typeof CustomersRouteWithChildren
   '/inventory': typeof InventoryRoute
+  '/profile': typeof ProfileRoute
   '/reports': typeof ReportsRoute
   '/sales': typeof SalesRoute
   '/signIn': typeof SignInRoute
@@ -159,6 +168,7 @@ export interface FileRouteTypes {
     | '/new'
     | '/customers'
     | '/inventory'
+    | '/profile'
     | '/reports'
     | '/sales'
     | '/signIn'
@@ -175,6 +185,7 @@ export interface FileRouteTypes {
     | '/'
     | '/customers'
     | '/inventory'
+    | '/profile'
     | '/reports'
     | '/sales'
     | '/signIn'
@@ -192,6 +203,7 @@ export interface FileRouteTypes {
     | '/new'
     | '/customers'
     | '/inventory'
+    | '/profile'
     | '/reports'
     | '/sales'
     | '/signIn'
@@ -210,6 +222,7 @@ export interface RootRouteChildren {
   NewRouteRoute: typeof NewRouteRouteWithChildren
   CustomersRoute: typeof CustomersRouteWithChildren
   InventoryRoute: typeof InventoryRoute
+  ProfileRoute: typeof ProfileRoute
   ReportsRoute: typeof ReportsRoute
   SalesRoute: typeof SalesRoute
   SignInRoute: typeof SignInRoute
@@ -247,6 +260,13 @@ declare module '@tanstack/react-router' {
       path: '/new'
       fullPath: '/new'
       preLoaderRoute: typeof NewRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/profile': {
+      id: '/profile'
+      path: '/profile'
+      fullPath: '/profile'
+      preLoaderRoute: typeof ProfileRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/reports': {
@@ -362,6 +382,7 @@ const rootRouteChildren: RootRouteChildren = {
   NewRouteRoute: NewRouteRouteWithChildren,
   CustomersRoute: CustomersRouteWithChildren,
   InventoryRoute: InventoryRoute,
+  ProfileRoute: ProfileRoute,
   ReportsRoute: ReportsRoute,
   SalesRoute: SalesRoute,
   SignInRoute: SignInRoute,

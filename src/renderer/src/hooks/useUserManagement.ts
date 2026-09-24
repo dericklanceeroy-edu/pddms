@@ -61,11 +61,20 @@ export function useUserManagement(): UserManagementState {
   }
 
   const toggleStatus = async (user: ManagedUser): Promise<void> => {
-    const blocked = user.status === 'active'
+    const blocked = user.status !== 'blocked'
     await setAccountBlocked(user.id, blocked)
     setUsers((current) =>
       current.map((value) =>
-        value.id === user.id ? { ...value, status: blocked ? 'blocked' : 'active' } : value
+        value.id === user.id
+          ? {
+              ...value,
+              status: blocked
+                ? 'blocked'
+                : value.lockedUntil && Date.parse(value.lockedUntil) > Date.now()
+                  ? 'locked'
+                  : 'active'
+            }
+          : value
       )
     )
   }
@@ -76,9 +85,7 @@ export function useUserManagement(): UserManagementState {
       ...accountValues,
       ...(password ? { password } : {})
     })
-    setUsers((current) =>
-      current.map((value) => (value.id === user.id ? { ...value, ...accountValues } : value))
-    )
+    await load()
   }
 
   const deleteUser = async (user: ManagedUser): Promise<void> => {

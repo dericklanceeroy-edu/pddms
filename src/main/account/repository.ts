@@ -1,5 +1,6 @@
 import { db } from '@main/db'
 import type { Account, AccountUpdate, NewAccount } from '@shared/types'
+import { sql } from 'kysely'
 
 export async function insertOne(data: NewAccount): Promise<Account> {
   // prettier-ignore
@@ -63,7 +64,7 @@ export async function updateOneById(id: number, data: AccountUpdate): Promise<vo
   // prettier-ignore
   await db
     .updateTable('accounts')
-    .set(data)
+    .set({...data, updatedAt: sql`CURRENT_TIMESTAMP`})
     .where('id', '=', id)
     .executeTakeFirstOrThrow()
 }

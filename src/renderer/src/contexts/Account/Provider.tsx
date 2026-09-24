@@ -38,6 +38,10 @@ export default function AccountProvider({ children }: PropsWithChildren): ReactE
       signIn: async (credentials: Credentials) => {
         const result = await requestSignIn(credentials)
         if (result.success && result.account) setAccount(result.account)
+        else {
+          setAccount(null)
+          useProfileStore.getState().reset()
+        }
         return result
       },
       signOut: async () => {
@@ -55,6 +59,29 @@ export default function AccountProvider({ children }: PropsWithChildren): ReactE
     }),
     [account]
   )
+
+  useEffect(() => {
+    let active = true
+    const refresh = (): void => {
+      void getAuthStatus().then((result) => {
+        if (!active || !result.success) return
+        if (!result.account) useProfileStore.getState().reset()
+        setAccount((current) =>
+          JSON.stringify(current) === JSON.stringify(result.account ?? null)
+            ? current
+            : (result.account ?? null)
+        )
+      })
+    }
+    refresh()
+    const timer = window.setInterval(refresh, 30_000)
+    window.addEventListener('focus', refresh)
+    return () => {
+      active = false
+      window.clearInterval(timer)
+      window.removeEventListener('focus', refresh)
+    }
+  }, [path])
 
   if (statusError) {
     return (

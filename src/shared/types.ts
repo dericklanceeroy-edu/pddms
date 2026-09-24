@@ -5,6 +5,9 @@ import type { SaleLine, SaleRecord } from './sales'
 import type { WholesaleOrder, WholesalePayment } from './wholesale'
 
 export interface Database {
+  auditLogs: Omit<import('./security').AuditRecord, 'id'> & {
+    id: ColumnType<number, number | undefined, never>
+  }
   wholesaleOrders: Omit<WholesaleOrder, 'id'> & {
     id: ColumnType<number, number | undefined, never>
   }
@@ -51,6 +54,9 @@ export type Id = number
 export type ZeroOrOne = 0 | 1
 
 export interface AccountsTable {
+  failedAttempts: ColumnType<number, number | undefined, number>
+  lastFailedAt: ColumnType<string | null, string | undefined | null, string | null>
+  lockedUntil: ColumnType<string | null, string | undefined | null, string | null>
   id: ColumnType<Id, Id | undefined, never>
   role: Role
   username: string
@@ -195,7 +201,14 @@ export interface SupplierPaymentsTable {
 export type Account = Selectable<AccountsTable>
 export type NewAccount = Insertable<AccountsTable>
 export type AccountUpdate = Updateable<AccountsTable>
-export type AccountWithoutPassword = Omit<Account, 'password'>
+export type AccountWithoutPassword = Omit<
+  Account,
+  'password' | 'failedAttempts' | 'lastFailedAt' | 'lockedUntil'
+>
+export type ManagedAccount = AccountWithoutPassword & {
+  failedAttempts: number
+  lockedUntil: string | null
+}
 
 export type Customer = Selectable<CustomersTable>
 export type NewCustomer = Insertable<CustomersTable>

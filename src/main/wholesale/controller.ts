@@ -11,7 +11,8 @@ import {
   wholesalePaymentSchema,
   wholesaleScheduleSchema
 } from '@shared/wholesale'
-import { dialog, ipcMain } from 'electron'
+import { ipcMain } from '@main/api/ipc'
+import { dialog } from 'electron'
 import { writeFile } from 'node:fs/promises'
 import z from 'zod'
 import * as repository from './repository'

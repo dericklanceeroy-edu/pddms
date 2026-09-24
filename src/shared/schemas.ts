@@ -14,6 +14,9 @@ import type {
 } from './types'
 
 export const accountSchema = z.strictObject({
+  failedAttempts: z.number().int().nonnegative(),
+  lastFailedAt: z.string().nullable(),
+  lockedUntil: z.string().nullable(),
   id: z.number().positive(),
   role: z.enum(Object.values(roles)),
   username: z.string().min(4),
@@ -72,10 +75,18 @@ export const accountUpdateSchema = z.strictObject({
 
 export const credentialsSchema = z.strictObject({
   username: z.string().trim().toLowerCase().min(usernameMin).max(32).regex(usernamePattern),
-  password: z.string().min(passwordMin)
+  password: z.string().min(1)
 }) satisfies z.ZodType<Credentials>
 
+export const profileUpdateSchema = z.strictObject({
+  fullName: z.string().trim().min(2).max(120).regex(namePattern),
+  username: z.string().trim().toLowerCase().min(4).max(32).regex(usernamePattern),
+  currentPassword: z.string().min(1).max(256),
+  password: z.string().min(8).max(256).optional()
+})
+
 export const masterSetupSchema = credentialsSchema.extend({
+  password: newAccountSchema.shape.password,
   fullName: z.string().trim().min(2, 'Full name must have at least two characters.')
 })
 

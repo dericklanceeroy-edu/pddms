@@ -4,7 +4,7 @@ import { channels, resources } from '@shared/constants'
 import { newDrugSchema, productUpdateSchema } from '@shared/schemas'
 import { formatValidationError } from '@shared/validation'
 import { isId } from '@shared/validators'
-import { ipcMain } from 'electron'
+import { ipcMain } from '@main/api/ipc'
 import { findAll, insertOne, removeOneById, updateOneById } from './repository'
 
 ipcMain.handle(channels.product.getAll, async () => {

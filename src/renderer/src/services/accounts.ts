@@ -1,13 +1,13 @@
 import { mapAccount, type ManagedUser, type UserFormValues } from '@renderer/data/userManagement'
 import { channels } from '@shared/constants'
 import { accountUpdateSchema, newAccountSchema } from '@shared/schemas'
-import type { AccountWithoutPassword } from '@shared/types'
+import type { AccountWithoutPassword, ManagedAccount } from '@shared/types'
 import { validate } from '@shared/validation'
 
 interface AccountResult {
   success: boolean
   account?: AccountWithoutPassword
-  accounts?: AccountWithoutPassword[]
+  accounts?: ManagedAccount[]
   error?: string
 }
 

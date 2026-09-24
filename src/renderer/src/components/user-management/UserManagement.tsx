@@ -9,6 +9,7 @@ import {
 import { useUserManagement } from '@renderer/hooks/useUserManagement'
 import { useMemo, useState, type FormEvent, type ReactElement } from 'react'
 import { FiEdit2, FiPlus, FiSearch, FiShield, FiTrash2, FiUsers, FiX } from 'react-icons/fi'
+import AdministrationTools from './AdministrationTools'
 
 const date = new Intl.DateTimeFormat('en-PH', { dateStyle: 'medium' })
 
@@ -64,6 +65,13 @@ export default function UserManagement(): ReactElement {
               </p>
               <button onClick={() => setCreating(true)} className="primary-button">
                 <FiPlus /> Create user
+              </button>
+              <button
+                disabled={management.isLoading}
+                onClick={() => void management.load()}
+                className="secondary-button"
+              >
+                Refresh accounts
               </button>
             </div>
           </div>
@@ -155,8 +163,17 @@ export default function UserManagement(): ReactElement {
                       <span
                         className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${user.status === 'active' ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-rose-200 bg-rose-50 text-rose-700'}`}
                       >
-                        {user.status === 'active' ? 'Active' : 'Blocked'}
+                        {user.status === 'locked'
+                          ? 'Temporarily locked'
+                          : user.status === 'active'
+                            ? 'Active'
+                            : 'Blocked'}
                       </span>
+                      {user.lockedUntil && user.status === 'locked' && (
+                        <p className="text-xs">
+                          Until {new Date(user.lockedUntil).toLocaleTimeString()}
+                        </p>
+                      )}
                     </td>
                     <td className="px-5 py-4 text-neutral-500">
                       {date.format(new Date(user.createdAt))}
@@ -191,11 +208,17 @@ export default function UserManagement(): ReactElement {
                           disabled={user.role === 'master'}
                           onClick={(event) => {
                             event.stopPropagation()
+                            if (
+                              !window.confirm(
+                                `${user.status === 'blocked' ? 'Unblock' : 'Block'} ${user.fullName}?`
+                              )
+                            )
+                              return
                             void management
                               .toggleStatus(user)
                               .then(() =>
                                 setFeedback(
-                                  user.status === 'active'
+                                  user.status !== 'blocked'
                                     ? 'User account blocked.'
                                     : 'User account unblocked.'
                                 )
@@ -211,7 +234,7 @@ export default function UserManagement(): ReactElement {
                           onKeyDown={(event) => event.stopPropagation()}
                           className="secondary-button text-xs disabled:opacity-40"
                         >
-                          {user.status === 'active' ? 'Block' : 'Unblock'}
+                          {user.status !== 'blocked' ? 'Block' : 'Unblock'}
                         </button>
                       </div>
                     </td>
@@ -229,6 +252,7 @@ export default function UserManagement(): ReactElement {
             )}
           </div>
         </section>
+        <AdministrationTools />
       </div>
       {creating && (
         <CreateUserDialog
@@ -534,7 +558,17 @@ function UserDetails({ user, close }: { user: ManagedUser; close: VoidFunction }
       <dl className="grid gap-4 sm:grid-cols-2">
         <Detail label="Username" value={`@${user.username}`} />
         <Detail label="Role" value={roleLabels[user.role]} />
-        <Detail label="Status" value={user.status === 'active' ? 'Active' : 'Blocked'} />
+        <Detail
+          label="Status"
+          value={
+            user.status === 'locked'
+              ? 'Temporarily locked'
+              : user.status === 'active'
+                ? 'Active'
+                : 'Blocked'
+          }
+        />
+        <Detail label="Failed sign-in attempts" value={String(user.failedAttempts)} />
         <Detail label="Verification" value={user.verified ? 'Verified' : 'Unverified'} />
       </dl>
     </Dialog>

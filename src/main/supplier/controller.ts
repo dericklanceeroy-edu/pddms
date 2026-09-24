@@ -4,7 +4,7 @@ import { channels, resources } from '@shared/constants'
 import { newSupplierSchema, supplierUpdateSchema } from '@shared/schemas'
 import { formatValidationError } from '@shared/validation'
 import { isId } from '@shared/validators'
-import { ipcMain } from 'electron'
+import { ipcMain } from '@main/api/ipc'
 import {
   countBatchesBySupplier,
   countOrdersBySupplier,

@@ -146,6 +146,14 @@ if (!process.env.INVENTORY_TEST_DATABASE) {
         .insertInto('accounts')
         .values([
           {
+            role: 'cashier',
+            username: 'verified-cashier',
+            fullName: 'Verified Cashier',
+            password,
+            isArchived: 0,
+            isVerified: 1
+          },
+          {
             role: 'staff',
             username: 'verified-staff',
             fullName: 'Verified Staff',
@@ -173,8 +181,12 @@ if (!process.env.INVENTORY_TEST_DATABASE) {
         .execute()
       state.session = undefined
       assert.match(
-        (await denied(channels.auth.signIn, { username: 'blocked-staff', password: 'SecurePass123' }))
-          .error,
+        (
+          await denied(channels.auth.signIn, {
+            username: 'blocked-staff',
+            password: 'SecurePass123'
+          })
+        ).error,
         /blocked/i
       )
       assert.match(
@@ -239,7 +251,13 @@ if (!process.env.INVENTORY_TEST_DATABASE) {
       }
       state.session = undefined
       await denied(channels.product.createOne, input)
-      state.session = { account: { ...admin, role: 'cashier' } }
+      state.session = {
+        account: await db
+          .selectFrom('accounts')
+          .selectAll()
+          .where('username', '=', 'verified-cashier')
+          .executeTakeFirstOrThrow()
+      }
       await denied(channels.product.createOne, input)
       state.session = { account: admin }
       assert.match(
@@ -311,7 +329,7 @@ if (!process.env.INVENTORY_TEST_DATABASE) {
         paidAt: localDate(),
         method: 'Bank transfer',
         referenceNumber: 'PAY-001',
-        notes: null,
+        notes: null
       })
       let paymentSummary = (await findPaymentSummaries()).find(
         (summary) => summary.purchaseOrderId === order.id
@@ -358,18 +376,18 @@ if (!process.env.INVENTORY_TEST_DATABASE) {
         paidAt: localDate(),
         method: 'Bank transfer',
         referenceNumber: 'PAY-002',
-        notes: null,
+        notes: null
       })
       assert.match(
         (
           await denied(channels.procurement.recordPayment, {
-          purchaseOrderId: order.id,
-          invoiceId: uploaded.invoice.id,
-          amount: 50,
-          paidAt: localDate(),
-          method: 'Bank transfer',
-          referenceNumber: 'PAY-OVER-INVOICE',
-          notes: null,
+            purchaseOrderId: order.id,
+            invoiceId: uploaded.invoice.id,
+            amount: 50,
+            paidAt: localDate(),
+            method: 'Bank transfer',
+            referenceNumber: 'PAY-OVER-INVOICE',
+            notes: null
           })
         ).error,
         /invoice balance/i
@@ -377,13 +395,13 @@ if (!process.env.INVENTORY_TEST_DATABASE) {
       assert.match(
         (
           await denied(channels.procurement.recordPayment, {
-          purchaseOrderId: order.id,
-          invoiceId: null,
-          amount: 1,
-          paidAt: localDate(),
-          method: 'Bank transfer',
-          referenceNumber: 'PAY-001',
-          notes: null,
+            purchaseOrderId: order.id,
+            invoiceId: null,
+            amount: 1,
+            paidAt: localDate(),
+            method: 'Bank transfer',
+            referenceNumber: 'PAY-001',
+            notes: null
           })
         ).error,
         /reference/i
@@ -409,7 +427,7 @@ if (!process.env.INVENTORY_TEST_DATABASE) {
         paidAt: localDate(),
         method: 'Bank transfer',
         referenceNumber: 'PAY-003',
-        notes: null,
+        notes: null
       })
       paymentSummary = (await findPaymentSummaries()).find(
         (summary) => summary.purchaseOrderId === order.id
@@ -422,13 +440,13 @@ if (!process.env.INVENTORY_TEST_DATABASE) {
       assert.match(
         (
           await denied(channels.procurement.recordPayment, {
-          purchaseOrderId: order.id,
-          invoiceId: null,
-          amount: 1,
-          paidAt: localDate(),
-          method: 'Cash',
-          referenceNumber: 'PAY-OVER-ORDER',
-          notes: null,
+            purchaseOrderId: order.id,
+            invoiceId: null,
+            amount: 1,
+            paidAt: localDate(),
+            method: 'Cash',
+            referenceNumber: 'PAY-OVER-ORDER',
+            notes: null
           })
         ).error,
         /already paid/i
@@ -455,7 +473,13 @@ if (!process.env.INVENTORY_TEST_DATABASE) {
       state.session = undefined
       await denied(channels.inventory.recordStockOut, adjust)
       for (const role of ['staff', 'cashier']) {
-        state.session = { account: { ...admin, role } }
+        state.session = {
+          account: await db
+            .selectFrom('accounts')
+            .selectAll()
+            .where('username', '=', `verified-${role}`)
+            .executeTakeFirstOrThrow()
+        }
         await denied(channels.inventory.recordStockOut, adjust)
         await denied(channels.inventory.exportReport)
       }
