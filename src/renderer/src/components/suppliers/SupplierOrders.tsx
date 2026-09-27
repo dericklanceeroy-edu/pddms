@@ -1127,14 +1127,16 @@ function Dialog({
       <section
         role="dialog"
         aria-modal="true"
-        className="glass-surface relative z-10 max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-[2rem] border-white/80 p-5 sm:p-6"
+        className="glass-surface relative z-10 max-h-[calc(100dvh-2rem)] w-full max-w-2xl min-w-0 overflow-y-auto rounded-[2rem] border-white/80 p-5 sm:p-6"
       >
         <div
           aria-hidden="true"
           className="pointer-events-none absolute -top-20 right-0 size-44 rounded-full bg-mauve-300/30 blur-3xl"
         />
-        <div className="relative mb-5 flex items-center justify-between">
-          <h2 className="text-xl font-semibold tracking-tight text-neutral-950">{title}</h2>
+        <div className="relative mb-5 flex items-start justify-between gap-3">
+          <h2 className="min-w-0 text-xl font-semibold tracking-tight break-words text-neutral-950">
+            {title}
+          </h2>
           <button type="button" onClick={close} className="icon-button" aria-label="Close dialog">
             <FiX />
           </button>

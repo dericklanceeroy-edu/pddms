@@ -9,6 +9,7 @@ import type {
 import { deadlineLabels, deadlineTone, orderStatusLabels } from '@renderer/data/supplierOrders'
 import type { SupplierOrdersState } from '@renderer/hooks/useSupplierOrders'
 import { useMemo, useState, type FormEvent, type ReactElement, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import {
   FiAlertCircle,
   FiClock,
@@ -170,7 +171,7 @@ export default function ProcurementRecords({
         <h3 className="font-semibold text-neutral-900">Supplier-provided invoice documents</h3>
       </div>
       <div className="min-w-0 overflow-x-auto">
-        <table className="w-full table-fixed text-sm">
+        <table className="w-full min-w-[850px] table-fixed text-sm">
           <colgroup>
             <col className="w-[18%]" />
             <col className="w-[22%]" />
@@ -181,10 +182,10 @@ export default function ProcurementRecords({
           </colgroup>
           <thead className="bg-neutral-50 text-left text-neutral-500">
             <tr>
-              <th className="px-5 py-3">Invoice</th>
-              <th className="px-5 py-3">Supplier / order</th>
-              <th className="px-5 py-3">Due date</th>
-              <th className="px-5 py-3">Payment</th>
+              <th className="px-3 py-3">Invoice</th>
+              <th className="px-3 py-3">Supplier / order</th>
+              <th className="px-3 py-3">Due date</th>
+              <th className="px-3 py-3">Payment</th>
               <th className="hidden px-3 py-3 xl:table-cell">File</th>
               <th className="px-3 py-3 text-right">Actions</th>
             </tr>
@@ -213,7 +214,9 @@ export default function ProcurementRecords({
                   <p className="truncate" title={invoice.supplierName}>
                     {invoice.supplierName}
                   </p>
-                  <p className="truncate text-xs text-neutral-500">{invoice.orderNumber}</p>
+                  <p className="truncate text-xs text-neutral-500" title={invoice.orderNumber}>
+                    {invoice.orderNumber}
+                  </p>
                 </td>
                 <td className="px-3 py-4">
                   <p>{date.format(new Date(invoice.dueDate))}</p>
@@ -224,7 +227,7 @@ export default function ProcurementRecords({
                   </span>
                 </td>
                 <td className="min-w-0 px-3 py-4">
-                  <p className="truncate font-semibold">
+                  <p className="font-semibold break-words tabular-nums">
                     {currency.format(invoice.outstandingAmount)} due
                   </p>
                   <p className="text-xs text-neutral-500">
@@ -853,7 +856,7 @@ function Modal({
   close: VoidFunction
   children: ReactNode
 }): ReactElement {
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[70] grid place-items-center overflow-y-auto bg-neutral-950/55 p-4 backdrop-blur-sm">
       <button
         type="button"
@@ -864,7 +867,7 @@ function Modal({
       <section
         role="dialog"
         aria-modal="true"
-        className="relative z-10 max-h-[calc(100dvh-2rem)] w-full max-w-2xl min-w-0 overflow-x-hidden overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl sm:p-6"
+        className="procurement-dialog relative z-10 max-h-[calc(100dvh-2rem)] w-full max-w-2xl min-w-0 overflow-x-hidden overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl sm:p-6"
       >
         <div className="mb-5 flex items-center justify-between">
           <h2 className="text-xl font-semibold">{title}</h2>
@@ -874,7 +877,8 @@ function Modal({
         </div>
         {children}
       </section>
-    </div>
+    </div>,
+    document.body
   )
 }
 

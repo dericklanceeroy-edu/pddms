@@ -83,7 +83,7 @@ function Sidebar({
 
   return (
     <div className="glass-sidebar flex h-full flex-col text-neutral-300">
-      <div className="flex h-20 items-center justify-between gap-3 border-b border-white/10 px-5">
+      <div className="flex h-20 shrink-0 items-center justify-between gap-3 border-b border-white/10 px-5">
         <div className="flex min-w-0 items-center gap-3">
           <div className="grid size-10 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-mauve-500 to-indigo-600 text-2xl font-semibold text-white shadow-lg shadow-mauve-950/50">
             +
@@ -105,7 +105,10 @@ function Sidebar({
           </button>
         )}
       </div>
-      <nav className="flex-1 space-y-1 px-3 py-6" aria-label="Dashboard sections">
+      <nav
+        className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3 py-6"
+        aria-label="Dashboard sections"
+      >
         <p className="px-3 pb-2 text-[0.65rem] font-semibold tracking-[0.18em] text-neutral-500 uppercase">
           Workspace
         </p>
@@ -135,7 +138,7 @@ function Sidebar({
             )
           })}
       </nav>
-      <div className="border-t border-white/10 p-4">
+      <div className="shrink-0 border-t border-white/10 p-4">
         <div className="rounded-2xl border border-white/10 bg-white/[0.06] p-3 shadow-inner shadow-white/[0.04]">
           <div className="flex items-center gap-3">
             <div className="grid size-9 place-items-center rounded-full bg-neutral-800 text-xs font-semibold text-white">
@@ -302,13 +305,11 @@ export default function DashboardShell({
                   {source.label}
                 </span>
               )}
-              <span className="hidden text-xs text-neutral-500 md:inline">
-                {source
-                  ? `Updated ${timeFormatter.format(generatedAt)}`
-                  : isLoading
-                    ? 'Loading data'
-                    : 'No data source'}
-              </span>
+              {(source || isLoading) && (
+                <span className="hidden text-xs text-neutral-500 md:inline">
+                  {source ? `Updated ${timeFormatter.format(generatedAt)}` : 'Loading data'}
+                </span>
+              )}
               {onRefresh && (
                 <button
                   type="button"

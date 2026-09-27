@@ -72,8 +72,10 @@
   button,
   a,
   input,
-  select {
-    @apply focus-visible:outline-none;
+  select,
+  textarea,
+  [tabindex] {
+    @apply focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mauve-500;
   }
 }
 
@@ -160,6 +162,10 @@
     @apply text-[0.68rem] font-semibold tracking-[0.17em] text-mauve-700 uppercase;
   }
 
+  .procurement-dialog .field {
+    @apply border-neutral-200 bg-neutral-50 focus:border-mauve-400 focus:bg-white;
+  }
+
   .primary-button {
     @apply from-plum-950 via-plum-900 shadow-plum-950/25 hover:from-plum-900 hover:shadow-plum-900/25 inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r to-mauve-900 px-4 text-sm font-semibold text-white shadow-md transition duration-200 hover:-translate-y-0.5 hover:to-mauve-800 hover:shadow-lg focus-visible:ring-2 focus-visible:ring-mauve-300 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60;
   }
@@ -173,7 +179,14 @@
   }
 
   .icon-button {
-    @apply grid size-10 place-items-center rounded-2xl border border-neutral-200 bg-white text-neutral-600 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-mauve-200 hover:bg-mauve-50/40 hover:shadow-md focus-visible:ring-2 focus-visible:ring-mauve-200;
+    @apply grid size-10 shrink-0 place-items-center rounded-2xl border border-neutral-200 bg-white text-neutral-600 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-mauve-200 hover:bg-mauve-50/40 hover:shadow-md focus-visible:ring-2 focus-visible:ring-mauve-200;
+  }
+
+  .primary-button,
+  .secondary-button,
+  .danger-button,
+  .icon-button {
+    @apply disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:hover:shadow-none;
   }
 
   .setup-stage {

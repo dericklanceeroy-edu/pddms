@@ -119,21 +119,23 @@ export default function SummaryCard({ metric }: { metric: DashboardSummaryMetric
       <div className="pointer-events-none absolute -right-14 -bottom-16 size-36 rounded-full bg-mauve-300/15 opacity-80 blur-3xl transition-opacity duration-200 group-hover:opacity-100" />
       <div className="relative flex items-start justify-between gap-3">
         <div
-          className={`grid size-10 place-items-center rounded-2xl ring-1 ${config.iconClassName}`}
+          className={`grid size-10 shrink-0 place-items-center rounded-2xl ring-1 ${config.iconClassName}`}
         >
           <config.icon className="size-4.5" aria-hidden="true" />
         </div>
-        <div className="-mt-1 -mr-1 opacity-85">
-          <Sparkline values={metric.sparkline} color={config.color} />
-        </div>
+        {metric.sparkline.length > 1 && (
+          <div className="-mt-1 -mr-1 opacity-85">
+            <Sparkline values={metric.sparkline} color={config.color} />
+          </div>
+        )}
       </div>
       <div className="relative mt-5">
         <p className="text-sm font-medium text-neutral-500">{metric.label}</p>
-        <p className="mt-1 text-2xl font-semibold tracking-tight text-neutral-950 sm:text-[1.7rem]">
+        <p className="mt-1 text-2xl font-semibold tracking-tight break-words text-neutral-950 tabular-nums sm:text-[1.7rem]">
           {formatMetric(metric)}
         </p>
       </div>
-      <div className="relative mt-4 flex min-w-0 items-center gap-2 text-xs">
+      <div className="relative mt-4 flex min-w-0 flex-wrap items-center gap-2 text-xs">
         {metric.sparkline.length > 1 && (
           <span
             className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-1 font-semibold ${trendClassName}`}
@@ -142,7 +144,7 @@ export default function SummaryCard({ metric }: { metric: DashboardSummaryMetric
             {metric.trend.direction === 'flat' ? 'Stable' : `${metric.trend.percentage}%`}
           </span>
         )}
-        <span className="truncate text-neutral-500">{metric.trend.label}</span>
+        <span className="text-neutral-500">{metric.trend.label}</span>
       </div>
     </article>
   )

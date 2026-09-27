@@ -596,8 +596,10 @@ function Dialog({
           aria-hidden="true"
           className="pointer-events-none absolute -top-20 right-0 size-44 rounded-full bg-mauve-300/30 blur-3xl"
         />
-        <div className="relative mb-5 flex items-center justify-between">
-          <h2 className="text-xl font-semibold tracking-tight text-neutral-950">{title}</h2>
+        <div className="relative mb-5 flex items-start justify-between gap-3">
+          <h2 className="min-w-0 text-xl font-semibold tracking-tight break-words text-neutral-950">
+            {title}
+          </h2>
           <button onClick={close} className="icon-button" aria-label="Close dialog">
             <FiX />
           </button>
@@ -621,7 +623,7 @@ function Detail({ label, value }: { label: string; value: string }): ReactElemen
   return (
     <div className="rounded-2xl border border-neutral-200/80 bg-white/70 p-3">
       <dt className="text-xs font-medium tracking-wide text-neutral-500 uppercase">{label}</dt>
-      <dd className="mt-1 font-semibold">{value}</dd>
+      <dd className="mt-1 font-semibold break-words">{value}</dd>
     </div>
   )
 }
