@@ -9,6 +9,10 @@ files:
   - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
   - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+  - '!scripts/**'
+  - '!**/{*.db,*.db-*,*.sqlite,*.sqlite-*,*.sqlite3,credentials.json,token.json}'
+  - '!**/pddms-backup-*/**'
+  - '!**/pddms-restore-*/**'
 asarUnpack:
   - resources/**
 win:

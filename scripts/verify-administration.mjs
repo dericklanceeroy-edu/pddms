@@ -312,6 +312,26 @@ if (!process.env.ADMIN_TEST_PHASE) {
       const backup = (await ok(channels.administration.backup)).backup
       assert.equal((await validateBackup(backup.directory)).invoiceCount, 1)
       await db
+        .updateTable('supplierInvoices')
+        .set({ storedFilename: 'unsafe.exe' })
+        .where('id', '=', invoice.id)
+        .execute()
+      assert.match(
+        (await bad(channels.procurement.openInvoice, invoice.id)).error,
+        /Invalid stored invoice/
+      )
+      await db
+        .updateTable('supplierInvoices')
+        .set({ storedFilename: 'backup-test.pdf' })
+        .where('id', '=', invoice.id)
+        .execute()
+      const unsafe = join(root, 'unsafe-invoice-backup')
+      await cp(backup.directory, unsafe, { recursive: true })
+      const unsafeManifest = JSON.parse(await readFile(join(unsafe, 'manifest.json'), 'utf8'))
+      unsafeManifest.invoices[0].name = 'unsafe.exe'
+      await writeFile(join(unsafe, 'manifest.json'), JSON.stringify(unsafeManifest))
+      await assert.rejects(validateBackup(unsafe))
+      await db
         .updateTable('accounts')
         .set({ fullName: 'Changed After Backup' })
         .where('id', '=', admin.id)

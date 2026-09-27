@@ -4,6 +4,7 @@ import type { Database } from '../src/shared/types'
 export async function up(db: Kysely<Database>): Promise<void> {
   await db.schema
     .createTable('batches')
+    .ifNotExists()
     .addColumn('id', 'integer', (col) => col.primaryKey().autoIncrement())
     .addColumn('drug_id', 'integer', (col) =>
       col.notNull().references('drugs.id').onDelete('restrict')

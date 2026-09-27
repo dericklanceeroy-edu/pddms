@@ -155,6 +155,7 @@ if (!process.env.SALES_TEST_PHASE) {
       ).order
       await ok(channels.purchaseOrder.updateStatusById, order.id, { status: 'submitted' })
       await ok(channels.purchaseOrder.recordDeliveryById, order.id, {
+        requestId: randomUUID(),
         deliveredAt: localDate(),
         items: order.items.map((item, index) => ({
           itemId: item.id,

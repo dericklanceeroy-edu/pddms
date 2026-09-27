@@ -4,7 +4,12 @@ import { audit } from '@main/audit/repository'
 import { db } from '@main/db'
 import { channels } from '@shared/constants'
 import { isLocked } from '@shared/security'
-import { ipcMain as electronIpc } from 'electron'
+import { ipcMain as electronIpc, type WebContents } from 'electron'
+
+const trustedSenders = new WeakMap<WebContents, string>()
+export function registerIpcSender(sender: WebContents, entryUrl: string): void {
+  trustedSenders.set(sender, entryUrl.split('#')[0])
+}
 
 const publicChannels: string[] = [...Object.values(channels.auth), ...Object.values(channels.setup)]
 let queue: Promise<unknown> = Promise.resolve()
@@ -12,6 +17,12 @@ export const ipcMain = {
   handle(channel: string, listener: Parameters<typeof electronIpc.handle>[1]): void {
     electronIpc.handle(channel, (event, ...args: unknown[]) => {
       const run = async (): Promise<unknown> => {
+        if (
+          !event.senderFrame ||
+          event.senderFrame !== event.sender.mainFrame ||
+          trustedSenders.get(event.sender) !== event.senderFrame.url.split('#')[0]
+        )
+          return { success: false, error: 'Untrusted application window.' }
         const actor = state.session?.account
         // Note: Logging failures must never prevent session termination.
         if (channel === channels.auth.signOut || channel === channels.auth.signIn)

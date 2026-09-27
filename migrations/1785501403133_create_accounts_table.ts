@@ -4,6 +4,7 @@ import type { Database } from '../src/shared/types'
 export async function up(db: Kysely<Database>): Promise<void> {
   await db.schema
     .createTable('accounts')
+    .ifNotExists()
     .addColumn('id', 'integer', (col) => col.primaryKey().autoIncrement())
     .addColumn('role', 'text', (col) =>
       col.notNull().check(sql`role IN ('master', 'staff', 'cashier')`)

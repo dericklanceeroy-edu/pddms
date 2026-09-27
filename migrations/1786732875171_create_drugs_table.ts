@@ -4,6 +4,7 @@ import type { Database } from '../src/shared/types'
 export async function up(db: Kysely<Database>): Promise<void> {
   await db.schema
     .createTable('drugs')
+    .ifNotExists()
     .addColumn('id', 'integer', (col) => col.primaryKey().autoIncrement())
     .addColumn('category', 'text', (col) => col.notNull())
     .addColumn('generic_name', 'text', (col) => col.notNull())

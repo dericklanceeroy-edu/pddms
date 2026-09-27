@@ -1,5 +1,6 @@
 import { accessControl, authorize } from '@main/access-control'
 import { state } from '@main/api'
+import { ipcMain } from '@main/api/ipc'
 import { channels, resources } from '@shared/constants'
 import {
   newPurchaseOrderSchema,
@@ -8,7 +9,6 @@ import {
 } from '@shared/schemas'
 import { formatValidationError } from '@shared/validation'
 import { isId } from '@shared/validators'
-import { ipcMain } from '@main/api/ipc'
 import {
   findAll,
   findOneById,
@@ -93,13 +93,11 @@ ipcMain.handle(
       if (!isId(id)) return { success: false, error: 'Invalid purchase order.' }
       const currentOrder = await findOneById(id)
       if (!currentOrder) return { success: false, error: 'Purchase order not found.' }
-      if (!['submitted', 'partially_received'].includes(currentOrder.status)) {
-        return { success: false, error: 'Submit the order before recording a delivery.' }
-      }
       const data = purchaseOrderDeliverySchema.parse(payload)
       const accountId = state.session?.account.id
       if (!accountId) return { success: false, error: 'Session not found.' }
       const order = await recordDelivery(id, {
+        requestId: data.requestId,
         deliveredAt: data.deliveredAt,
         notes: data.notes ?? null,
         recordedBy: accountId,

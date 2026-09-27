@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/explicit-function-return-type -- Node harness uses JavaScript. */
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -291,6 +292,7 @@ if (!process.env.INVENTORY_TEST_DATABASE) {
       })
       await success(channels.purchaseOrder.updateStatusById, order.id, { status: 'submitted' })
       const delivery = (quantity, expiresAt = offsetDate(30), batchNumber = 'TEST-NEAR') => ({
+        requestId: randomUUID(),
         deliveredAt: offsetDate(-10),
         notes: null,
         items: [
@@ -509,6 +511,7 @@ if (!process.env.INVENTORY_TEST_DATABASE) {
       ).order
       await success(channels.purchaseOrder.updateStatusById, next.id, { status: 'submitted' })
       await success(channels.purchaseOrder.recordDeliveryById, next.id, {
+        requestId: randomUUID(),
         deliveredAt: localDate(),
         items: [
           {

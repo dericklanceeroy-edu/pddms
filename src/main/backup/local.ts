@@ -11,7 +11,10 @@ import z from 'zod'
 
 export const invoiceDirectory = (): string => join(app.getPath('userData'), 'supplier-invoices')
 export const backupDirectory = (): string => join(app.getPath('userData'), 'backups')
-const safeName = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,180}$/)
+const safeName = z
+  .string()
+  .regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,180}$/)
+  .regex(/\.(pdf|png|jpe?g|webp)$/i)
 const fileSchema = z.strictObject({ name: safeName, sha256: z.string().regex(/^[a-f0-9]{64}$/) })
 const manifestSchema = z.strictObject({
   format: z.literal('pddms-backup-v1'),
@@ -31,7 +34,7 @@ function schema(connection: SQLite.Database): string {
   return JSON.stringify(
     connection
       .prepare(
-        "SELECT type, name, sql FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' ORDER BY type, name"
+        "SELECT type, name, sql FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' AND name NOT IN ('kysely_migration', 'kysely_migration_lock') ORDER BY type, name"
       )
       .all()
   )
@@ -167,7 +170,9 @@ export async function restoreBackup(source: string): Promise<{ safety: BackupInf
     await copyFile(join(staging, 'invoices', item.name), join(nextInvoices, item.name))
   const tables = (
     database
-      .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'")
+      .prepare(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT IN ('kysely_migration', 'kysely_migration_lock')"
+      )
       .all() as { name: string }[]
   ).map((row) => row.name)
   const quote = (value: string): string => `"${value.replaceAll('"', '""')}"`

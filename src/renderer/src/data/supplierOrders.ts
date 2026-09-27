@@ -24,6 +24,7 @@ export interface PurchaseOrderFormValues {
 }
 
 export interface DeliveryFormValues {
+  requestId: string
   deliveredAt: string
   notes: string | null
   items: Array<{

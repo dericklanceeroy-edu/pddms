@@ -18,7 +18,7 @@ import {
 const currencyFormatter = new Intl.NumberFormat('en-PH', {
   style: 'currency',
   currency: 'PHP',
-  maximumFractionDigits: 0
+  maximumFractionDigits: 2
 })
 
 const numberFormatter = new Intl.NumberFormat('en-PH')
@@ -134,12 +134,14 @@ export default function SummaryCard({ metric }: { metric: DashboardSummaryMetric
         </p>
       </div>
       <div className="relative mt-4 flex min-w-0 items-center gap-2 text-xs">
-        <span
-          className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-1 font-semibold ${trendClassName}`}
-        >
-          <TrendIcon className="size-3" aria-hidden="true" />
-          {metric.trend.direction === 'flat' ? 'Stable' : `${metric.trend.percentage}%`}
-        </span>
+        {metric.sparkline.length > 1 && (
+          <span
+            className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-1 font-semibold ${trendClassName}`}
+          >
+            <TrendIcon className="size-3" aria-hidden="true" />
+            {metric.trend.direction === 'flat' ? 'Stable' : `${metric.trend.percentage}%`}
+          </span>
+        )}
         <span className="truncate text-neutral-500">{metric.trend.label}</span>
       </div>
     </article>

@@ -367,7 +367,7 @@ async function financial(
     (SELECT COALESCE(SUM(amount_cents), 0) FROM wholesale_payments WHERE paid_at >= ${filter.from} AND paid_at <= ${filter.to}) AS collections,
     (SELECT COALESCE(ROUND(SUM(amount) * 100), 0) FROM supplier_payments WHERE paid_at >= ${filter.from} AND paid_at <= ${filter.to}) AS expenses,
     (SELECT COALESCE(SUM(w.total_cents - ${paidAR}), 0) FROM wholesale_orders w WHERE status != 'cancelled') AS ar,
-    (SELECT COALESCE(SUM(MAX(0, ${owedAP} - ${paidAP})), 0) FROM purchase_orders po WHERE status IN ('received', 'partially_received')) AS ap`.execute(
+    (SELECT COALESCE(SUM(MAX(0, ${owedAP} - ${paidAP})), 0) FROM purchase_orders po WHERE status IN ('received', 'partially_received', 'cancelled')) AS ap`.execute(
       database
     )
   ).rows[0]

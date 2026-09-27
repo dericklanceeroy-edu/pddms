@@ -24,8 +24,9 @@ const fieldLabels: Record<string, string> = {
 export function formatValidationError(error: unknown): string {
   if (error instanceof z.ZodError) {
     const issue = error.issues[0]
-    const field = String(issue?.path[0] ?? '')
+    const field = String(issue?.path.findLast((part) => typeof part === 'string') ?? '')
     const input = (issue as { input?: unknown } | undefined)?.input
+    if (issue?.code === 'custom') return issue.message
 
     if (
       [
@@ -52,8 +53,19 @@ export function formatValidationError(error: unknown): string {
     return fieldLabels[field] ?? issue?.message ?? 'Invalid input.'
   }
 
-  if (error instanceof Error) return error.message
-  return String(error)
+  if (error instanceof Error) {
+    const code = 'code' in error ? String(error.code) : ''
+    if (code.startsWith('SQLITE_CONSTRAINT_FOREIGNKEY'))
+      return 'This record is linked to existing transactions and cannot be removed.'
+    if (code.startsWith('SQLITE_CONSTRAINT_UNIQUE')) return 'That record already exists.'
+    if (code.startsWith('SQLITE_'))
+      return 'Unable to save or load the record. Please reload and try again.'
+    if (/^E[A-Z]+$/.test(code))
+      return 'Unable to access the file. Check the file and folder permissions.'
+    if (error.name === 'UnauthorizedError') return 'You do not have permission for this action.'
+    return error.message
+  }
+  return 'Unable to complete the operation. Please try again.'
 }
 
 export function validate<T>(schema: z.ZodType<T>, value: unknown): T {

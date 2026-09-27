@@ -20,6 +20,8 @@
     "test:wholesale": "node scripts/verify-wholesale.mjs",
     "test:reporting": "node scripts/verify-reporting.mjs",
     "test:administration": "node scripts/verify-administration.mjs",
+    "test:system": "node scripts/verify-system.mjs",
+    "test:desktop": "node scripts/verify-desktop.mjs",
     "start": "node scripts/run-electron-vite.mjs preview",
     "dev": "node scripts/run-electron-vite.mjs dev",
     "build": "npm run typecheck && electron-vite build",

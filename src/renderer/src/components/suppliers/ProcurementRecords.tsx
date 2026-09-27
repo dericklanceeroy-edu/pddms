@@ -533,8 +533,10 @@ function InvoiceDialog({
   close: VoidFunction
   save: (values: InvoiceUploadValues) => Promise<void>
 }): ReactElement {
-  const eligibleOrders = orders.filter((order) =>
-    ['submitted', 'partially_received', 'received'].includes(order.status)
+  const eligibleOrders = orders.filter(
+    (order) =>
+      ['submitted', 'partially_received', 'received'].includes(order.status) ||
+      (order.status === 'cancelled' && order.items.some((item) => item.receivedQuantity > 0))
   )
   const [purchaseOrderId, setPurchaseOrderId] = useState(eligibleOrders[0]?.id ?? 0)
   const selectedOrder = eligibleOrders.find((order) => order.id === purchaseOrderId)

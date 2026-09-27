@@ -1,6 +1,7 @@
 import { state } from '@main/api'
-import { channels } from '@shared/constants'
 import { ipcMain } from '@main/api/ipc'
+import { channels } from '@shared/constants'
+import { formatValidationError } from '@shared/validation'
 import { getAdminDashboard } from './repository'
 
 ipcMain.handle(channels.dashboard.getAdmin, async () => {
@@ -11,6 +12,6 @@ ipcMain.handle(channels.dashboard.getAdmin, async () => {
     }
     return { success: true, data: await getAdminDashboard() }
   } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : String(error) }
+    return { success: false, error: formatValidationError(error) }
   }
 })

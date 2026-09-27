@@ -1,4 +1,5 @@
 import { db } from '@main/db'
+import { purchaseOrderDeliverySchema } from '@shared/schemas'
 import type {
   NewPurchaseOrderItem,
   PurchaseOrder,
@@ -25,6 +26,7 @@ interface DeliveryInput {
 }
 
 interface RecordDeliveryInput {
+  requestId: string
   deliveredAt: string
   notes: string | null
   recordedBy: number
@@ -167,7 +169,24 @@ export async function recordDelivery(
   id: number,
   data: RecordDeliveryInput
 ): Promise<PurchaseOrderWithDetails> {
+  const { recordedBy, ...payload } = data
+  const { requestId, ...values } = purchaseOrderDeliverySchema.parse(payload)
+  const fingerprint = JSON.stringify(values)
   await db.transaction().execute(async (transaction) => {
+    const existing = await transaction
+      .selectFrom('supplierDeliveries')
+      .selectAll()
+      .where('requestId', '=', requestId)
+      .executeTakeFirst()
+    if (existing) {
+      if (
+        existing.purchaseOrderId !== id ||
+        existing.recordedBy !== recordedBy ||
+        existing.requestFingerprint !== fingerprint
+      )
+        throw new Error('Delivery reference belongs to a different request.')
+      return
+    }
     const order = await transaction
       .selectFrom('purchaseOrders')
       .select(['supplierId', 'status'])
@@ -186,6 +205,8 @@ export async function recordDelivery(
     const delivery = await transaction
       .insertInto('supplierDeliveries')
       .values({
+        requestId,
+        requestFingerprint: fingerprint,
         purchaseOrderId: id,
         supplierId: order.supplierId,
         deliveredAt: data.deliveredAt,

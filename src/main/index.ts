@@ -1,9 +1,11 @@
 import { electronApp, is, optimizer } from '@electron-toolkit/utils'
 import { app, BrowserWindow, shell } from 'electron'
+import { pathToFileURL } from 'node:url'
 import { join } from 'path'
 import icon from '../../resources/icon.png?asset'
 import './account/controller'
 import './administration/controller'
+import { registerIpcSender } from './api/ipc'
 import './auth/controller'
 import './customer/controller'
 import './dashboard/controller'
@@ -37,9 +39,20 @@ function createWindow(): void {
   })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
-    shell.openExternal(details.url)
+    if (/^https?:\/\//i.test(details.url))
+      void shell.openExternal(details.url).catch(() => undefined)
     return { action: 'deny' }
   })
+
+  const entryUrl =
+    is.dev && process.env['ELECTRON_RENDERER_URL']
+      ? process.env['ELECTRON_RENDERER_URL']
+      : pathToFileURL(join(__dirname, '../renderer/index.html')).href
+  registerIpcSender(mainWindow.webContents, new URL(entryUrl).href)
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    if (url.split('#')[0] !== new URL(entryUrl).href.split('#')[0]) event.preventDefault()
+  })
+  mainWindow.webContents.on('will-attach-webview', (event) => event.preventDefault())
 
   // HMR for renderer base on electron-vite cli.
   // Load the remote URL for development or the local html file for production.

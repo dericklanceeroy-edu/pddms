@@ -939,6 +939,7 @@ function ReceiveDialog({
   save: (values: DeliveryFormValues) => Promise<void>
 }): ReactElement {
   const [deliveredAt, setDeliveredAt] = useState(today())
+  const [requestId] = useState(() => crypto.randomUUID())
   const [notes, setNotes] = useState('')
   const [lines, setLines] = useState<
     Record<
@@ -988,7 +989,7 @@ function ReceiveDialog({
       return
     }
     try {
-      await save({ deliveredAt, notes: notes.trim() || null, items: deliveries })
+      await save({ requestId, deliveredAt, notes: notes.trim() || null, items: deliveries })
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Unable to record the delivery.')
       setSaving(false)

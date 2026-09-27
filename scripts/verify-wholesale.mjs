@@ -161,6 +161,7 @@ if (!process.env.WHOLESALE_TEST_PHASE) {
       ).order
       await ok(channels.purchaseOrder.updateStatusById, po.id, { status: 'submitted' })
       await ok(channels.purchaseOrder.recordDeliveryById, po.id, {
+        requestId: randomUUID(),
         deliveredAt: localDate(),
         items: po.items.map((item, index) => ({
           itemId: item.id,

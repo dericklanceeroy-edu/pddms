@@ -168,17 +168,16 @@ if (!process.env.REPORT_TEST_PHASE) {
       const po = (
         await ok(channels.purchaseOrder.createOne, {
           supplierId: supplier.id,
-          items: products
-            .slice(0, 2)
-            .map((product, index) => ({
-              drugId: product.id,
-              quantity: 20,
-              unitCost: index ? 40 : 80
-            }))
+          items: products.slice(0, 2).map((product, index) => ({
+            drugId: product.id,
+            quantity: 20,
+            unitCost: index ? 40 : 80
+          }))
         })
       ).order
       await ok(channels.purchaseOrder.updateStatusById, po.id, { status: 'submitted' })
       await ok(channels.purchaseOrder.recordDeliveryById, po.id, {
+        requestId: randomUUID(),
         deliveredAt: localDate(),
         items: po.items.map((item, index) => ({
           itemId: item.id,

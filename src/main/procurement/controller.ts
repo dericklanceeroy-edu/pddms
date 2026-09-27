@@ -1,10 +1,10 @@
 import { accessControl, authorize } from '@main/access-control'
 import { state } from '@main/api'
+import { ipcMain } from '@main/api/ipc'
 import { channels, resources } from '@shared/constants'
 import { supplierInvoiceUploadSchema, supplierPaymentSchema } from '@shared/schemas'
 import { formatValidationError } from '@shared/validation'
 import { isId } from '@shared/validators'
-import { ipcMain } from '@main/api/ipc'
 import { app, dialog, shell } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { copyFile, mkdir, stat, unlink } from 'node:fs/promises'
@@ -96,7 +96,10 @@ ipcMain.handle(channels.procurement.openInvoice, async (_, id: unknown) => {
     if (!isId(id)) return { success: false, error: 'Invalid supplier invoice.' }
     const invoice = await findInvoiceFile(id)
     if (!invoice) return { success: false, error: 'Supplier invoice not found.' }
-    if (basename(invoice.storedFilename) !== invoice.storedFilename) {
+    if (
+      basename(invoice.storedFilename) !== invoice.storedFilename ||
+      !invoiceExtensions.has(extname(invoice.storedFilename).toLowerCase())
+    ) {
       return { success: false, error: 'Invalid stored invoice reference.' }
     }
     const error = await shell.openPath(join(invoiceDirectory(), invoice.storedFilename))

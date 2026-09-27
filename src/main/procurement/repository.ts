@@ -212,7 +212,7 @@ export async function findPaymentSummaries(): Promise<PurchaseOrderPaymentSummar
       'purchaseOrders.orderNumber',
       'suppliers.organization as supplierName'
     ])
-    .where('purchaseOrders.status', 'in', ['partially_received', 'received'])
+    .where('purchaseOrders.status', 'in', ['partially_received', 'received', 'cancelled'])
     .orderBy('purchaseOrders.orderedAt', 'desc')
     .execute()
   const items = await db
@@ -282,7 +282,16 @@ export async function insertInvoice(data: InvoiceFileInput): Promise<SupplierInv
       .where('id', '=', data.purchaseOrderId)
       .executeTakeFirst()
     if (!order) throw new Error('Purchase order not found.')
-    if (!['submitted', 'partially_received', 'received'].includes(order.status)) {
+    const received = await transaction
+      .selectFrom('purchaseOrderItems')
+      .select('id')
+      .where('purchaseOrderId', '=', data.purchaseOrderId)
+      .where('receivedQuantity', '>', 0)
+      .executeTakeFirst()
+    if (
+      !['submitted', 'partially_received', 'received'].includes(order.status) &&
+      !(order.status === 'cancelled' && received)
+    ) {
       throw new Error('Submit the purchase order before attaching an invoice.')
     }
     if (data.dueDate < data.invoiceDate) {
@@ -350,7 +359,7 @@ export async function insertPayment(data: PaymentInput): Promise<SupplierPayment
       .where('id', '=', data.purchaseOrderId)
       .executeTakeFirst()
     if (!order) throw new Error('Purchase order not found.')
-    if (!['partially_received', 'received'].includes(order.status)) {
+    if (!['partially_received', 'received', 'cancelled'].includes(order.status)) {
       throw new Error('Record a supplier delivery before recording a payment.')
     }
 
@@ -439,11 +448,7 @@ export async function insertPayment(data: PaymentInput): Promise<SupplierPayment
     for (const invoice of invoices) {
       const invoicePaid = paidByInvoice.get(invoice.id) ?? 0
       const status: SupplierInvoiceStatus =
-        invoicePaid <= 0
-          ? 'unpaid'
-          : invoicePaid >= invoice.amount
-            ? 'paid'
-            : 'partially_paid'
+        invoicePaid <= 0 ? 'unpaid' : invoicePaid >= invoice.amount ? 'paid' : 'partially_paid'
       await transaction
         .updateTable('supplierInvoices')
         .set({ status })

@@ -148,6 +148,8 @@ export interface PurchaseOrderItemsTable {
 
 export interface SupplierDeliveriesTable {
   id: ColumnType<Id, Id | undefined, never>
+  requestId: ColumnType<string | null, string | null | undefined, never>
+  requestFingerprint: ColumnType<string | null, string | null | undefined, never>
   purchaseOrderId: Id
   supplierId: Id
   deliveredAt: string
@@ -268,7 +270,10 @@ export type SupplierDelivery = Selectable<SupplierDeliveriesTable>
 export type SupplierInvoice = Selectable<SupplierInvoicesTable>
 export type SupplierPayment = Selectable<SupplierPaymentsTable>
 
-export interface SupplierDeliveryWithDetails extends SupplierDelivery {
+export interface SupplierDeliveryWithDetails extends Omit<
+  SupplierDelivery,
+  'requestId' | 'requestFingerprint'
+> {
   orderNumber: string
   supplierName: string
   recordedByName: string

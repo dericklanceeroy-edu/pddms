@@ -17,7 +17,7 @@ const operationIcons: Record<DashboardOperationsPulseId, IconType> = {
 const currencyFormatter = new Intl.NumberFormat('en-PH', {
   style: 'currency',
   currency: 'PHP',
-  maximumFractionDigits: 0
+  maximumFractionDigits: 2
 })
 
 const numberFormatter = new Intl.NumberFormat('en-PH')
