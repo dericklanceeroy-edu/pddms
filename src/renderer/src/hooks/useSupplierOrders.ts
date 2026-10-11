@@ -8,13 +8,16 @@ import type {
   PaymentSummary,
   PurchaseOrderFormValues,
   PurchaseOrderRecord,
+  SelectedInvoiceFile,
   SupplierFormValues,
   SupplierPaymentValues
 } from '@renderer/data/supplierOrders'
 import { getProducts } from '@renderer/services/profiles'
 import {
+  chooseInvoiceFile,
   createPurchaseOrder,
   createSupplierPayment,
+  downloadSupplierInvoice,
   getProcurementRecords,
   getPurchaseOrders,
   getSuppliers,
@@ -23,6 +26,7 @@ import {
   removePurchaseOrder,
   removeSupplier,
   saveSupplier,
+  updatePurchaseOrder,
   updatePurchaseOrderStatus,
   uploadSupplierInvoice
 } from '@renderer/services/supplierOrders'
@@ -43,11 +47,14 @@ export interface SupplierOrdersState {
   saveSupplier: (values: SupplierFormValues, id?: number) => Promise<void>
   deleteSupplier: (id: number) => Promise<void>
   createOrder: (values: PurchaseOrderFormValues) => Promise<void>
+  updateOrder: (id: number, values: PurchaseOrderFormValues) => Promise<void>
   updateOrderStatus: (id: number, status: PurchaseOrderStatus) => Promise<void>
   receiveOrder: (id: number, values: DeliveryFormValues) => Promise<void>
   deleteOrder: (id: number) => Promise<void>
-  uploadInvoice: (values: InvoiceUploadValues) => Promise<InvoiceRecord | null>
+  chooseInvoiceFile: () => Promise<SelectedInvoiceFile | null>
+  uploadInvoice: (values: InvoiceUploadValues) => Promise<InvoiceRecord>
   openInvoice: (id: number) => Promise<void>
+  downloadInvoice: (id: number) => Promise<boolean>
   recordPayment: (values: SupplierPaymentValues) => Promise<void>
 }
 
@@ -127,6 +134,11 @@ export function useSupplierOrders(): SupplierOrdersState {
     await refresh()
   }
 
+  const updateOrderRecord = async (id: number, values: PurchaseOrderFormValues): Promise<void> => {
+    await updatePurchaseOrder(id, values)
+    await refresh()
+  }
+
   const updateOrderStatusRecord = async (
     id: number,
     status: PurchaseOrderStatus
@@ -145,11 +157,9 @@ export function useSupplierOrders(): SupplierOrdersState {
     await refresh()
   }
 
-  const uploadInvoiceRecord = async (
-    values: InvoiceUploadValues
-  ): Promise<InvoiceRecord | null> => {
+  const uploadInvoiceRecord = async (values: InvoiceUploadValues): Promise<InvoiceRecord> => {
     const invoice = await uploadSupplierInvoice(values)
-    if (invoice) await refresh()
+    await refresh()
     return invoice
   }
 
@@ -172,11 +182,14 @@ export function useSupplierOrders(): SupplierOrdersState {
     saveSupplier: saveSupplierRecord,
     deleteSupplier: deleteSupplierRecord,
     createOrder: createOrderRecord,
+    updateOrder: updateOrderRecord,
     updateOrderStatus: updateOrderStatusRecord,
     receiveOrder: receiveOrderRecord,
     deleteOrder: deleteOrderRecord,
+    chooseInvoiceFile,
     uploadInvoice: uploadInvoiceRecord,
     openInvoice: openSupplierInvoice,
+    downloadInvoice: downloadSupplierInvoice,
     recordPayment
   }
 }

@@ -17,3 +17,12 @@ export async function exportReport(filter: ReportFilter): Promise<boolean> {
   if (!response.success) throw new Error(response.error ?? 'Unable to export report.')
   return !response.cancelled
 }
+
+export async function exportReportPdf(filter: ReportFilter): Promise<boolean> {
+  const response = (await window.electron.ipcRenderer.invoke(
+    channels.reporting.exportPdf,
+    filter
+  )) as { success: boolean; error?: string; cancelled?: boolean }
+  if (!response.success) throw new Error(response.error ?? 'Unable to export the PDF report.')
+  return !response.cancelled
+}

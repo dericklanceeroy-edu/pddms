@@ -11,8 +11,9 @@ import {
   wholesalePaymentSchema,
   wholesaleScheduleSchema
 } from '@shared/wholesale'
+import { windowDialog } from '@main/api/dialogs'
 import { ipcMain } from '@main/api/ipc'
-import { dialog } from 'electron'
+import type { IpcMainInvokeEvent } from 'electron'
 import { writeFile } from 'node:fs/promises'
 import z from 'zod'
 import * as repository from './repository'
@@ -45,12 +46,16 @@ type Operation = Parameters<typeof session>[0]
 function handle(
   channel: string,
   operation: Operation,
-  action: (payload: unknown, account: Awaited<ReturnType<typeof session>>) => Promise<unknown>
+  action: (
+    payload: unknown,
+    account: Awaited<ReturnType<typeof session>>,
+    event: IpcMainInvokeEvent
+  ) => Promise<unknown>
 ): void {
-  ipcMain.handle(channel, async (_, payload: unknown) => {
+  ipcMain.handle(channel, async (event, payload: unknown) => {
     try {
       const account = await session(operation)
-      const data = await action(payload, account)
+      const data = await action(payload, account, event)
       if (['create', 'update', 'pay'].includes(operation)) state.database.stale = true
       return { success: true, data }
     } catch (error) {
@@ -90,11 +95,11 @@ handle(channels.wholesale.pay, 'pay', (payload, account) =>
   repository.recordPayment(wholesalePaymentSchema.parse(payload), account.id)
 )
 handle(channels.wholesale.alerts, 'alerts', () => repository.overdueSummary())
-handle(channels.wholesale.exportReceipt, 'read', async (payload, account) => {
+handle(channels.wholesale.exportReceipt, 'read', async (payload, account, event) => {
   const id = idSchema.parse(payload)
   const order = await repository.getOrder(id, false)
   const text = deliveryReceiptText(order)
-  const selected = await dialog.showSaveDialog({
+  const selected = await windowDialog(event).showSaveDialog({
     title: 'Save delivery receipt',
     defaultPath: `DR-${order.reference}.txt`,
     filters: [{ name: 'Text receipt', extensions: ['txt'] }]

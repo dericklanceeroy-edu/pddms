@@ -3,8 +3,8 @@ import { findOneById } from '@main/account/repository'
 import { state } from '@main/api'
 import { channels, resources } from '@shared/constants'
 import { checkoutSchema, receiptText, saleDraftSchema, SalesError } from '@shared/sales'
+import { windowDialog } from '@main/api/dialogs'
 import { ipcMain } from '@main/api/ipc'
-import { dialog } from 'electron'
 import { writeFile } from 'node:fs/promises'
 import z from 'zod'
 import { checkout, getSale, history, quote } from './repository'
@@ -81,12 +81,12 @@ ipcMain.handle(channels.sales.getOne, async (_, id: unknown) => {
     return failure(error)
   }
 })
-ipcMain.handle(channels.sales.exportReceipt, async (_, id: unknown) => {
+ipcMain.handle(channels.sales.exportReceipt, async (event, id: unknown) => {
   try {
     const account = await session(true)
     const saleId = z.number().int().positive().parse(id)
     const sale = await getSale(saleId, account.all ? undefined : account.id)
-    const selection = await dialog.showSaveDialog({
+    const selection = await windowDialog(event).showSaveDialog({
       title: 'Save sales receipt',
       defaultPath: `${sale.reference}.txt`,
       filters: [{ name: 'Text receipt', extensions: ['txt'] }]

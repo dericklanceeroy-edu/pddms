@@ -14,9 +14,11 @@ import type { IconType } from 'react-icons'
 import {
   FiArchive,
   FiBarChart2,
+  FiCreditCard,
   FiGrid,
   FiLogOut,
   FiMenu,
+  FiPackage,
   FiRefreshCw,
   FiShoppingBag,
   FiTruck,
@@ -25,16 +27,49 @@ import {
   FiX
 } from 'react-icons/fi'
 
-const navigation: Array<{ label: string; to: string; icon: IconType }> = [
-  { label: 'Overview', to: '/', icon: FiGrid },
-  { label: 'My profile', to: '/profile', icon: FiUser },
-  { label: 'Sales & dispensing', to: '/sales', icon: FiShoppingBag },
-  { label: 'Wholesale & deliveries', to: '/wholesale', icon: FiTruck },
-  { label: 'Customers', to: '/customers', icon: FiUser },
-  { label: 'Inventory', to: '/inventory', icon: FiArchive },
-  { label: 'Suppliers & orders', to: '/suppliers', icon: FiTruck },
-  { label: 'Reports', to: '/reports', icon: FiBarChart2 },
-  { label: 'User management', to: '/users', icon: FiUsers }
+type ProcurementSection = 'receiving' | 'invoices'
+interface NavigationItem {
+  label: string
+  to: string
+  icon: IconType
+  /** Opens a specific procurement tab, e.g. Receiving inside Suppliers & purchasing. */
+  tab?: ProcurementSection
+}
+
+// Note: Grouped by staff task. Every item still links to the existing module and route
+// permissions; groups with no permitted items are hidden.
+const navigation: Array<{ group: string; items: NavigationItem[] }> = [
+  {
+    group: 'Daily work',
+    items: [
+      { label: 'Overview', to: '/', icon: FiGrid },
+      { label: 'Sales & dispensing', to: '/sales', icon: FiShoppingBag },
+      { label: 'Customers', to: '/customers', icon: FiUser }
+    ]
+  },
+  {
+    group: 'Stock & purchasing',
+    items: [
+      { label: 'Inventory & expiry', to: '/inventory', icon: FiArchive },
+      { label: 'Receiving', to: '/suppliers', icon: FiPackage, tab: 'receiving' },
+      { label: 'Suppliers & orders', to: '/suppliers', icon: FiTruck },
+      { label: 'Invoices & payments', to: '/suppliers', icon: FiCreditCard, tab: 'invoices' }
+    ]
+  },
+  {
+    group: 'Business',
+    items: [
+      { label: 'Wholesale & deliveries', to: '/wholesale', icon: FiTruck },
+      { label: 'Reports', to: '/reports', icon: FiBarChart2 }
+    ]
+  },
+  {
+    group: 'Account & admin',
+    items: [
+      { label: 'User management', to: '/users', icon: FiUsers },
+      { label: 'My profile', to: '/profile', icon: FiUser }
+    ]
+  }
 ]
 
 const dateFormatter = new Intl.DateTimeFormat('en-PH', {
@@ -67,6 +102,9 @@ function Sidebar({
   closeButtonRef?: RefObject<HTMLButtonElement | null>
 }): ReactElement {
   const { account, signOut } = useAccount()
+  const activeTab = useRouterState({
+    select: (state) => (state.location.search as { tab?: string }).tab
+  })
   const [isSigningOut, setIsSigningOut] = useState(false)
   const [signOutError, setSignOutError] = useState('')
 
@@ -109,34 +147,47 @@ function Sidebar({
         className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3 py-6"
         aria-label="Dashboard sections"
       >
-        <p className="px-3 pb-2 text-[0.65rem] font-semibold tracking-[0.18em] text-neutral-500 uppercase">
-          Workspace
-        </p>
-        {navigation
-          .filter(({ to }) => account !== null && canAccessPath(account.role, to))
-          .map(({ label, to, icon: Icon }) => {
-            const isActive =
-              activePath === to ||
-              (to === '/inventory' && activePath.startsWith('/items/')) ||
-              (to === '/customers' && activePath.startsWith('/customers/'))
+        {navigation.map(({ group, items }) => {
+          const permitted = items.filter(
+            ({ to }) => account !== null && canAccessPath(account.role, to)
+          )
+          if (permitted.length === 0) return null
+          return (
+            <div key={group} className="pb-4">
+              <p className="px-3 pb-1.5 text-[0.65rem] font-semibold tracking-[0.18em] text-neutral-500 uppercase">
+                {group}
+              </p>
+              {permitted.map(({ label, to, icon: Icon, tab }) => {
+                const isActive =
+                  to === '/suppliers'
+                    ? activePath === to &&
+                      (activeTab === tab ||
+                        (!tab && !['receiving', 'invoices'].includes(activeTab ?? '')))
+                    : activePath === to ||
+                      (to === '/inventory' && activePath.startsWith('/items/')) ||
+                      (to === '/customers' && activePath.startsWith('/customers/'))
 
-            return (
-              <Link
-                key={to}
-                to={to}
-                aria-current={isActive ? 'page' : undefined}
-                onClick={onClose}
-                className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
-                  isActive
-                    ? 'bg-white/15 text-white shadow-lg ring-1 shadow-black/20 ring-white/15'
-                    : 'text-neutral-400 hover:bg-white/10 hover:text-white'
-                }`}
-              >
-                <Icon className="size-4.5 shrink-0" aria-hidden="true" />
-                <span>{label}</span>
-              </Link>
-            )
-          })}
+                return (
+                  <Link
+                    key={label}
+                    to={to}
+                    search={to === '/suppliers' ? { tab } : undefined}
+                    aria-current={isActive ? 'page' : undefined}
+                    onClick={onClose}
+                    className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
+                      isActive
+                        ? 'bg-white/15 text-white shadow-lg ring-1 shadow-black/20 ring-white/15'
+                        : 'text-neutral-400 hover:bg-white/10 hover:text-white'
+                    }`}
+                  >
+                    <Icon className="size-4.5 shrink-0" aria-hidden="true" />
+                    <span>{label}</span>
+                  </Link>
+                )
+              })}
+            </div>
+          )
+        })}
       </nav>
       <div className="shrink-0 border-t border-white/10 p-4">
         <div className="rounded-2xl border border-white/10 bg-white/[0.06] p-3 shadow-inner shadow-white/[0.04]">
@@ -252,7 +303,7 @@ export default function DashboardShell({
           <button
             type="button"
             aria-label="Close navigation"
-            className="fixed inset-0 z-40 bg-neutral-950/50 backdrop-blur-[2px] xl:hidden"
+            className="fixed inset-0 z-40 bg-neutral-950/50 backdrop-blur-[2px] lg:hidden"
             onClick={closeNavigation}
           />
           <aside
@@ -261,7 +312,7 @@ export default function DashboardShell({
             role="dialog"
             aria-label="Dashboard navigation"
             aria-modal="true"
-            className="fixed inset-y-0 left-0 z-50 w-64 shadow-2xl xl:hidden"
+            className="fixed inset-y-0 left-0 z-50 w-64 shadow-2xl lg:hidden"
           >
             <Sidebar
               activePath={activePath}
@@ -271,10 +322,10 @@ export default function DashboardShell({
           </aside>
         </>
       )}
-      <aside className="shadow-ink-950/30 fixed inset-y-3 left-3 z-50 hidden w-64 overflow-hidden rounded-[1.75rem] shadow-2xl xl:block">
+      <aside className="shadow-ink-950/30 fixed inset-y-3 left-3 z-50 hidden w-64 overflow-hidden rounded-[1.75rem] shadow-2xl lg:block">
         <Sidebar activePath={activePath} />
       </aside>
-      <div className="min-w-0 xl:pl-[18rem]">
+      <div className="min-w-0 lg:pl-[18rem]">
         <header className="glass-header sticky top-3 z-30 mx-3 rounded-[1.5rem]">
           <div className="flex h-20 items-center justify-between gap-4 px-4 sm:px-6 xl:px-8">
             <div className="flex min-w-0 items-center gap-3">
@@ -285,7 +336,7 @@ export default function DashboardShell({
                 aria-controls="dashboard-mobile-navigation"
                 aria-expanded={isNavigationOpen}
                 onClick={() => setIsNavigationOpen(true)}
-                className="icon-button shrink-0 xl:hidden"
+                className="icon-button shrink-0 lg:hidden"
               >
                 <FiMenu aria-hidden="true" />
               </button>

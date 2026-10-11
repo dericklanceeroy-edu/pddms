@@ -1,4 +1,5 @@
 import DashboardShell from '@renderer/components/dashboard/DashboardShell'
+import { useConfirm } from '@renderer/components/ui/ConfirmDialog'
 import {
   roleLabels,
   type ManagedUser,
@@ -20,6 +21,7 @@ const roleTone: Record<UserRole, string> = {
 }
 
 export default function UserManagement(): ReactElement {
+  const [confirmDialog, confirm] = useConfirm()
   const management = useUserManagement()
   const [query, setQuery] = useState('')
   const [role, setRole] = useState<UserRole | 'all'>('all')
@@ -206,14 +208,18 @@ export default function UserManagement(): ReactElement {
                         </button>
                         <button
                           disabled={user.role === 'master'}
-                          onClick={(event) => {
+                          onClick={async (event) => {
                             event.stopPropagation()
-                            if (
-                              !window.confirm(
-                                `${user.status === 'blocked' ? 'Unblock' : 'Block'} ${user.fullName}?`
-                              )
-                            )
-                              return
+                            const blocking = user.status !== 'blocked'
+                            const accepted = await confirm({
+                              title: `${blocking ? 'Block' : 'Unblock'} ${user.fullName}?`,
+                              message: blocking
+                                ? 'The user will be signed out and cannot sign in until unblocked.'
+                                : 'The user will be able to sign in again.',
+                              confirmLabel: blocking ? 'Block user' : 'Unblock user',
+                              tone: blocking ? 'danger' : 'default'
+                            })
+                            if (!accepted) return
                             void management
                               .toggleStatus(user)
                               .then(() =>
@@ -288,6 +294,7 @@ export default function UserManagement(): ReactElement {
           }}
         />
       )}
+      {confirmDialog}
     </DashboardShell>
   )
 }

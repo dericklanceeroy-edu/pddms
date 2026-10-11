@@ -1,4 +1,5 @@
 import DashboardShell from '@renderer/components/dashboard/DashboardShell'
+import { useConfirm } from '@renderer/components/ui/ConfirmDialog'
 import type { CustomerProfile, ItemProfile } from '@renderer/data/profiles'
 import { useAccount } from '@renderer/hooks/useAccount'
 import { getCustomers, getProducts } from '@renderer/services/profiles'
@@ -27,6 +28,7 @@ import {
 import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react'
 
 export default function WholesaleWorkspace(): ReactElement {
+  const [confirmDialog, confirm] = useConfirm()
   const { account } = useAccount()
   const admin = account?.role === 'master'
   const [products, setProducts] = useState<ItemProfile[]>([])
@@ -686,13 +688,14 @@ export default function WholesaleWorkspace(): ReactElement {
                     <button
                       className="primary-button"
                       disabled={busy}
-                      onClick={() => {
-                        if (
-                          !window.confirm(
-                            'Confirm the full order has been delivered? This deducts the ordered stock once and cannot be undone here.'
-                          )
-                        )
-                          return
+                      onClick={async () => {
+                        const accepted = await confirm({
+                          title: 'Record full delivery?',
+                          message:
+                            'Confirm the full order has been delivered. This deducts the ordered stock once and cannot be undone here.',
+                          confirmLabel: 'Record delivery'
+                        })
+                        if (!accepted) return
                         void run(async () => {
                           await update(
                             () => deliverWholesale(selected.id),
@@ -709,12 +712,16 @@ export default function WholesaleWorkspace(): ReactElement {
                   <button
                     className="secondary-button"
                     disabled={busy}
-                    onClick={() => {
-                      if (
-                        window.confirm(
-                          'Cancel this undelivered order? Orders with payments cannot be cancelled.'
-                        )
-                      )
+                    onClick={async () => {
+                      const accepted = await confirm({
+                        title: 'Cancel this order?',
+                        message:
+                          'Cancel this undelivered order? Cancellation is permanent. Orders with payments cannot be cancelled.',
+                        confirmLabel: 'Cancel order',
+                        cancelLabel: 'Keep order',
+                        tone: 'danger'
+                      })
+                      if (accepted)
                         void run(() =>
                           update(
                             () => cancelWholesale(selected.id),
@@ -927,6 +934,7 @@ export default function WholesaleWorkspace(): ReactElement {
           </section>
         )}
       </div>
+      {confirmDialog}
     </DashboardShell>
   )
 }

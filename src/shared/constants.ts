@@ -6,7 +6,11 @@ export const channels = {
     backup: 'administration.backup',
     restore: 'administration.restore'
   },
-  reporting: { generate: 'reporting.generate', export: 'reporting.export' },
+  reporting: {
+    generate: 'reporting.generate',
+    export: 'reporting.export',
+    exportPdf: 'reporting.exportPdf'
+  },
   wholesale: {
     create: 'wholesale.create',
     list: 'wholesale.list',
@@ -68,14 +72,17 @@ export const channels = {
   purchaseOrder: {
     getAll: 'purchaseOrder.getAll',
     createOne: 'purchaseOrder.createOne',
+    updateOneById: 'purchaseOrder.updateOneById',
     updateStatusById: 'purchaseOrder.updateStatusById',
     recordDeliveryById: 'purchaseOrder.recordDeliveryById',
     removeOneById: 'purchaseOrder.removeOneById'
   },
   procurement: {
     getRecords: 'procurement.getRecords',
+    chooseInvoiceFile: 'procurement.chooseInvoiceFile',
     uploadInvoice: 'procurement.uploadInvoice',
     openInvoice: 'procurement.openInvoice',
+    downloadInvoice: 'procurement.downloadInvoice',
     recordPayment: 'procurement.recordPayment'
   },
   auth: {

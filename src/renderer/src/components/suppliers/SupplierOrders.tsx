@@ -1,5 +1,9 @@
 import DashboardShell from '@renderer/components/dashboard/DashboardShell'
 import ProcurementRecords from '@renderer/components/suppliers/ProcurementRecords'
+import { useConfirm } from '@renderer/components/ui/ConfirmDialog'
+import { splitErrors, type FieldErrors } from '@renderer/components/ui/fieldErrors'
+import FormField, { FormError, RequiredNote } from '@renderer/components/ui/FormField'
+import Modal from '@renderer/components/ui/Modal'
 import type { ItemProfile } from '@renderer/data/profiles'
 import type {
   DeliveryFormValues,
@@ -8,13 +12,18 @@ import type {
   SupplierFormValues
 } from '@renderer/data/supplierOrders'
 import {
+  orderStatusHelp,
   orderStatusLabels,
   orderStatusTone,
+  procurementTabs,
+  type ProcurementTab,
   type PurchaseOrderRecord
 } from '@renderer/data/supplierOrders'
 import { useSupplierOrders } from '@renderer/hooks/useSupplierOrders'
+import { localDate } from '@shared/inventory'
 import type { Supplier } from '@shared/types'
-import { useMemo, useState, type FormEvent, type ReactElement, type ReactNode } from 'react'
+import { Link } from '@tanstack/react-router'
+import { useMemo, useRef, useState, type FormEvent, type ReactElement, type ReactNode } from 'react'
 import {
   FiArchive,
   FiCheck,
@@ -23,27 +32,25 @@ import {
   FiPlus,
   FiRefreshCw,
   FiSearch,
+  FiSend,
+  FiSlash,
   FiTrash2,
   FiTruck,
   FiX
 } from 'react-icons/fi'
 
-type Tab = 'suppliers' | 'orders' | 'receiving' | 'invoices' | 'history'
-
 const currency = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' })
 const date = new Intl.DateTimeFormat('en-PH', { dateStyle: 'medium' })
-const orderStatusTransitions: Record<OrderStatus, OrderStatus[]> = {
-  draft: ['draft', 'submitted', 'cancelled'],
-  submitted: ['submitted', 'cancelled'],
-  partially_received: ['partially_received', 'cancelled'],
-  received: ['received'],
-  cancelled: ['cancelled']
-}
 
-const today = (): string => {
-  const current = new Date()
-  return `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}-${String(current.getDate()).padStart(2, '0')}`
-}
+/** Empty input becomes NaN so validation reports "enter a number" instead of silently using 0. */
+const toNumber = (value: string): number => (value.trim() === '' ? Number.NaN : Number(value))
+
+const remaining = (item: PurchaseOrderRecord['items'][number]): number =>
+  Math.max(item.quantity - item.receivedQuantity, 0)
+
+const canReceive = (order: PurchaseOrderRecord): boolean =>
+  ['submitted', 'partially_received'].includes(order.status) &&
+  order.items.some((item) => remaining(item) > 0)
 
 const blankSupplier: SupplierFormValues = {
   organization: '',
@@ -58,15 +65,38 @@ const blankSupplier: SupplierFormValues = {
   postalCode: ''
 }
 
-export default function SupplierOrders(): ReactElement {
+interface Feedback {
+  message: string
+  tone: 'success' | 'error'
+  link?: { to: '/inventory'; label: string }
+}
+
+export default function SupplierOrders({
+  tab,
+  onTabChange
+}: {
+  tab: ProcurementTab
+  onTabChange: (tab: ProcurementTab) => void
+}): ReactElement {
   const procurement = useSupplierOrders()
-  const [tab, setTab] = useState<Tab>('suppliers')
   const [query, setQuery] = useState('')
   const [status, setStatus] = useState<OrderStatus | 'all'>('all')
   const [supplierDialog, setSupplierDialog] = useState<Supplier | 'new' | null>(null)
-  const [orderDialog, setOrderDialog] = useState(false)
+  const [orderDialog, setOrderDialog] = useState<PurchaseOrderRecord | 'new' | null>(null)
   const [receiveDialog, setReceiveDialog] = useState<PurchaseOrderRecord | null>(null)
-  const [feedback, setFeedback] = useState('')
+  const [feedback, setFeedbackState] = useState<Feedback | null>(null)
+  const [confirmDialog, confirm] = useConfirm()
+
+  const setFeedback = (message: string, tone: Feedback['tone'] = 'success'): void =>
+    setFeedbackState(message ? { message, tone } : null)
+  const fail = (cause: unknown, fallback: string): void =>
+    setFeedback(cause instanceof Error ? cause.message : fallback, 'error')
+
+  const setTab = (next: ProcurementTab): void => {
+    setQuery('')
+    setStatus('all')
+    onTabChange(next)
+  }
 
   const filteredSuppliers = useMemo(() => {
     const normalized = query.trim().toLowerCase()
@@ -91,197 +121,214 @@ export default function SupplierOrders(): ReactElement {
     })
   }, [procurement.orders, query, status])
 
-  const saveSupplier = async (values: SupplierFormValues, id?: number): Promise<void> => {
-    await procurement.saveSupplier(values, id)
-    setSupplierDialog(null)
-    setFeedback(id ? 'Supplier updated.' : 'Supplier added.')
-  }
+  const awaitingDelivery = useMemo(() => {
+    const normalized = query.trim().toLowerCase()
+    return procurement.orders.filter(
+      (order) =>
+        canReceive(order) &&
+        (!normalized ||
+          `${order.orderNumber} ${order.supplierName} ${order.items.map((item) => item.productName).join(' ')}`
+            .toLowerCase()
+            .includes(normalized))
+    )
+  }, [procurement.orders, query])
 
   const removeSupplier = async (supplier: Supplier): Promise<void> => {
-    if (!window.confirm(`Remove ${supplier.organization}?`)) return
+    const accepted = await confirm({
+      title: 'Remove supplier?',
+      message: (
+        <>
+          <strong>{supplier.organization}</strong> will be removed from the supplier list. Suppliers
+          with purchase orders or stock batches are kept to protect their history.
+        </>
+      ),
+      confirmLabel: 'Remove supplier',
+      tone: 'danger'
+    })
+    if (!accepted) return
     try {
       await procurement.deleteSupplier(supplier.id)
-      setFeedback('Supplier removed.')
+      setFeedback(`${supplier.organization} removed.`)
     } catch (cause) {
-      setFeedback(cause instanceof Error ? cause.message : 'Unable to remove the supplier.')
+      fail(cause, 'Unable to remove the supplier.')
     }
   }
 
-  const updateOrderStatus = async (
-    order: PurchaseOrderRecord,
-    nextStatus: OrderStatus
-  ): Promise<void> => {
+  const submitOrder = async (order: PurchaseOrderRecord): Promise<void> => {
+    const accepted = await confirm({
+      title: `Submit ${order.orderNumber}?`,
+      message:
+        'Submit this order once it has been sent to the supplier. Submitted orders can no longer be edited, but you can record deliveries against them.',
+      confirmLabel: 'Submit order'
+    })
+    if (!accepted) return
     try {
-      await procurement.updateOrderStatus(order.id, nextStatus)
-      setFeedback(`${order.orderNumber} marked ${orderStatusLabels[nextStatus].toLowerCase()}.`)
+      await procurement.updateOrderStatus(order.id, 'submitted')
+      setFeedback(`${order.orderNumber} submitted. Record deliveries under Receiving.`)
     } catch (cause) {
-      setFeedback(cause instanceof Error ? cause.message : 'Unable to update the order.')
+      fail(cause, 'Unable to submit the order.')
+    }
+  }
+
+  const cancelOrder = async (order: PurchaseOrderRecord): Promise<void> => {
+    const undelivered = order.items.reduce((total, item) => total + remaining(item), 0)
+    const received = order.items.some((item) => item.receivedQuantity > 0)
+    const accepted = await confirm({
+      title: `Cancel ${order.orderNumber}?`,
+      message: (
+        <>
+          <p>
+            <strong>Cancellation is permanent.</strong> The order will be closed and its status can
+            no longer be changed or edited.
+          </p>
+          <p className="mt-2">
+            {received
+              ? `The ${undelivered} undelivered unit(s) will be cancelled. Stock already received stays in inventory and remains payable to the supplier.`
+              : 'No deliveries can be recorded against it afterwards. Create a new order if you still need these items.'}
+          </p>
+        </>
+      ),
+      confirmLabel: 'Cancel order',
+      cancelLabel: 'Keep order',
+      tone: 'danger'
+    })
+    if (!accepted) return
+    try {
+      await procurement.updateOrderStatus(order.id, 'cancelled')
+      setFeedback(`${order.orderNumber} cancelled.`)
+    } catch (cause) {
+      fail(cause, 'Unable to cancel the order.')
     }
   }
 
   const removeOrder = async (order: PurchaseOrderRecord): Promise<void> => {
-    if (!window.confirm(`Delete ${order.orderNumber}?`)) return
+    const accepted = await confirm({
+      title: `Delete ${order.orderNumber}?`,
+      message: 'The order and its lines will be permanently deleted.',
+      confirmLabel: 'Delete order',
+      tone: 'danger'
+    })
+    if (!accepted) return
     try {
       await procurement.deleteOrder(order.id)
       setFeedback('Purchase order deleted.')
     } catch (cause) {
-      setFeedback(cause instanceof Error ? cause.message : 'Unable to delete the order.')
+      fail(cause, 'Unable to delete the order.')
     }
   }
 
+  const primaryAction =
+    tab === 'suppliers'
+      ? { label: 'Add supplier', run: () => setSupplierDialog('new') }
+      : tab === 'orders'
+        ? { label: 'Create purchase order', run: () => setOrderDialog('new') }
+        : null
+
   return (
-    <DashboardShell pageTitle="Suppliers & orders">
+    <DashboardShell pageTitle="Suppliers & purchasing">
       <div className="space-y-5 lg:space-y-6">
         <section className="page-intro p-6 sm:p-7">
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute -top-20 right-0 size-64 rounded-full bg-mauve-400/20 blur-3xl"
-          />
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute right-1/4 -bottom-24 size-52 rounded-full bg-indigo-400/15 blur-3xl"
-          />
           <div className="page-intro-content flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
             <div>
               <p className="eyebrow">Supplier & procurement</p>
               <h2 className="mt-1 text-3xl font-semibold tracking-tight text-neutral-950 sm:text-[2rem]">
-                Suppliers & orders
+                Suppliers & purchasing
               </h2>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-neutral-600">
-                Maintain supplier records, create purchase orders, and record deliveries from one
-                live workspace.
+                Order from suppliers, receive deliveries into inventory with their batch and expiry
+                details, then record supplier invoices and payments.
               </p>
             </div>
-            <div className="flex flex-col items-start gap-3 sm:items-end">
-              <p className="rounded-full border border-white/80 bg-white/55 px-3 py-1.5 text-xs font-medium text-neutral-500 shadow-sm backdrop-blur-md">
-                Live procurement workspace
-              </p>
-              {(tab === 'suppliers' || tab === 'orders') && (
-                <button
-                  type="button"
-                  className="primary-button"
-                  onClick={() =>
-                    tab === 'suppliers' ? setSupplierDialog('new') : setOrderDialog(true)
-                  }
-                >
-                  <FiPlus aria-hidden="true" />{' '}
-                  {tab === 'suppliers' ? 'Add supplier' : 'Create order'}
-                </button>
-              )}
-            </div>
+            {primaryAction && (
+              <button
+                type="button"
+                className="primary-button shrink-0 whitespace-nowrap"
+                onClick={primaryAction.run}
+              >
+                <FiPlus aria-hidden="true" /> {primaryAction.label}
+              </button>
+            )}
           </div>
         </section>
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <Metric label="Suppliers" value={procurement.suppliers.length} icon={<FiTruck />} />
           <Metric
             label="Open orders"
             value={
-              procurement.orders.filter(
-                (order) => !['received', 'cancelled'].includes(order.status)
+              procurement.orders.filter((order) =>
+                ['draft', 'submitted', 'partially_received'].includes(order.status)
               ).length
             }
             icon={<FiFileText />}
           />
           <Metric
-            label="Order value"
+            label="Awaiting delivery"
+            value={procurement.orders.filter(canReceive).length}
+            icon={<FiCheck />}
+          />
+          <Metric
+            label="Open order value"
             value={currency.format(
-              procurement.orders.reduce((total, order) => total + order.totalAmount, 0)
+              procurement.orders
+                .filter((order) => !['received', 'cancelled'].includes(order.status))
+                .reduce((total, order) => total + order.totalAmount, 0)
             )}
             icon={<FiArchive />}
           />
         </section>
-        {(procurement.error || feedback) && (
-          <div className="flex items-center justify-between gap-3 rounded-2xl border border-white/80 bg-white/70 px-4 py-3 text-sm text-neutral-700 shadow-sm backdrop-blur-md">
-            <p
-              className={procurement.error ? 'text-rose-700' : 'text-emerald-700'}
-              role={procurement.error ? 'alert' : 'status'}
+        {procurement.error && (
+          <Banner tone="error">
+            <span>{procurement.error}</span>
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => void procurement.refresh()}
             >
-              {procurement.error || feedback}
-            </p>
+              Try again
+            </button>
+          </Banner>
+        )}
+        {feedback && (
+          <Banner tone={feedback.tone}>
+            <span>
+              {feedback.message}{' '}
+              {feedback.link && (
+                <Link to={feedback.link.to} className="font-semibold underline">
+                  {feedback.link.label}
+                </Link>
+              )}
+            </span>
             <button
               type="button"
               className="icon-button"
               aria-label="Dismiss message"
-              onClick={() => setFeedback('')}
+              onClick={() => setFeedbackState(null)}
             >
               <FiX />
             </button>
-          </div>
+          </Banner>
         )}
         <section className="table-surface">
-          <div className="surface-header flex flex-col gap-4 p-4 sm:p-5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="surface-header flex flex-col gap-4 p-4 sm:p-5 2xl:flex-row 2xl:items-center 2xl:justify-between">
             <div
-              className="flex w-full overflow-x-auto rounded-2xl border border-neutral-200/80 bg-white p-1 shadow-sm lg:w-auto"
+              className="flex w-full overflow-x-auto rounded-2xl border border-neutral-200/80 bg-white p-1 shadow-sm 2xl:w-auto"
               role="tablist"
               aria-label="Procurement views"
             >
-              <button
-                type="button"
-                role="tab"
-                aria-selected={tab === 'suppliers'}
-                onClick={() => {
-                  setTab('suppliers')
-                  setQuery('')
-                  setStatus('all')
-                }}
-                className={`flex-1 shrink-0 rounded-xl px-4 py-2 text-sm font-semibold transition sm:flex-none ${tab === 'suppliers' ? 'bg-plum-900 shadow-plum-950/15 text-white shadow-sm' : 'text-neutral-500 hover:bg-neutral-50 hover:text-neutral-800'}`}
-              >
-                Suppliers
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={tab === 'orders'}
-                onClick={() => {
-                  setTab('orders')
-                  setQuery('')
-                  setStatus('all')
-                }}
-                className={`flex-1 shrink-0 rounded-xl px-4 py-2 text-sm font-semibold transition sm:flex-none ${tab === 'orders' ? 'bg-plum-900 shadow-plum-950/15 text-white shadow-sm' : 'text-neutral-500 hover:bg-neutral-50 hover:text-neutral-800'}`}
-              >
-                Purchase orders
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={tab === 'receiving'}
-                onClick={() => {
-                  setTab('receiving')
-                  setQuery('')
-                  setStatus('all')
-                }}
-                className={`flex-1 shrink-0 rounded-xl px-4 py-2 text-sm font-semibold transition sm:flex-none ${tab === 'receiving' ? 'bg-plum-900 shadow-plum-950/15 text-white shadow-sm' : 'text-neutral-500 hover:bg-neutral-50 hover:text-neutral-800'}`}
-              >
-                Receiving reports
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={tab === 'invoices'}
-                onClick={() => {
-                  setTab('invoices')
-                  setQuery('')
-                  setStatus('all')
-                }}
-                className={`flex-1 shrink-0 rounded-xl px-4 py-2 text-sm font-semibold transition sm:flex-none ${tab === 'invoices' ? 'bg-plum-900 shadow-plum-950/15 text-white shadow-sm' : 'text-neutral-500 hover:bg-neutral-50 hover:text-neutral-800'}`}
-              >
-                Invoices
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={tab === 'history'}
-                onClick={() => {
-                  setTab('history')
-                  setQuery('')
-                  setStatus('all')
-                }}
-                className={`flex-1 shrink-0 rounded-xl px-4 py-2 text-sm font-semibold transition sm:flex-none ${tab === 'history' ? 'bg-plum-900 shadow-plum-950/15 text-white shadow-sm' : 'text-neutral-500 hover:bg-neutral-50 hover:text-neutral-800'}`}
-              >
-                History
-              </button>
+              {procurementTabs.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={tab === item.id}
+                  onClick={() => setTab(item.id)}
+                  className={`flex-1 shrink-0 rounded-xl px-4 py-2 text-sm font-semibold whitespace-nowrap transition sm:flex-none ${tab === item.id ? 'bg-plum-900 text-white shadow-sm' : 'text-neutral-500 hover:bg-neutral-50 hover:text-neutral-800'}`}
+                >
+                  {item.label}
+                </button>
+              ))}
             </div>
-            <div className="flex flex-col gap-3 sm:flex-row lg:justify-end">
+            <div className="flex flex-col gap-3 sm:flex-row 2xl:justify-end">
               <label className="relative min-w-0 sm:w-72">
                 <span className="sr-only">Search {tab}</span>
                 <FiSearch className="absolute top-3 left-3.5 text-neutral-400" />
@@ -294,7 +341,9 @@ export default function SupplierOrders(): ReactElement {
                       ? 'Search suppliers'
                       : tab === 'orders'
                         ? 'Search order number or supplier'
-                        : 'Search procurement records'
+                        : tab === 'receiving'
+                          ? 'Search order, product or batch'
+                          : 'Search procurement records'
                   }
                 />
               </label>
@@ -326,7 +375,7 @@ export default function SupplierOrders(): ReactElement {
           {tab === 'suppliers' ? (
             <SupplierTable
               suppliers={filteredSuppliers}
-              remove={removeSupplier}
+              remove={(supplier) => void removeSupplier(supplier)}
               edit={setSupplierDialog}
               isLoading={procurement.isLoading}
             />
@@ -334,17 +383,28 @@ export default function SupplierOrders(): ReactElement {
             <OrderTable
               orders={filteredOrders}
               isLoading={procurement.isLoading}
-              updateStatus={(order, nextStatus) => void updateOrderStatus(order, nextStatus)}
+              edit={setOrderDialog}
+              submit={(order) => void submitOrder(order)}
+              cancel={(order) => void cancelOrder(order)}
               receive={setReceiveDialog}
               remove={(order) => void removeOrder(order)}
             />
           ) : (
-            <ProcurementRecords
-              view={tab}
-              query={query}
-              procurement={procurement}
-              feedback={setFeedback}
-            />
+            <>
+              {tab === 'receiving' && (
+                <AwaitingDelivery
+                  orders={awaitingDelivery}
+                  isLoading={procurement.isLoading}
+                  receive={setReceiveDialog}
+                />
+              )}
+              <ProcurementRecords
+                view={tab}
+                query={query}
+                procurement={procurement}
+                feedback={(message, tone) => setFeedback(message, tone)}
+              />
+            </>
           )}
         </section>
       </div>
@@ -352,33 +412,67 @@ export default function SupplierOrders(): ReactElement {
         <SupplierDialog
           initial={supplierDialog === 'new' ? null : supplierDialog}
           close={() => setSupplierDialog(null)}
-          save={saveSupplier}
+          save={async (values, id) => {
+            await procurement.saveSupplier(values, id)
+            setSupplierDialog(null)
+            setFeedback(id ? 'Supplier updated.' : 'Supplier added.')
+          }}
         />
       )}
       {orderDialog && (
         <OrderDialog
+          initial={orderDialog === 'new' ? null : orderDialog}
           suppliers={procurement.suppliers}
           products={procurement.products}
-          close={() => setOrderDialog(false)}
+          close={() => setOrderDialog(null)}
           save={async (values) => {
-            await procurement.createOrder(values)
-            setOrderDialog(false)
-            setFeedback('Purchase order created.')
+            if (orderDialog === 'new') await procurement.createOrder(values)
+            else await procurement.updateOrder(orderDialog.id, values)
+            setFeedback(
+              orderDialog === 'new'
+                ? 'Purchase order saved as a draft. Submit it once it has been sent to the supplier.'
+                : `${orderDialog.orderNumber} updated.`
+            )
+            setOrderDialog(null)
           }}
         />
       )}
       {receiveDialog && (
         <ReceiveDialog
           order={receiveDialog}
+          products={procurement.products}
           close={() => setReceiveDialog(null)}
-          save={async (items) => {
-            await procurement.receiveOrder(receiveDialog.id, items)
+          save={async (values) => {
+            await procurement.receiveOrder(receiveDialog.id, values)
+            const units = values.items.reduce((total, item) => total + item.receivedQuantity, 0)
             setReceiveDialog(null)
-            setFeedback('Delivery recorded.')
+            setFeedbackState({
+              message: `Delivery recorded for ${receiveDialog.orderNumber}: ${units} unit(s) added to inventory.`,
+              tone: 'success',
+              link: { to: '/inventory', label: 'View inventory' }
+            })
           }}
         />
       )}
+      {confirmDialog}
     </DashboardShell>
+  )
+}
+
+function Banner({
+  tone,
+  children
+}: {
+  tone: 'success' | 'error'
+  children: ReactNode
+}): ReactElement {
+  return (
+    <div
+      role={tone === 'error' ? 'alert' : 'status'}
+      className={`flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-sm shadow-sm ${tone === 'error' ? 'border-rose-200 bg-rose-50 text-rose-800' : 'border-emerald-200 bg-emerald-50 text-emerald-800'}`}
+    >
+      {children}
+    </div>
   )
 }
 
@@ -391,7 +485,7 @@ function SupplierTable({
   suppliers: Supplier[]
   isLoading: boolean
   edit: (supplier: Supplier | 'new') => void
-  remove: (supplier: Supplier) => Promise<void>
+  remove: (supplier: Supplier) => void
 }): ReactElement {
   return (
     <div className="overflow-x-auto">
@@ -406,20 +500,7 @@ function SupplierTable({
         </thead>
         <tbody className="divide-y divide-neutral-100/90">
           {suppliers.map((supplier) => (
-            <tr
-              key={supplier.id}
-              tabIndex={0}
-              role="button"
-              aria-label={`View ${supplier.organization}`}
-              onClick={() => edit(supplier)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' || event.key === ' ') {
-                  event.preventDefault()
-                  edit(supplier)
-                }
-              }}
-              className="cursor-pointer transition-colors hover:bg-mauve-50/50 focus-visible:bg-mauve-50/50 focus-visible:ring-2 focus-visible:ring-mauve-500 focus-visible:outline-none focus-visible:ring-inset"
-            >
+            <tr key={supplier.id} className="transition-colors hover:bg-mauve-50/50">
               <td className="px-5 py-4">
                 <p className="font-semibold text-neutral-900">{supplier.organization}</p>
                 <p className="text-xs text-neutral-500">{supplier.person}</p>
@@ -437,25 +518,18 @@ function SupplierTable({
                 <div className="flex justify-end gap-2">
                   <button
                     type="button"
-                    className="icon-button"
-                    aria-label={`Edit ${supplier.organization}`}
-                    onClick={(event) => {
-                      event.stopPropagation()
-                      edit(supplier)
-                    }}
-                    onKeyDown={(event) => event.stopPropagation()}
+                    className="secondary-button"
+                    onClick={() => edit(supplier)}
+                    aria-label={`View or edit ${supplier.organization}`}
                   >
-                    <FiEdit2 />
+                    <FiEdit2 aria-hidden="true" /> View / edit
                   </button>
                   <button
                     type="button"
                     className="icon-button text-rose-700"
                     aria-label={`Remove ${supplier.organization}`}
-                    onClick={(event) => {
-                      event.stopPropagation()
-                      void remove(supplier)
-                    }}
-                    onKeyDown={(event) => event.stopPropagation()}
+                    title="Remove supplier"
+                    onClick={() => remove(supplier)}
                   >
                     <FiTrash2 />
                   </button>
@@ -468,53 +542,62 @@ function SupplierTable({
       {!isLoading && suppliers.length === 0 && (
         <EmptyState label="No suppliers match this search." />
       )}
-      {isLoading && <EmptyState label="Loading suppliers…" />}
+      {isLoading && suppliers.length === 0 && <EmptyState label="Loading suppliers…" />}
     </div>
+  )
+}
+
+function StatusBadge({ status }: { status: OrderStatus }): ReactElement {
+  return (
+    <span className={`status-badge ${orderStatusTone[status]}`} title={orderStatusHelp[status]}>
+      {orderStatusLabels[status]}
+    </span>
   )
 }
 
 function OrderTable({
   orders,
   isLoading,
-  updateStatus,
+  edit,
+  submit,
+  cancel,
   receive,
   remove
 }: {
   orders: PurchaseOrderRecord[]
   isLoading: boolean
-  updateStatus: (order: PurchaseOrderRecord, status: OrderStatus) => void
+  edit: (order: PurchaseOrderRecord) => void
+  submit: (order: PurchaseOrderRecord) => void
+  cancel: (order: PurchaseOrderRecord) => void
   receive: (order: PurchaseOrderRecord) => void
   remove: (order: PurchaseOrderRecord) => void
 }): ReactElement {
   return (
     <div className="min-w-0 overflow-x-auto">
-      <table className="w-full table-fixed text-sm">
+      <table className="w-full min-w-[860px] table-fixed text-sm">
         <colgroup>
-          <col className="w-[20%]" />
+          <col className="w-[21%]" />
           <col className="w-[17%]" />
-          <col className="w-[17%]" />
-          <col className="w-[31%]" />
-          <col className="hidden w-[15%] xl:table-column" />
-          <col className="w-24" />
+          <col className="w-[13%]" />
+          <col className="w-[33%]" />
+          <col className="w-[16%]" />
         </colgroup>
         <thead className="surface-header text-left text-neutral-500">
           <tr>
-            <th className="px-5 py-3">Order</th>
-            <th className="px-5 py-3">Supplier</th>
-            <th className="px-5 py-3">Status</th>
-            <th className="px-5 py-3">Items</th>
-            <th className="hidden px-3 py-3 xl:table-cell">Total</th>
-            <th className="px-3 py-3 text-right">Actions</th>
+            <th className="px-4 py-3">Order</th>
+            <th className="px-4 py-3">Supplier</th>
+            <th className="px-4 py-3">Status</th>
+            <th className="px-4 py-3">Items: ordered · received · remaining</th>
+            <th className="px-4 py-3 text-right">Actions</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-neutral-100/90">
           {orders.map((order) => {
-            const canReceive =
-              ['submitted', 'partially_received'].includes(order.status) &&
-              order.items.some((item) => item.receivedQuantity < item.quantity)
+            const received = order.items.some((item) => item.receivedQuantity > 0)
+            const cancellable = ['draft', 'submitted', 'partially_received'].includes(order.status)
             return (
-              <tr key={order.id} className="transition-colors hover:bg-mauve-50/50">
-                <td className="min-w-0 px-3 py-4 align-top">
+              <tr key={order.id} className="align-top transition-colors hover:bg-mauve-50/50">
+                <td className="min-w-0 px-4 py-4">
                   <p className="truncate font-semibold text-neutral-900" title={order.orderNumber}>
                     {order.orderNumber}
                   </p>
@@ -526,31 +609,18 @@ function OrderTable({
                       Expected {date.format(new Date(order.expectedAt))}
                     </p>
                   )}
-                  <p className="mt-1 text-xs font-semibold xl:hidden">
-                    {currency.format(order.totalAmount)}
-                  </p>
+                  <p className="mt-1 text-xs font-semibold">{currency.format(order.totalAmount)}</p>
                 </td>
-                <td className="min-w-0 px-3 py-4 align-top">
+                <td className="min-w-0 px-4 py-4">
                   <p className="truncate" title={order.supplierName}>
                     {order.supplierName}
                   </p>
                 </td>
-                <td className="px-3 py-4 align-top">
-                  <select
-                    value={order.status}
-                    onChange={(event) => updateStatus(order, event.target.value as OrderStatus)}
-                    className={`rounded-full border border-white/80 px-2.5 py-1 text-xs font-semibold shadow-sm ${orderStatusTone[order.status]}`}
-                    aria-label={`Status for ${order.orderNumber}`}
-                  >
-                    {orderStatusTransitions[order.status].map((status) => (
-                      <option key={status} value={status}>
-                        {orderStatusLabels[status]}
-                      </option>
-                    ))}
-                  </select>
+                <td className="px-4 py-4">
+                  <StatusBadge status={order.status} />
                 </td>
-                <td className="min-w-0 px-3 py-4 text-neutral-600">
-                  <ul className="space-y-1">
+                <td className="min-w-0 px-4 py-4 text-neutral-600">
+                  <ul className="space-y-1.5">
                     {order.items.map((item) => (
                       <li key={item.id}>
                         <span
@@ -559,8 +629,19 @@ function OrderTable({
                         >
                           {item.productName}
                         </span>
-                        <span className="block text-xs text-neutral-500">
-                          {item.quantity} ordered · {item.receivedQuantity} received
+                        <span className="block text-xs text-neutral-500 tabular-nums">
+                          {item.quantity} ordered · {item.receivedQuantity} received ·{' '}
+                          <span
+                            className={
+                              remaining(item) > 0 && order.status !== 'cancelled'
+                                ? 'font-semibold text-amber-700'
+                                : ''
+                            }
+                          >
+                            {order.status === 'cancelled' && remaining(item) > 0
+                              ? `${remaining(item)} cancelled`
+                              : `${remaining(item)} remaining`}
+                          </span>
                         </span>
                       </li>
                     ))}
@@ -570,33 +651,63 @@ function OrderTable({
                       className="mt-2 line-clamp-2 text-xs break-words text-neutral-500"
                       title={order.notes}
                     >
-                      {order.notes}
+                      Note: {order.notes}
                     </p>
                   )}
                 </td>
-                <td className="hidden px-3 py-4 font-semibold xl:table-cell">
-                  {currency.format(order.totalAmount)}
-                </td>
-                <td className="px-3 py-4 align-top">
+                <td className="px-4 py-4">
                   <div className="flex flex-col items-stretch gap-2">
-                    {canReceive && (
+                    {canReceive(order) && (
                       <button
                         type="button"
-                        className="secondary-button justify-center px-2 text-xs"
+                        className="primary-button h-10 text-xs"
                         onClick={() => receive(order)}
                       >
-                        <FiCheck /> Receive
+                        <FiCheck /> Receive delivery
                       </button>
                     )}
-                    {['draft', 'cancelled'].includes(order.status) && (
+                    {order.status === 'draft' && (
+                      <>
+                        <button
+                          type="button"
+                          className="primary-button h-10 text-xs"
+                          onClick={() => submit(order)}
+                        >
+                          <FiSend /> Submit order
+                        </button>
+                        <button
+                          type="button"
+                          className="secondary-button text-xs"
+                          onClick={() => edit(order)}
+                        >
+                          <FiEdit2 /> Edit
+                        </button>
+                      </>
+                    )}
+                    {cancellable && (
                       <button
                         type="button"
-                        className="icon-button text-rose-700"
-                        aria-label={`Delete ${order.orderNumber}`}
+                        className="secondary-button text-xs text-rose-700"
+                        onClick={() => cancel(order)}
+                      >
+                        <FiSlash /> Cancel order
+                      </button>
+                    )}
+                    {(order.status === 'draft' || (order.status === 'cancelled' && !received)) && (
+                      <button
+                        type="button"
+                        className="secondary-button text-xs text-rose-700"
                         onClick={() => remove(order)}
                       >
-                        <FiTrash2 />
+                        <FiTrash2 /> Delete
                       </button>
+                    )}
+                    {order.status !== 'draft' && (
+                      <p className="text-xs leading-5 text-neutral-500">
+                        {orderStatusHelp[order.status]}
+                        {['submitted', 'partially_received'].includes(order.status) &&
+                          ' Editing is locked after submission.'}
+                      </p>
                     )}
                   </div>
                 </td>
@@ -608,8 +719,61 @@ function OrderTable({
       {!isLoading && orders.length === 0 && (
         <EmptyState label="No purchase orders match these filters." />
       )}
-      {isLoading && <EmptyState label="Loading purchase orders…" />}
+      {isLoading && orders.length === 0 && <EmptyState label="Loading purchase orders…" />}
     </div>
+  )
+}
+
+function AwaitingDelivery({
+  orders,
+  isLoading,
+  receive
+}: {
+  orders: PurchaseOrderRecord[]
+  isLoading: boolean
+  receive: (order: PurchaseOrderRecord) => void
+}): ReactElement {
+  return (
+    <section className="border-b border-neutral-200 p-4 sm:p-5">
+      <h3 className="font-semibold text-neutral-900">Receive a delivery</h3>
+      <p className="text-sm text-neutral-500">
+        Choose the submitted purchase order that matches the delivery. Draft orders must be
+        submitted first.
+      </p>
+      <div className="mt-3 grid gap-3 lg:grid-cols-2">
+        {orders.map((order) => (
+          <article
+            key={order.id}
+            className="flex min-w-0 items-start justify-between gap-3 rounded-xl border border-neutral-200 bg-white p-4"
+          >
+            <div className="min-w-0">
+              <p className="truncate font-semibold">{order.orderNumber}</p>
+              <p className="truncate text-sm text-neutral-600">{order.supplierName}</p>
+              <p className="mt-1 text-xs text-neutral-500">
+                {order.items.reduce((total, item) => total + remaining(item), 0)} unit(s) remaining
+                across {order.items.filter((item) => remaining(item) > 0).length} line(s)
+                {order.expectedAt ? ` · expected ${date.format(new Date(order.expectedAt))}` : ''}
+              </p>
+            </div>
+            <div className="flex shrink-0 flex-col items-end gap-2">
+              <StatusBadge status={order.status} />
+              <button
+                type="button"
+                className="primary-button h-9 text-xs"
+                onClick={() => receive(order)}
+              >
+                <FiCheck /> Receive
+              </button>
+            </div>
+          </article>
+        ))}
+      </div>
+      {!isLoading && orders.length === 0 && (
+        <p className="mt-3 text-sm text-neutral-500">
+          No submitted purchase orders are waiting for delivery.
+        </p>
+      )}
+    </section>
   )
 }
 
@@ -629,194 +793,263 @@ function SupplierDialog({
     return supplierValues
   })
   const [saving, setSaving] = useState(false)
+  const [errors, setErrors] = useState<FieldErrors>({})
   const [error, setError] = useState('')
-  const set = (key: keyof SupplierFormValues, value: string): void =>
+  const set = (key: keyof SupplierFormValues, value: string): void => {
     setValues((current) => ({ ...current, [key]: value }))
+    setErrors((current) => ({ ...current, [key]: '' }))
+  }
   const submit = async (event: FormEvent): Promise<void> => {
     event.preventDefault()
+    if (saving) return
     setSaving(true)
     setError('')
+    setErrors({})
     try {
       await save(
-        { ...values, telephone: values.telephone || null, email: values.email || null },
+        {
+          ...values,
+          telephone: values.telephone?.trim() || null,
+          email: values.email?.trim() || null
+        },
         initial?.id
       )
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Unable to save the supplier.')
+      const result = splitErrors(cause, 'Unable to save the supplier.')
+      setErrors(result.fields)
+      setError(result.form)
       setSaving(false)
     }
   }
+  const input = (
+    key: keyof SupplierFormValues,
+    props: {
+      placeholder?: string
+      inputMode?: 'numeric' | 'tel'
+      maxLength?: number
+      type?: string
+    } = {}
+  ): ReactElement => (
+    <input
+      className="field"
+      autoComplete="off"
+      value={values[key] ?? ''}
+      onChange={(event) => set(key, event.target.value)}
+      {...props}
+    />
+  )
   return (
-    <Dialog title={initial ? 'Edit supplier' : 'Add supplier'} close={close}>
+    <Modal
+      title={initial ? `Supplier: ${initial.organization}` : 'Add supplier'}
+      description={initial ? 'Review or update the supplier details.' : undefined}
+      close={close}
+      busy={saving}
+    >
       <form noValidate onSubmit={(event) => void submit(event)} className="space-y-4">
+        <RequiredNote />
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Organization">
-            <input
-              required
-              className="field"
-              placeholder={'e.g. MedSupply Distribution'}
-              value={values.organization}
-              onChange={(event) => set('organization', event.target.value)}
-            />
-          </Field>
-          <Field label="Contact person">
-            <input
-              required
-              className="field"
-              placeholder={'e.g. Juan Dela Cruz'}
-              value={values.person}
-              onChange={(event) => set('person', event.target.value)}
-            />
-          </Field>
-          <Field label="Mobile phone">
-            <input
-              required
-              className="field"
-              inputMode={'numeric'}
-              maxLength={11}
-              placeholder={'e.g. 09171234567'}
-              value={values.phone}
-              onChange={(event) => set('phone', event.target.value)}
-            />
-          </Field>
-          <Field label="Email">
-            <input
-              type="email"
-              className="field"
-              placeholder={'e.g. juan@example.com'}
-              value={values.email ?? ''}
-              onChange={(event) => set('email', event.target.value)}
-            />
-          </Field>
-          <Field label="Street">
-            <input
-              required
-              className="field"
-              placeholder={'e.g. 123 Rizal Street'}
-              value={values.street}
-              onChange={(event) => set('street', event.target.value)}
-            />
-          </Field>
-          <Field label="City">
-            <input
-              required
-              className="field"
-              placeholder={'e.g. Davao City'}
-              value={values.city}
-              onChange={(event) => set('city', event.target.value)}
-            />
-          </Field>
-          <Field label="Province">
-            <input
-              required
-              className="field"
-              placeholder={'e.g. Davao del Sur'}
-              value={values.province}
-              onChange={(event) => set('province', event.target.value)}
-            />
-          </Field>
-          <Field label="Postal code">
-            <input
-              required
-              className="field"
-              placeholder={'e.g. 8000'}
-              value={values.postalCode}
-              onChange={(event) => set('postalCode', event.target.value)}
-            />
-          </Field>
-        </div>
-        {error && (
-          <p
-            role="alert"
-            className="rounded-2xl border border-rose-200/80 bg-rose-50/75 p-3 text-sm text-rose-700"
+          <FormField label="Organization" required error={errors.organization}>
+            {input('organization', { placeholder: 'e.g. MedSupply Distribution' })}
+          </FormField>
+          <FormField label="Contact person" required error={errors.person}>
+            {input('person', { placeholder: 'e.g. Juan Dela Cruz' })}
+          </FormField>
+          <FormField
+            label="Mobile phone"
+            required
+            hint="11 digits starting with 09."
+            error={errors.phone}
           >
-            {error}
-          </p>
-        )}
-        <div className="flex justify-end gap-2 pt-2">
-          <button type="button" className="secondary-button" onClick={close}>
-            Cancel
-          </button>
-          <button disabled={saving} className="primary-button">
-            {saving ? 'Saving…' : 'Save supplier'}
-          </button>
+            {input('phone', { placeholder: '09171234567', inputMode: 'numeric', maxLength: 11 })}
+          </FormField>
+          <FormField label="Telephone" error={errors.telephone}>
+            {input('telephone', { placeholder: 'e.g. (082) 123 4567', inputMode: 'tel' })}
+          </FormField>
+          <FormField label="Email" error={errors.email} className="sm:col-span-2">
+            {input('email', { type: 'email', placeholder: 'e.g. orders@supplier.ph' })}
+          </FormField>
+          <FormField label="Street" required error={errors.street}>
+            {input('street', { placeholder: 'e.g. 123 Rizal Street' })}
+          </FormField>
+          <FormField label="City" required error={errors.city}>
+            {input('city', { placeholder: 'e.g. Davao City' })}
+          </FormField>
+          <FormField label="Province" required error={errors.province}>
+            {input('province', { placeholder: 'e.g. Davao del Sur' })}
+          </FormField>
+          <FormField label="Postal code" required hint="4 digits." error={errors.postalCode}>
+            {input('postalCode', { placeholder: '8000', inputMode: 'numeric', maxLength: 4 })}
+          </FormField>
+          <FormField label="Country" required error={errors.country}>
+            {input('country')}
+          </FormField>
         </div>
+        <FormError message={error} />
+        <DialogActions
+          close={close}
+          saving={saving}
+          label={initial ? 'Save changes' : 'Add supplier'}
+        />
       </form>
-    </Dialog>
+    </Modal>
   )
 }
 
+let nextLineKey = 0
+interface OrderLineDraft {
+  key: number
+  drugId: string
+  quantity: string
+  unitCost: string
+}
+
 function OrderDialog({
+  initial,
   suppliers,
   products,
   close,
   save
 }: {
+  initial: PurchaseOrderRecord | null
   suppliers: Supplier[]
   products: ItemProfile[]
   close: VoidFunction
   save: (values: PurchaseOrderFormValues) => Promise<void>
 }): ReactElement {
-  const [supplierId, setSupplierId] = useState(suppliers[0]?.id ?? 0)
-  const [expectedAt, setExpectedAt] = useState('')
-  const [notes, setNotes] = useState('')
-  const [lines, setLines] = useState<Array<{ drugId: string; quantity: string; unitCost: string }>>(
-    [{ drugId: String(products[0]?.id ?? ''), quantity: '1', unitCost: '0' }]
+  const [supplierId, setSupplierId] = useState(initial?.supplierId ?? 0)
+  const [expectedAt, setExpectedAt] = useState(initial?.expectedAt?.slice(0, 10) ?? '')
+  const [notes, setNotes] = useState(initial?.notes ?? '')
+  const [lines, setLines] = useState<OrderLineDraft[]>(() =>
+    initial
+      ? initial.items.map((item) => ({
+          key: nextLineKey++,
+          drugId: String(item.drugId),
+          quantity: String(item.quantity),
+          unitCost: String(item.unitCost)
+        }))
+      : [{ key: nextLineKey++, drugId: '', quantity: '', unitCost: '' }]
   )
   const [saving, setSaving] = useState(false)
+  const [errors, setErrors] = useState<FieldErrors>({})
   const [error, setError] = useState('')
+  const minimumDate = initial ? initial.orderedAt.slice(0, 10) : localDate()
+  const total = lines.reduce((sum, line) => {
+    const value = Number(line.quantity) * Number(line.unitCost)
+    return Number.isFinite(value) ? sum + value : sum
+  }, 0)
+
+  const updateLine = (
+    index: number,
+    field: keyof Omit<OrderLineDraft, 'key'>,
+    value: string
+  ): void => {
+    setLines((current) =>
+      current.map((item, itemIndex) => (itemIndex === index ? { ...item, [field]: value } : item))
+    )
+    setErrors((current) => ({ ...current, [`items.${index}.${field}`]: '' }))
+  }
+
   const submit = async (event: FormEvent): Promise<void> => {
     event.preventDefault()
+    if (saving) return
     setSaving(true)
     setError('')
-    const items = lines.map((line) => ({
-      drugId: Number(line.drugId),
-      quantity: Number(line.quantity),
-      unitCost: Number(line.unitCost)
-    }))
+    setErrors({})
     try {
-      await save({ supplierId, expectedAt: expectedAt || null, notes: notes || null, items })
+      await save({
+        supplierId,
+        expectedAt: expectedAt || null,
+        notes: notes.trim() || null,
+        items: lines.map((line) => ({
+          drugId: Number(line.drugId),
+          quantity: toNumber(line.quantity),
+          unitCost: toNumber(line.unitCost)
+        }))
+      })
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Unable to create the purchase order.')
+      const result = splitErrors(cause, 'Unable to save the purchase order.', (path, field) =>
+        path.startsWith('items.') && path.split('.').length === 3
+          ? path
+          : field === 'items'
+            ? null
+            : field
+      )
+      setErrors(result.fields)
+      setError(result.form)
       setSaving(false)
     }
   }
+
   return (
-    <Dialog title="Create purchase order" close={close}>
+    <Modal
+      title={initial ? `Edit ${initial.orderNumber}` : 'Create purchase order'}
+      description={
+        initial
+          ? 'Draft orders can be changed until they are submitted to the supplier.'
+          : 'New orders are saved as drafts. Submit the order once it has been sent to the supplier.'
+      }
+      close={close}
+      size="lg"
+      busy={saving}
+    >
       <form noValidate onSubmit={(event) => void submit(event)} className="space-y-4">
-        <Field label="Supplier">
-          <select
-            required
-            className="field"
-            value={supplierId}
-            onChange={(event) => setSupplierId(Number(event.target.value))}
-          >
-            <option value={0}>Select supplier</option>
-            {suppliers.map((supplier) => (
-              <option key={supplier.id} value={supplier.id}>
-                {supplier.organization}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Expected delivery">
-          <input
-            type="date"
-            className="field"
-            value={expectedAt}
-            onChange={(event) => setExpectedAt(event.target.value)}
+        <RequiredNote />
+        {(suppliers.length === 0 || products.length === 0) && (
+          <FormError
+            message={
+              suppliers.length === 0
+                ? 'Add a supplier before creating a purchase order.'
+                : 'Add a product to the inventory catalog before creating a purchase order.'
+            }
           />
-        </Field>
-        <div className="rounded-2xl border border-neutral-200/80 bg-neutral-50/55 p-3 sm:p-4">
+        )}
+        <div className="grid gap-4 sm:grid-cols-2">
+          <FormField label="Supplier" required error={errors.supplierId}>
+            <select
+              className="field"
+              value={supplierId}
+              onChange={(event) => {
+                setSupplierId(Number(event.target.value))
+                setErrors((current) => ({ ...current, supplierId: '' }))
+              }}
+            >
+              <option value={0}>Select supplier</option>
+              {suppliers.map((supplier) => (
+                <option key={supplier.id} value={supplier.id}>
+                  {supplier.organization}
+                </option>
+              ))}
+            </select>
+          </FormField>
+          <FormField
+            label="Expected delivery date"
+            hint="Cannot be before the order date."
+            error={errors.expectedAt}
+          >
+            <input
+              type="date"
+              className="field"
+              min={minimumDate}
+              value={expectedAt}
+              onChange={(event) => {
+                setExpectedAt(event.target.value)
+                setErrors((current) => ({ ...current, expectedAt: '' }))
+              }}
+            />
+          </FormField>
+        </div>
+        <div className="rounded-2xl border border-neutral-200 bg-neutral-50/60 p-3 sm:p-4">
           <div className="mb-3 flex items-center justify-between">
-            <p className="text-sm font-medium text-neutral-700">Order lines</p>
+            <p className="text-sm font-medium text-neutral-700">
+              Order lines<span className="ml-0.5 text-rose-600">*</span>
+            </p>
             <button
               type="button"
               className="secondary-button text-xs"
               onClick={() =>
                 setLines((current) => [
                   ...current,
-                  { drugId: String(products[0]?.id ?? ''), quantity: '1', unitCost: '0' }
+                  { key: nextLineKey++, drugId: '', quantity: '', unitCost: '' }
                 ])
               }
               disabled={products.length === 0}
@@ -824,335 +1057,397 @@ function OrderDialog({
               <FiPlus /> Add line
             </button>
           </div>
-          <div className="space-y-2">
-            {lines.map((line, index) => (
-              <div
-                key={`${index}-${line.drugId}`}
-                className="grid gap-2 rounded-2xl border border-neutral-200/70 bg-white/80 p-2 sm:grid-cols-[1fr_6rem_7rem_auto]"
-              >
-                <select
-                  required
-                  className="field mt-0"
-                  value={line.drugId}
-                  onChange={(event) =>
-                    setLines((current) =>
-                      current.map((item, itemIndex) =>
-                        itemIndex === index ? { ...item, drugId: event.target.value } : item
-                      )
-                    )
-                  }
-                >
-                  <option value="">Select product</option>
-                  {products.map((product) => (
-                    <option key={product.id} value={product.id}>
-                      {product.brandName} · {product.genericName}
-                    </option>
-                  ))}
-                </select>
-                <input
-                  required
-                  min="1"
-                  type="number"
-                  className="field mt-0"
-                  aria-label="Quantity"
-                  placeholder={'e.g. 10'}
-                  value={line.quantity}
-                  onChange={(event) =>
-                    setLines((current) =>
-                      current.map((item, itemIndex) =>
-                        itemIndex === index ? { ...item, quantity: event.target.value } : item
-                      )
-                    )
-                  }
-                />
-                <input
-                  required
-                  min="0"
-                  step="0.01"
-                  type="number"
-                  className="field mt-0"
-                  aria-label="Unit cost"
-                  placeholder={'e.g. 25.50'}
-                  value={line.unitCost}
-                  onChange={(event) =>
-                    setLines((current) =>
-                      current.map((item, itemIndex) =>
-                        itemIndex === index ? { ...item, unitCost: event.target.value } : item
-                      )
-                    )
-                  }
-                />
-                <button
-                  type="button"
-                  className="icon-button"
-                  aria-label="Remove order line"
-                  disabled={lines.length === 1}
-                  onClick={() =>
-                    setLines((current) => current.filter((_, itemIndex) => itemIndex !== index))
-                  }
-                >
-                  <FiX />
-                </button>
-              </div>
-            ))}
+          <div className="hidden grid-cols-[minmax(0,1fr)_7rem_8rem_7rem_2.5rem] gap-2 px-2 pb-1 text-xs font-medium text-neutral-500 sm:grid">
+            <span>Product</span>
+            <span>Quantity</span>
+            <span>Unit cost (₱)</span>
+            <span className="text-right">Line total</span>
+            <span />
           </div>
+          <div className="space-y-2">
+            {lines.map((line, index) => {
+              const lineError =
+                errors[`items.${index}.drugId`] ||
+                errors[`items.${index}.quantity`] ||
+                errors[`items.${index}.unitCost`]
+              const lineTotal = Number(line.quantity) * Number(line.unitCost)
+              return (
+                <div key={line.key} className="rounded-xl border border-neutral-200 bg-white p-2">
+                  <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_7rem_8rem_7rem_2.5rem] sm:items-center">
+                    <select
+                      className="field mt-0"
+                      aria-label={`Product for line ${index + 1}`}
+                      aria-invalid={errors[`items.${index}.drugId`] ? true : undefined}
+                      value={line.drugId}
+                      onChange={(event) => updateLine(index, 'drugId', event.target.value)}
+                    >
+                      <option value="">Select product</option>
+                      {products.map((product) => (
+                        <option key={product.id} value={product.id}>
+                          {product.brandName} · {product.genericName} · {product.formulation}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      min="1"
+                      step="1"
+                      type="number"
+                      inputMode="numeric"
+                      className="field mt-0"
+                      aria-label={`Quantity for line ${index + 1}`}
+                      aria-invalid={errors[`items.${index}.quantity`] ? true : undefined}
+                      placeholder="Qty"
+                      value={line.quantity}
+                      onChange={(event) => updateLine(index, 'quantity', event.target.value)}
+                    />
+                    <input
+                      min="0"
+                      step="0.01"
+                      type="number"
+                      inputMode="decimal"
+                      className="field mt-0"
+                      aria-label={`Unit cost for line ${index + 1}`}
+                      aria-invalid={errors[`items.${index}.unitCost`] ? true : undefined}
+                      placeholder="0.00"
+                      value={line.unitCost}
+                      onChange={(event) => updateLine(index, 'unitCost', event.target.value)}
+                    />
+                    <span className="text-right text-sm font-medium text-neutral-700 tabular-nums">
+                      {Number.isFinite(lineTotal) ? currency.format(lineTotal) : '—'}
+                    </span>
+                    <button
+                      type="button"
+                      className="icon-button"
+                      aria-label={`Remove line ${index + 1}`}
+                      disabled={lines.length === 1}
+                      onClick={() =>
+                        setLines((current) => current.filter((_, itemIndex) => itemIndex !== index))
+                      }
+                    >
+                      <FiX />
+                    </button>
+                  </div>
+                  {lineError && (
+                    <p className="mt-1 px-1 text-xs font-medium text-rose-700">{lineError}</p>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+          <p className="mt-3 text-right text-sm font-semibold">
+            Order total: <span className="tabular-nums">{currency.format(total)}</span>
+          </p>
         </div>
-        <Field label="Notes">
+        <FormField label="Notes" error={errors.notes}>
           <textarea
             className="field min-h-20"
-            placeholder={'e.g. Deliver before month end'}
+            maxLength={500}
+            placeholder="e.g. Deliver before month end"
             value={notes}
             onChange={(event) => setNotes(event.target.value)}
           />
-        </Field>
-        {error && (
-          <p
-            role="alert"
-            className="rounded-2xl border border-rose-200/80 bg-rose-50/75 p-3 text-sm text-rose-700"
-          >
-            {error}
-          </p>
-        )}
-        <div className="flex justify-end gap-2 pt-2">
-          <button type="button" className="secondary-button" onClick={close}>
-            Cancel
-          </button>
-          <button
-            disabled={saving || suppliers.length === 0 || products.length === 0}
-            className="primary-button"
-          >
-            {saving ? 'Creating…' : 'Create order'}
-          </button>
-        </div>
+        </FormField>
+        <FormError message={error} />
+        <DialogActions
+          close={close}
+          saving={saving}
+          label={initial ? 'Save changes' : 'Save draft order'}
+          disabled={suppliers.length === 0 || products.length === 0}
+        />
       </form>
-    </Dialog>
+    </Modal>
   )
+}
+
+interface ReceiveLine {
+  receivedQuantity: string
+  batchNumber: string
+  sellPrice: string
+  expiresAt: string
 }
 
 function ReceiveDialog({
   order,
+  products,
   close,
   save
 }: {
   order: PurchaseOrderRecord
+  products: ItemProfile[]
   close: VoidFunction
   save: (values: DeliveryFormValues) => Promise<void>
 }): ReactElement {
-  const [deliveredAt, setDeliveredAt] = useState(today())
+  const [deliveredAt, setDeliveredAt] = useState(localDate())
+  // Note: One request ID per dialog lets the main process ignore a repeated submission.
   const [requestId] = useState(() => crypto.randomUUID())
+  const submitting = useRef(false)
   const [notes, setNotes] = useState('')
-  const [lines, setLines] = useState<
-    Record<
-      number,
-      { receivedQuantity: string; batchNumber: string; sellPrice: string; expiresAt: string }
-    >
-  >(() =>
+  const openItems = order.items.filter((item) => remaining(item) > 0)
+  const [lines, setLines] = useState<Record<number, ReceiveLine>>(() =>
     Object.fromEntries(
-      order.items.map((item) => [
-        item.id,
-        {
-          receivedQuantity: String(Math.max(item.quantity - item.receivedQuantity, 0)),
-          batchNumber: '',
-          sellPrice: String(item.unitCost),
-          expiresAt: ''
-        }
-      ])
+      openItems.map((item) => {
+        // Note: Suggest the product's current selling price; staff confirm it per delivery.
+        const latest = products
+          .find((product) => product.id === item.drugId)
+          ?.batches.reduce<{ id: number; sellPrice: number } | null>(
+            (best, batch) => (!best || batch.id > best.id ? batch : best),
+            null
+          )
+        return [
+          item.id,
+          {
+            receivedQuantity: String(remaining(item)),
+            batchNumber: '',
+            sellPrice: latest ? String(latest.sellPrice) : '',
+            expiresAt: ''
+          }
+        ]
+      })
     )
   )
   const [saving, setSaving] = useState(false)
+  const [errors, setErrors] = useState<FieldErrors>({})
   const [error, setError] = useState('')
+
+  const updateLine = (itemId: number, field: keyof ReceiveLine, value: string): void => {
+    setLines((current) => ({ ...current, [itemId]: { ...current[itemId], [field]: value } }))
+    setErrors((current) => ({ ...current, [`${itemId}.${field}`]: '' }))
+  }
+
   const submit = async (event: FormEvent): Promise<void> => {
     event.preventDefault()
-    setSaving(true)
+    if (submitting.current) return
     setError('')
-    const deliveries = Object.entries(lines)
-      .map(([itemId, value]) => ({
-        itemId: Number(itemId),
-        receivedQuantity: Number(value.receivedQuantity),
-        batchNumber: value.batchNumber.trim(),
-        sellPrice: Number(value.sellPrice),
-        expiresAt: value.expiresAt
-      }))
-      .filter((item) => item.receivedQuantity > 0)
-    if (deliveries.length === 0) {
-      setError('Enter at least one delivered quantity.')
-      setSaving(false)
+    const nextErrors: FieldErrors = {}
+    const delivered = openItems.filter((item) => lines[item.id].receivedQuantity.trim() !== '')
+    for (const item of delivered) {
+      const quantity = Number(lines[item.id].receivedQuantity)
+      if (!Number.isInteger(quantity) || quantity < 0)
+        nextErrors[`${item.id}.receivedQuantity`] = 'Enter a whole number of 0 or more.'
+      else if (quantity > remaining(item))
+        nextErrors[`${item.id}.receivedQuantity`] =
+          `Only ${remaining(item)} remaining. Over-receiving is not allowed.`
+    }
+    const deliveredLines = delivered.filter((item) => Number(lines[item.id].receivedQuantity) > 0)
+    if (Object.keys(nextErrors).length === 0 && deliveredLines.length === 0) {
+      setError('Enter the delivered quantity for at least one product.')
       return
     }
-    if (
-      deliveries.some(
-        (item) => !item.batchNumber || !item.expiresAt || Number.isNaN(item.sellPrice)
-      )
-    ) {
-      setError('Enter a batch number, selling price, and expiry date for each delivered line.')
-      setSaving(false)
+    if (Object.keys(nextErrors).length > 0) {
+      setErrors(nextErrors)
+      setError('Check the highlighted fields.')
       return
     }
+    submitting.current = true
+    setSaving(true)
+    setErrors({})
     try {
-      await save({ requestId, deliveredAt, notes: notes.trim() || null, items: deliveries })
+      await save({
+        requestId,
+        deliveredAt,
+        notes: notes.trim() || null,
+        items: deliveredLines.map((item) => ({
+          itemId: item.id,
+          receivedQuantity: Number(lines[item.id].receivedQuantity),
+          batchNumber: lines[item.id].batchNumber.trim(),
+          sellPrice: toNumber(lines[item.id].sellPrice),
+          expiresAt: lines[item.id].expiresAt
+        }))
+      })
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Unable to record the delivery.')
+      const result = splitErrors(cause, 'Unable to record the delivery.', (path, field) => {
+        const match = /^items\.(\d+)\.(\w+)$/.exec(path)
+        if (match) return `${deliveredLines[Number(match[1])]?.id}.${match[2]}`
+        return field === 'deliveredAt' || field === 'notes' ? field : null
+      })
+      setErrors(result.fields)
+      setError(result.form)
+      submitting.current = false
       setSaving(false)
     }
   }
+
+  const cell = (itemId: number, field: keyof ReceiveLine, control: ReactElement): ReactElement => (
+    <td className="px-2 py-2 align-top">
+      {control}
+      {errors[`${itemId}.${field}`] && (
+        <p className="mt-1 text-xs font-medium text-rose-700">{errors[`${itemId}.${field}`]}</p>
+      )}
+    </td>
+  )
+
   return (
-    <Dialog title={`Receive ${order.orderNumber}`} close={close}>
-      <form onSubmit={(event) => void submit(event)} className="space-y-4">
-        <p className="text-sm leading-6 text-neutral-600">
-          Record the delivered units and stock batch details. Inventory and the order status update
-          together when this delivery is saved.
-        </p>
+    <Modal
+      title={`Receive delivery for ${order.orderNumber}`}
+      description={`${order.supplierName} · enter what physically arrived. Inventory, batches and the order status are updated together when you save.`}
+      close={close}
+      size="xl"
+      busy={saving}
+    >
+      <form noValidate onSubmit={(event) => void submit(event)} className="space-y-4">
+        <RequiredNote />
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Delivery date">
+          <FormField label="Delivery date" required error={errors.deliveredAt}>
             <input
-              required
               type="date"
               className="field"
+              max={localDate()}
               value={deliveredAt}
-              onChange={(event) => setDeliveredAt(event.target.value)}
+              onChange={(event) => {
+                setDeliveredAt(event.target.value)
+                setErrors((current) => ({ ...current, deliveredAt: '' }))
+              }}
             />
-          </Field>
-          <Field label="Delivery notes">
+          </FormField>
+          <FormField label="Delivery notes / DR number" error={errors.notes}>
             <input
               className="field"
+              maxLength={500}
               value={notes}
-              placeholder="Optional reference or remarks"
+              placeholder="e.g. DR-10234, 2 boxes damaged"
               onChange={(event) => setNotes(event.target.value)}
             />
-          </Field>
+          </FormField>
         </div>
-        <div className="space-y-3">
-          {order.items.map((item) => {
-            const line = lines[item.id]
-            const updateLine = (field: keyof typeof line, value: string): void =>
-              setLines((current) => ({
-                ...current,
-                [item.id]: { ...current[item.id], [field]: value }
-              }))
-            return (
-              <section
-                key={item.id}
-                className="rounded-2xl border border-neutral-200/80 bg-white/70 p-3 text-sm"
-              >
-                <div>
-                  <span className="block font-medium text-neutral-800">{item.productName}</span>
-                  <span className="text-xs text-neutral-500">
-                    {item.receivedQuantity} of {item.quantity} already received
-                  </span>
-                </div>
-                <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                  <Field label="Delivered quantity">
-                    <input
-                      required
-                      min="0"
-                      max={item.quantity - item.receivedQuantity}
-                      type="number"
-                      className="field"
-                      value={line?.receivedQuantity ?? '0'}
-                      onChange={(event) => updateLine('receivedQuantity', event.target.value)}
-                    />
-                  </Field>
-                  <Field label="Batch number">
-                    <input
-                      required={Number(line?.receivedQuantity) > 0}
-                      className="field"
-                      value={line?.batchNumber ?? ''}
-                      onChange={(event) => updateLine('batchNumber', event.target.value)}
-                    />
-                  </Field>
-                  <Field label="Selling price">
-                    <input
-                      required={Number(line?.receivedQuantity) > 0}
-                      min="0"
-                      step="0.01"
-                      type="number"
-                      className="field"
-                      value={line?.sellPrice ?? ''}
-                      onChange={(event) => updateLine('sellPrice', event.target.value)}
-                    />
-                  </Field>
-                  <Field label="Expiry date">
-                    <input
-                      required={Number(line?.receivedQuantity) > 0}
-                      min={deliveredAt}
-                      type="date"
-                      className="field"
-                      value={line?.expiresAt ?? ''}
-                      onChange={(event) => updateLine('expiresAt', event.target.value)}
-                    />
-                  </Field>
-                </div>
-              </section>
-            )
-          })}
+        <div className="overflow-x-auto rounded-xl border border-neutral-200">
+          <table className="w-full min-w-[880px] text-sm">
+            <thead className="bg-neutral-50 text-left text-xs text-neutral-500">
+              <tr>
+                <th className="px-3 py-2">Product</th>
+                <th className="px-2 py-2 text-right">Ordered</th>
+                <th className="px-2 py-2 text-right">Received</th>
+                <th className="px-2 py-2 text-right">Remaining</th>
+                <th className="w-28 px-2 py-2">
+                  Delivered now<span className="text-rose-600">*</span>
+                </th>
+                <th className="w-40 px-2 py-2">
+                  Batch number<span className="text-rose-600">*</span>
+                </th>
+                <th className="w-40 px-2 py-2">
+                  Expiry date<span className="text-rose-600">*</span>
+                </th>
+                <th className="w-32 px-2 py-2">
+                  Selling price (₱)<span className="text-rose-600">*</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-neutral-100">
+              {openItems.map((item) => {
+                const line = lines[item.id]
+                const active = Number(line.receivedQuantity) > 0
+                return (
+                  <tr key={item.id} className={active ? '' : 'bg-neutral-50/70 text-neutral-500'}>
+                    <td className="px-3 py-2 align-top">
+                      <p className="font-medium text-neutral-800">{item.productName}</p>
+                      <p className="text-xs text-neutral-500">
+                        Unit cost {currency.format(item.unitCost)}
+                      </p>
+                    </td>
+                    <td className="px-2 py-2 text-right align-top tabular-nums">{item.quantity}</td>
+                    <td className="px-2 py-2 text-right align-top tabular-nums">
+                      {item.receivedQuantity}
+                    </td>
+                    <td className="px-2 py-2 text-right align-top font-semibold tabular-nums">
+                      {remaining(item)}
+                    </td>
+                    {cell(
+                      item.id,
+                      'receivedQuantity',
+                      <input
+                        type="number"
+                        min="0"
+                        max={remaining(item)}
+                        step="1"
+                        inputMode="numeric"
+                        className="field mt-0"
+                        aria-label={`Delivered quantity for ${item.productName}`}
+                        aria-invalid={errors[`${item.id}.receivedQuantity`] ? true : undefined}
+                        value={line.receivedQuantity}
+                        onChange={(event) =>
+                          updateLine(item.id, 'receivedQuantity', event.target.value)
+                        }
+                      />
+                    )}
+                    {cell(
+                      item.id,
+                      'batchNumber',
+                      <input
+                        className="field mt-0"
+                        autoComplete="off"
+                        maxLength={80}
+                        placeholder="e.g. LOT-24A015"
+                        aria-label={`Batch number for ${item.productName}`}
+                        aria-invalid={errors[`${item.id}.batchNumber`] ? true : undefined}
+                        value={line.batchNumber}
+                        onChange={(event) => updateLine(item.id, 'batchNumber', event.target.value)}
+                      />
+                    )}
+                    {cell(
+                      item.id,
+                      'expiresAt',
+                      <input
+                        type="date"
+                        className="field mt-0"
+                        min={deliveredAt}
+                        aria-label={`Expiry date for ${item.productName}`}
+                        aria-invalid={errors[`${item.id}.expiresAt`] ? true : undefined}
+                        value={line.expiresAt}
+                        onChange={(event) => updateLine(item.id, 'expiresAt', event.target.value)}
+                      />
+                    )}
+                    {cell(
+                      item.id,
+                      'sellPrice',
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        inputMode="decimal"
+                        className="field mt-0"
+                        aria-label={`Selling price for ${item.productName}`}
+                        aria-invalid={errors[`${item.id}.sellPrice`] ? true : undefined}
+                        value={line.sellPrice}
+                        onChange={(event) => updateLine(item.id, 'sellPrice', event.target.value)}
+                      />
+                    )}
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
         </div>
-        {error && (
-          <p
-            role="alert"
-            className="rounded-2xl border border-rose-200/80 bg-rose-50/75 p-3 text-sm text-rose-700"
-          >
-            {error}
-          </p>
-        )}
-        <div className="flex justify-end gap-2 pt-2">
-          <button type="button" className="secondary-button" onClick={close}>
-            Cancel
-          </button>
-          <button disabled={saving} className="primary-button">
-            {saving ? 'Saving…' : 'Record delivery'}
-          </button>
-        </div>
+        <p className="text-xs text-neutral-500">
+          Set “Delivered now” to 0 for products that did not arrive; they stay open for a later
+          delivery. A batch number already in inventory adds to that batch only when its product,
+          supplier, cost, price and expiry match.
+        </p>
+        <FormError message={error} />
+        <DialogActions close={close} saving={saving} label="Record delivery" />
       </form>
-    </Dialog>
+    </Modal>
   )
 }
 
-function Dialog({
-  title,
+function DialogActions({
   close,
-  children
+  saving,
+  label,
+  disabled = false
 }: {
-  title: string
   close: VoidFunction
-  children: ReactNode
+  saving: boolean
+  label: string
+  disabled?: boolean
 }): ReactElement {
   return (
-    <div className="bg-ink-950/55 fixed inset-0 z-[70] grid place-items-center p-4 backdrop-blur-md">
-      <button
-        type="button"
-        className="absolute inset-0"
-        aria-label="Close dialog"
-        onClick={close}
-      />
-      <section
-        role="dialog"
-        aria-modal="true"
-        className="glass-surface relative z-10 max-h-[calc(100dvh-2rem)] w-full max-w-2xl min-w-0 overflow-y-auto rounded-[2rem] border-white/80 p-5 sm:p-6"
-      >
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute -top-20 right-0 size-44 rounded-full bg-mauve-300/30 blur-3xl"
-        />
-        <div className="relative mb-5 flex items-start justify-between gap-3">
-          <h2 className="min-w-0 text-xl font-semibold tracking-tight break-words text-neutral-950">
-            {title}
-          </h2>
-          <button type="button" onClick={close} className="icon-button" aria-label="Close dialog">
-            <FiX />
-          </button>
-        </div>
-        <div className="relative">{children}</div>
-      </section>
+    <div className="flex justify-end gap-2 border-t border-neutral-100 pt-4">
+      <button type="button" className="secondary-button" onClick={close} disabled={saving}>
+        Cancel
+      </button>
+      <button type="submit" disabled={saving || disabled} className="primary-button">
+        {saving ? 'Saving…' : label}
+      </button>
     </div>
-  )
-}
-
-function Field({ label, children }: { label: string; children: ReactElement }): ReactElement {
-  return (
-    <label className="block text-sm font-medium text-neutral-700">
-      {label}
-      <span className="mt-1.5 block">{children}</span>
-    </label>
   )
 }
 
@@ -1174,11 +1469,7 @@ function Metric({
   icon: ReactElement
 }): ReactElement {
   return (
-    <div className="relative overflow-hidden rounded-[1.5rem] border border-neutral-200/80 bg-white/85 p-5 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md">
-      <div
-        aria-hidden="true"
-        className="absolute inset-x-5 top-0 h-px bg-gradient-to-r from-mauve-300/0 via-mauve-300/90 to-indigo-300/0"
-      />
+    <div className="relative overflow-hidden rounded-[1.5rem] border border-neutral-200/80 bg-white/85 p-5 shadow-sm">
       <div className="flex items-center justify-between">
         <p className="text-sm text-neutral-500">{label}</p>
         <span className="grid size-10 place-items-center rounded-2xl bg-mauve-50 text-mauve-700">

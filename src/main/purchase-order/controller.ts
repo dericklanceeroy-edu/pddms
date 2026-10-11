@@ -5,7 +5,8 @@ import { channels, resources } from '@shared/constants'
 import {
   newPurchaseOrderSchema,
   purchaseOrderDeliverySchema,
-  purchaseOrderStatusUpdateSchema
+  purchaseOrderStatusUpdateSchema,
+  purchaseOrderUpdateSchema
 } from '@shared/schemas'
 import { formatValidationError } from '@shared/validation'
 import { isId } from '@shared/validators'
@@ -16,6 +17,7 @@ import {
   insertOne,
   recordDelivery,
   removeOneById,
+  updateDraftById,
   updateStatusById
 } from './repository'
 
@@ -41,6 +43,25 @@ ipcMain.handle(channels.purchaseOrder.createOne, async (_, payload: unknown) => 
       expectedAt: data.expectedAt ?? null,
       notes: data.notes ?? null,
       createdBy: accountId
+    })
+    state.database.stale = true
+    return { success: true, order }
+  } catch (error) {
+    return { success: false, error: formatValidationError(error) }
+  }
+})
+
+ipcMain.handle(channels.purchaseOrder.updateOneById, async (_, id: unknown, payload: unknown) => {
+  try {
+    authorize((session) =>
+      accessControl.can(session.account.role).updateAny(resources.purchaseOrder)
+    )
+    if (!isId(id)) return { success: false, error: 'Invalid purchase order.' }
+    const data = purchaseOrderUpdateSchema.parse(payload)
+    const order = await updateDraftById(id, {
+      ...data,
+      expectedAt: data.expectedAt ?? null,
+      notes: data.notes ?? null
     })
     state.database.stale = true
     return { success: true, order }

@@ -5,8 +5,8 @@ import { localDate } from '@shared/inventory'
 import { stockOutSchema } from '@shared/schemas'
 import { formatValidationError } from '@shared/validation'
 import { isId } from '@shared/validators'
+import { windowDialog } from '@main/api/dialogs'
 import { ipcMain } from '@main/api/ipc'
-import { dialog } from 'electron'
 import { writeFile } from 'node:fs/promises'
 import { findStockOuts, inventoryCsv, recordStockOut } from './repository'
 
@@ -35,12 +35,12 @@ ipcMain.handle(channels.inventory.getStockOuts, async (_, drugId: unknown) => {
   }
 })
 
-ipcMain.handle(channels.inventory.exportReport, async () => {
+ipcMain.handle(channels.inventory.exportReport, async (event) => {
   try {
     authorize((session) =>
       accessControl.can(session.account.role).readAny(resources.inventoryAdjustment)
     )
-    const selection = await dialog.showSaveDialog({
+    const selection = await windowDialog(event).showSaveDialog({
       title: 'Export current inventory',
       defaultPath: `inventory-${localDate()}.csv`,
       filters: [{ name: 'CSV report', extensions: ['csv'] }]
