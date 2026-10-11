@@ -15,7 +15,7 @@ import AdministrationTools from './AdministrationTools'
 const date = new Intl.DateTimeFormat('en-PH', { dateStyle: 'medium' })
 
 const roleTone: Record<UserRole, string> = {
-  master: 'border-mauve-200 bg-mauve-50 text-mauve-800',
+  master: 'border-brand-200 bg-brand-50 text-brand-800',
   staff: 'border-indigo-200 bg-indigo-50 text-indigo-800',
   cashier: 'border-sky-200 bg-sky-50 text-sky-800'
 }
@@ -42,38 +42,26 @@ export default function UserManagement(): ReactElement {
   return (
     <DashboardShell pageTitle="User management">
       <div className="space-y-5 lg:space-y-6">
-        <section className="page-intro p-6 sm:p-7">
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute -top-20 right-0 size-64 rounded-full bg-indigo-400/20 blur-3xl"
-          />
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute right-1/4 -bottom-24 size-52 rounded-full bg-mauve-400/15 blur-3xl"
-          />
+        <section className="page-intro">
           <div className="page-intro-content flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
             <div>
-              <p className="eyebrow">System administration</p>
-              <h2 className="mt-1 text-3xl font-semibold tracking-tight text-neutral-950 sm:text-[2rem]">
-                User accounts
-              </h2>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-neutral-600">
-                Create, find, inspect, block, and unblock verified system users.
+              <p className="eyebrow">Account & admin</p>
+              <h2 className="page-title mt-0.5">User management</h2>
+              <p className="page-subtitle">
+                Create staff and cashier accounts, and block access for anyone who should no longer
+                sign in.
               </p>
             </div>
-            <div className="flex flex-col items-start gap-3 sm:items-end">
-              <p className="rounded-full border border-white/80 bg-white/55 px-3 py-1.5 text-xs font-medium text-neutral-500 shadow-sm backdrop-blur-md">
-                Access control workspace
-              </p>
-              <button onClick={() => setCreating(true)} className="primary-button">
-                <FiPlus /> Create user
-              </button>
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 disabled={management.isLoading}
                 onClick={() => void management.load()}
                 className="secondary-button"
               >
                 Refresh accounts
+              </button>
+              <button onClick={() => setCreating(true)} className="primary-button">
+                <FiPlus /> Create user
               </button>
             </div>
           </div>
@@ -94,7 +82,7 @@ export default function UserManagement(): ReactElement {
         {(management.error || feedback) && (
           <p
             role={management.error ? 'alert' : 'status'}
-            className={`rounded-2xl border px-4 py-3 text-sm shadow-sm backdrop-blur-md ${management.error ? 'border-rose-200/80 bg-rose-50/75 text-rose-700' : 'border-emerald-200/80 bg-emerald-50/75 text-emerald-800'}`}
+            className={`status-message ${management.error ? 'border-rose-200 bg-rose-50 text-rose-800' : 'border-emerald-200 bg-emerald-50 text-emerald-800'}`}
           >
             {management.error || feedback}
           </p>
@@ -103,7 +91,7 @@ export default function UserManagement(): ReactElement {
           <div className="surface-header flex flex-col gap-3 p-4 sm:flex-row sm:p-5">
             <label className="relative flex-1">
               <span className="sr-only">Search users</span>
-              <FiSearch className="absolute top-3 left-3.5 text-neutral-400" />
+              <FiSearch className="absolute top-3 left-3.5 text-slate-400" />
               <input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
@@ -125,7 +113,7 @@ export default function UserManagement(): ReactElement {
           </div>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[720px] text-sm">
-              <thead className="surface-header text-left text-neutral-500">
+              <thead className="surface-header text-left text-slate-500">
                 <tr>
                   <th className="px-5 py-3">User</th>
                   <th className="px-5 py-3">Role</th>
@@ -134,7 +122,7 @@ export default function UserManagement(): ReactElement {
                   <th className="px-5 py-3 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-neutral-100/90">
+              <tbody className="divide-y divide-slate-100/90">
                 {filtered.map((user) => (
                   <tr
                     key={user.id}
@@ -148,11 +136,11 @@ export default function UserManagement(): ReactElement {
                         setSelected(user)
                       }
                     }}
-                    className="cursor-pointer transition-colors hover:bg-mauve-50/50 focus-visible:bg-mauve-50/50 focus-visible:ring-2 focus-visible:ring-mauve-500 focus-visible:outline-none focus-visible:ring-inset"
+                    className="hover:bg-brand-50/50 focus-visible:bg-brand-50/50 focus-visible:ring-brand-500 cursor-pointer transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset"
                   >
                     <td className="px-5 py-4">
                       <p className="font-semibold">{user.fullName}</p>
-                      <p className="text-xs text-neutral-500">@{user.username}</p>
+                      <p className="text-xs text-slate-500">@{user.username}</p>
                     </td>
                     <td className="px-5 py-4">
                       <span
@@ -177,7 +165,7 @@ export default function UserManagement(): ReactElement {
                         </p>
                       )}
                     </td>
-                    <td className="px-5 py-4 text-neutral-500">
+                    <td className="px-5 py-4 text-slate-500">
                       {date.format(new Date(user.createdAt))}
                     </td>
                     <td className="px-5 py-4">
@@ -189,7 +177,7 @@ export default function UserManagement(): ReactElement {
                             setEditing(user)
                           }}
                           onKeyDown={(event) => event.stopPropagation()}
-                          className={'icon-button text-mauve-700 disabled:opacity-40'}
+                          className={'icon-button text-brand-700 disabled:opacity-40'}
                           aria-label={'Edit user'}
                         >
                           <FiEdit2 />
@@ -249,12 +237,12 @@ export default function UserManagement(): ReactElement {
               </tbody>
             </table>
             {!management.isLoading && filtered.length === 0 && (
-              <p className="p-10 text-center text-sm text-neutral-500">
+              <p className="p-10 text-center text-sm text-slate-500">
                 No accounts match the filters.
               </p>
             )}
             {management.isLoading && (
-              <p className="p-10 text-center text-sm text-neutral-500">Loading accounts…</p>
+              <p className="p-10 text-center text-sm text-slate-500">Loading accounts…</p>
             )}
           </div>
         </section>
@@ -384,7 +372,7 @@ function CreateUserDialog({
         {error && (
           <p
             role="alert"
-            className="rounded-2xl border border-rose-200/80 bg-rose-50/75 p-3 text-sm text-rose-700"
+            className="rounded-lg border border-rose-200/80 bg-rose-50/75 p-3 text-sm text-rose-700"
           >
             {error}
           </p>
@@ -486,7 +474,7 @@ function EditUserDialog({
           <p
             role={'alert'}
             className={
-              'rounded-2xl border border-rose-200/80 bg-rose-50/75 p-3 text-sm text-rose-700'
+              'rounded-lg border border-rose-200/80 bg-rose-50/75 p-3 text-sm text-rose-700'
             }
           >
             {error}
@@ -531,13 +519,13 @@ function DeleteUserDialog({
   return (
     <Dialog title="Delete staff account?" close={close}>
       <div>
-        <p className="text-sm leading-6 text-neutral-600">
+        <p className="text-sm leading-6 text-slate-600">
           {user.fullName} will permanently lose access and be removed from the user list.
         </p>
         {error && (
           <p
             role="alert"
-            className="mt-4 rounded-2xl border border-rose-200/80 bg-rose-50/75 p-3 text-sm text-rose-700"
+            className="mt-4 rounded-lg border border-rose-200/80 bg-rose-50/75 p-3 text-sm text-rose-700"
           >
             {error}
           </p>
@@ -592,19 +580,15 @@ function Dialog({
   children: ReactElement
 }): ReactElement {
   return (
-    <div className="bg-ink-950/55 fixed inset-0 z-[70] grid place-items-center overflow-y-auto p-4 backdrop-blur-md">
+    <div className="bg-sidebar-950/55 fixed inset-0 z-[70] grid place-items-center overflow-y-auto p-4">
       <button className="absolute inset-0" aria-label="Close dialog" onClick={close} />
       <section
         role="dialog"
         aria-modal="true"
-        className="glass-surface relative z-10 max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-x-hidden overflow-y-auto rounded-[2rem] border-white/80 p-5 sm:p-6"
+        className="glass-surface relative z-10 max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-x-hidden overflow-y-auto rounded-lg border-slate-200 p-5 sm:p-6"
       >
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute -top-20 right-0 size-44 rounded-full bg-mauve-300/30 blur-3xl"
-        />
         <div className="relative mb-5 flex items-start justify-between gap-3">
-          <h2 className="min-w-0 text-xl font-semibold tracking-tight break-words text-neutral-950">
+          <h2 className="min-w-0 text-xl font-semibold tracking-tight break-words text-slate-950">
             {title}
           </h2>
           <button onClick={close} className="icon-button" aria-label="Close dialog">
@@ -619,7 +603,7 @@ function Dialog({
 
 function Field({ label, children }: { label: string; children: ReactElement }): ReactElement {
   return (
-    <label className="block text-sm font-medium text-neutral-700">
+    <label className="block text-sm font-medium text-slate-700">
       {label}
       <span className="mt-1.5 block">{children}</span>
     </label>
@@ -628,8 +612,8 @@ function Field({ label, children }: { label: string; children: ReactElement }): 
 
 function Detail({ label, value }: { label: string; value: string }): ReactElement {
   return (
-    <div className="rounded-2xl border border-neutral-200/80 bg-white/70 p-3">
-      <dt className="text-xs font-medium tracking-wide text-neutral-500 uppercase">{label}</dt>
+    <div className="rounded-lg border border-slate-200/80 bg-white p-3">
+      <dt className="text-xs font-medium tracking-wide text-slate-500 uppercase">{label}</dt>
       <dd className="mt-1 font-semibold break-words">{value}</dd>
     </div>
   )
@@ -645,14 +629,10 @@ function Metric({
   icon: ReactElement
 }): ReactElement {
   return (
-    <div className="relative overflow-hidden rounded-[1.5rem] border border-neutral-200/80 bg-white/85 p-5 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md">
-      <div
-        aria-hidden="true"
-        className="absolute inset-x-5 top-0 h-px bg-gradient-to-r from-mauve-300/0 via-mauve-300/90 to-indigo-300/0"
-      />
+    <div className="relative overflow-hidden rounded-lg border border-slate-200/80 bg-white p-5 shadow-sm transition duration-200 hover:shadow-md">
       <div className="flex items-center justify-between">
-        <p className="text-sm text-neutral-500">{label}</p>
-        <span className="grid size-10 place-items-center rounded-2xl bg-mauve-50 text-mauve-700">
+        <p className="text-sm text-slate-500">{label}</p>
+        <span className="bg-brand-50 text-brand-700 grid size-10 place-items-center rounded-lg">
           {icon}
         </span>
       </div>

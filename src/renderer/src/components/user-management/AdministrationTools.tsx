@@ -71,18 +71,18 @@ export default function AdministrationTools(): ReactElement {
   return (
     <div className="space-y-5">
       {error && (
-        <p role="alert" className="rounded-xl bg-rose-50 p-4 text-rose-800">
+        <p role="alert" className="status-message border-rose-200 bg-rose-50 text-rose-800">
           {error}
         </p>
       )}
       {message && (
-        <p role="status" className="rounded-xl bg-emerald-50 p-4 break-words text-emerald-800">
+        <p role="status" className="rounded-md bg-emerald-50 p-4 break-words text-emerald-800">
           {message}
         </p>
       )}
       <section className="panel space-y-3 p-5">
         <h3 className="text-lg font-semibold">Role permissions</h3>
-        <p className="text-sm text-neutral-500">
+        <p className="text-sm text-slate-500">
           Permissions come from existing AccessControl roles. Assign Staff/Cashier in Edit user to
           change access. The setup-only Master role is protected. No separate individual permission
           overrides are used.
@@ -99,7 +99,7 @@ export default function AdministrationTools(): ReactElement {
             <tbody>
               {Object.entries(grants).flatMap(([role, resources]) =>
                 Object.entries(resources).map(([resource, actions]) => (
-                  <tr key={`${role}-${resource}`} className="border-t border-neutral-100">
+                  <tr key={`${role}-${resource}`} className="border-t border-slate-100">
                     <td className="p-2">{role}</td>
                     <td className="p-2">{resource}</td>
                     <td className="p-2">{Object.keys(actions).join(', ')}</td>
@@ -112,7 +112,7 @@ export default function AdministrationTools(): ReactElement {
       </section>
       <section className="panel space-y-3 p-5">
         <h3 className="text-lg font-semibold">Backups & restore</h3>
-        <p className="text-sm text-neutral-500">
+        <p className="text-sm text-slate-500">
           Local backups contain a consistent SQLite snapshot and referenced supplier invoice files.
           Keep the entire backup folder. Files are not encrypted; store them securely. Restore
           requires a compatible schema and signs everyone out.
@@ -163,14 +163,14 @@ export default function AdministrationTools(): ReactElement {
             Refresh local backup list
           </button>
         </div>
-        <p className="text-xs text-neutral-500">
+        <p className="text-xs text-slate-500">
           The list shows the default local backup folder and backups created in this session.
           External backups can be selected through Restore.
         </p>
         <div className="max-h-48 space-y-2 overflow-auto">
           {backups.map((backup) => (
             <p
-              className="rounded-lg border border-neutral-200 p-3 text-sm break-all"
+              className="rounded-lg border border-slate-200 p-3 text-sm break-all"
               key={backup.directory}
             >
               {new Date(backup.createdAt).toLocaleString()} · {backup.invoiceCount} invoices
@@ -180,12 +180,12 @@ export default function AdministrationTools(): ReactElement {
           ))}
         </div>
         {!backups.length && (
-          <p className="text-sm text-neutral-500">No completed local backups found.</p>
+          <p className="text-sm text-slate-500">No completed local backups found.</p>
         )}
       </section>
       <section className="panel space-y-3 p-5">
         <h3 className="text-lg font-semibold">System activity log</h3>
-        <p className="text-sm text-neutral-500">
+        <p className="text-sm text-slate-500">
           Security events and important saved operations. Passwords and raw request payloads are
           never logged. A “started” entry without a final result may indicate an interrupted
           operation.
@@ -228,7 +228,7 @@ export default function AdministrationTools(): ReactElement {
             </thead>
             <tbody>
               {logs.map((log) => (
-                <tr className="border-t border-neutral-100" key={log.id}>
+                <tr className="border-t border-slate-100" key={log.id}>
                   <td className="p-3">{new Date(log.createdAt).toLocaleString()}</td>
                   <td className="p-3">{log.actorName}</td>
                   <td className="p-3">{log.action}</td>

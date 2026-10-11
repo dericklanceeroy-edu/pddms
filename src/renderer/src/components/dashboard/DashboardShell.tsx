@@ -120,15 +120,15 @@ function Sidebar({
   }
 
   return (
-    <div className="glass-sidebar flex h-full flex-col text-neutral-300">
-      <div className="flex h-20 shrink-0 items-center justify-between gap-3 border-b border-white/10 px-5">
+    <div className="glass-sidebar flex h-full flex-col text-slate-300">
+      <div className="bg-sidebar-950 flex h-16 shrink-0 items-center justify-between gap-3 px-5">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="grid size-10 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-mauve-500 to-indigo-600 text-2xl font-semibold text-white shadow-lg shadow-mauve-950/50">
+          <div className="bg-brand-600 grid size-10 shrink-0 place-items-center rounded-md text-2xl font-semibold text-white">
             +
           </div>
           <div className="min-w-0">
             <p className="truncate font-semibold tracking-tight text-white">Med Prix</p>
-            <p className="truncate text-xs text-neutral-400">Pharmacy management</p>
+            <p className="truncate text-xs text-slate-400">Pharmacy management</p>
           </div>
         </div>
         {onClose && (
@@ -137,24 +137,21 @@ function Sidebar({
             type="button"
             aria-label="Close navigation"
             onClick={onClose}
-            className="grid size-9 shrink-0 place-items-center rounded-lg text-neutral-400 transition hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-mauve-400 focus-visible:outline-none"
+            className="focus-visible:ring-brand-400 grid size-9 shrink-0 place-items-center rounded-lg text-slate-400 transition hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:outline-none"
           >
             <FiX aria-hidden="true" />
           </button>
         )}
       </div>
-      <nav
-        className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3 py-6"
-        aria-label="Dashboard sections"
-      >
+      <nav className="min-h-0 flex-1 overflow-y-auto py-5" aria-label="Dashboard sections">
         {navigation.map(({ group, items }) => {
           const permitted = items.filter(
             ({ to }) => account !== null && canAccessPath(account.role, to)
           )
           if (permitted.length === 0) return null
           return (
-            <div key={group} className="pb-4">
-              <p className="px-3 pb-1.5 text-[0.65rem] font-semibold tracking-[0.18em] text-neutral-500 uppercase">
+            <div key={group} className="pb-5">
+              <p className="px-5 pb-1.5 text-[0.7rem] font-semibold tracking-wider text-slate-400 uppercase">
                 {group}
               </p>
               {permitted.map(({ label, to, icon: Icon, tab }) => {
@@ -174,10 +171,10 @@ function Sidebar({
                     search={to === '/suppliers' ? { tab } : undefined}
                     aria-current={isActive ? 'page' : undefined}
                     onClick={onClose}
-                    className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
+                    className={`group flex items-center gap-3 border-l-4 px-4 py-2.5 text-sm font-medium transition-colors ${
                       isActive
-                        ? 'bg-white/15 text-white shadow-lg ring-1 shadow-black/20 ring-white/15'
-                        : 'text-neutral-400 hover:bg-white/10 hover:text-white'
+                        ? 'border-brand-300 bg-brand-600 text-white'
+                        : 'border-transparent text-slate-300 hover:bg-white/10 hover:text-white'
                     }`}
                   >
                     <Icon className="size-4.5 shrink-0" aria-hidden="true" />
@@ -189,17 +186,17 @@ function Sidebar({
           )
         })}
       </nav>
-      <div className="shrink-0 border-t border-white/10 p-4">
-        <div className="rounded-2xl border border-white/10 bg-white/[0.06] p-3 shadow-inner shadow-white/[0.04]">
+      <div className="bg-sidebar-950 shrink-0 border-t border-white/10 p-4">
+        <div>
           <div className="flex items-center gap-3">
-            <div className="grid size-9 place-items-center rounded-full bg-neutral-800 text-xs font-semibold text-white">
+            <div className="bg-brand-600 grid size-9 place-items-center rounded-full text-xs font-semibold text-white">
               {account?.username.slice(0, 2).toUpperCase() ?? '—'}
             </div>
             <div className="min-w-0">
               <p className="truncate text-sm font-medium text-white">
                 {account?.username ?? 'Unknown account'}
               </p>
-              <p className="text-xs text-neutral-400">
+              <p className="text-xs text-amber-300">
                 {account?.role === 'master'
                   ? 'Master account'
                   : `${account?.role ?? 'User'} account`}
@@ -210,7 +207,7 @@ function Sidebar({
             type="button"
             onClick={logout}
             disabled={isSigningOut}
-            className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-medium text-neutral-300 transition hover:bg-white/10 hover:text-white disabled:cursor-wait disabled:opacity-60"
+            className="mt-3 flex w-full items-center justify-center gap-2 rounded-md border border-white/15 px-3 py-2 text-xs font-medium text-slate-200 transition hover:bg-white/10 hover:text-white disabled:cursor-wait disabled:opacity-60"
           >
             <FiLogOut /> {isSigningOut ? 'Signing out…' : 'Sign out'}
           </button>
@@ -291,19 +288,13 @@ export default function DashboardShell({
   }, [isNavigationOpen])
 
   return (
-    <div className="admin-dashboard relative isolate min-h-screen overflow-hidden font-sans text-neutral-950">
-      <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden" aria-hidden="true">
-        <div className="mesh-glow bg-aurora-lilac/35 -top-52 left-[18%] size-[28rem]" />
-        <div className="mesh-glow bg-aurora-blue/30 top-[35%] -right-48 size-[30rem]" />
-        <div className="mesh-glow bg-aurora-peach/35 -bottom-56 left-[38%] size-[24rem]" />
-        <div className="mesh-glow bg-aurora-mint/20 top-[48%] left-[12%] size-[20rem]" />
-      </div>
+    <div className="admin-dashboard relative isolate min-h-screen font-sans text-slate-900">
       {isNavigationOpen && (
         <>
           <button
             type="button"
             aria-label="Close navigation"
-            className="fixed inset-0 z-40 bg-neutral-950/50 backdrop-blur-[2px] lg:hidden"
+            className="fixed inset-0 z-40 bg-slate-950/50 lg:hidden"
             onClick={closeNavigation}
           />
           <aside
@@ -322,12 +313,12 @@ export default function DashboardShell({
           </aside>
         </>
       )}
-      <aside className="shadow-ink-950/30 fixed inset-y-3 left-3 z-50 hidden w-64 overflow-hidden rounded-[1.75rem] shadow-2xl lg:block">
+      <aside className="fixed inset-y-0 left-0 z-50 hidden w-64 overflow-hidden lg:block">
         <Sidebar activePath={activePath} />
       </aside>
-      <div className="min-w-0 lg:pl-[18rem]">
-        <header className="glass-header sticky top-3 z-30 mx-3 rounded-[1.5rem]">
-          <div className="flex h-20 items-center justify-between gap-4 px-4 sm:px-6 xl:px-8">
+      <div className="min-w-0 lg:pl-64">
+        <header className="glass-header sticky top-0 z-30">
+          <div className="flex h-16 items-center justify-between gap-4 px-4 sm:px-6 xl:px-8">
             <div className="flex min-w-0 items-center gap-3">
               <button
                 ref={navigationButtonRef}
@@ -341,23 +332,23 @@ export default function DashboardShell({
                 <FiMenu aria-hidden="true" />
               </button>
               <div className="min-w-0">
-                <h1 className="truncate text-base font-semibold tracking-tight sm:text-lg">
+                <h1 className="truncate text-base font-semibold tracking-tight text-slate-900">
                   {pageTitle}
                 </h1>
-                <p className="hidden truncate text-xs text-neutral-500 sm:block">
+                <p className="hidden truncate text-xs text-slate-500 sm:block">
                   {dateFormatter.format(generatedAt)}
                 </p>
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-2 sm:gap-3">
               {source && (
-                <span className="hidden items-center gap-1.5 rounded-full border border-emerald-200/80 bg-emerald-50/80 px-3 py-1.5 text-xs font-medium text-emerald-800 shadow-sm sm:inline-flex">
+                <span className="hidden items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-800 sm:inline-flex">
                   <span className="size-1.5 rounded-full bg-emerald-500" aria-hidden="true" />
                   {source.label}
                 </span>
               )}
               {(source || isLoading) && (
-                <span className="hidden text-xs text-neutral-500 md:inline">
+                <span className="hidden text-xs text-slate-500 md:inline">
                   {source ? `Updated ${timeFormatter.format(generatedAt)}` : 'Loading data'}
                 </span>
               )}
@@ -379,9 +370,7 @@ export default function DashboardShell({
             </div>
           </div>
         </header>
-        <main className="mx-auto w-full max-w-[108rem] p-4 pt-7 sm:p-6 sm:pt-8 xl:p-8 xl:pt-10">
-          {children}
-        </main>
+        <main className="mx-auto w-full max-w-[100rem] p-4 sm:p-6 xl:p-8">{children}</main>
       </div>
     </div>
   )

@@ -1,5 +1,10 @@
 import DashboardShell from '@renderer/components/dashboard/DashboardShell'
-import { getItemStock, getSellableStock, getStockStatus } from '@renderer/data/profiles'
+import {
+  getItemStock,
+  getSellableStock,
+  getStockStatus,
+  type ItemProfile
+} from '@renderer/data/profiles'
 import { useAccount } from '@renderer/hooks/useAccount'
 import { exportInventory } from '@renderer/services/inventory'
 import { useProfileStore } from '@renderer/stores/useProfileStore'
@@ -12,11 +17,30 @@ import {
   FiChevronRight,
   FiLayers,
   FiPlus,
+  FiRefreshCw,
   FiSearch
 } from 'react-icons/fi'
 import InventoryReport from './InventoryReport'
 
 const expiryDate = new Intl.DateTimeFormat('en-PH', { dateStyle: 'medium' })
+
+type StockFilter = 'all' | 'low-stock' | 'out-of-stock' | 'near-expiry' | 'expired'
+
+const stockFilters: Array<{ id: StockFilter; label: string }> = [
+  { id: 'all', label: 'All products' },
+  { id: 'low-stock', label: 'Low stock' },
+  { id: 'out-of-stock', label: 'Out of stock' },
+  { id: 'near-expiry', label: 'Expiring soon' },
+  { id: 'expired', label: 'Expired stock on hand' }
+]
+
+function matchesFilter(item: ItemProfile, filter: StockFilter): boolean {
+  if (filter === 'all') return true
+  if (filter === 'low-stock' || filter === 'out-of-stock') return getStockStatus(item) === filter
+  return item.batches.some(
+    (batch) => batch.stock > 0 && getExpiryStatus(batch.expiresAt) === filter
+  )
+}
 
 const statusLabels = {
   'in-stock': 'In stock',
@@ -31,22 +55,28 @@ export default function ItemDirectory(): ReactElement {
   const loadError = useProfileStore((state) => state.error)
   const isLoading = useProfileStore((state) => state.isLoading)
   const [report, setReport] = useState(false)
-  const [message, setMessage] = useState('')
+  const [message, setMessageState] = useState<{ text: string; tone: 'success' | 'error' } | null>(
+    null
+  )
+  const setMessage = (text: string, tone: 'success' | 'error' = 'success'): void =>
+    setMessageState(text ? { text, tone } : null)
   const [exporting, setExporting] = useState(false)
 
   const [query, setQuery] = useState('')
+  const [filter, setFilter] = useState<StockFilter>('all')
 
   const filteredItems = useMemo(() => {
     const search = query.trim().toLowerCase()
 
     return items.filter(
       (item) =>
-        !search ||
-        `${item.genericName} ${item.brandName} ${item.category} ${item.formulation}`
-          .toLowerCase()
-          .includes(search)
+        matchesFilter(item, filter) &&
+        (!search ||
+          `${item.genericName} ${item.brandName} ${item.category} ${item.formulation}`
+            .toLowerCase()
+            .includes(search))
     )
-  }, [items, query])
+  }, [items, query, filter])
 
   const inventoryMetrics = useMemo(() => {
     let availableUnits = 0
@@ -81,28 +111,28 @@ export default function ItemDirectory(): ReactElement {
   return (
     <DashboardShell pageTitle="Inventory">
       <div className="space-y-5 sm:space-y-6">
-        <section className="page-intro p-6 sm:p-7">
-          <div className="mesh-glow -top-28 right-0 size-72 bg-indigo-300/30" />
-          <div className="mesh-glow -bottom-36 left-1/4 size-72 bg-mauve-300/25" />
-          <div className="page-intro-content flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
-            <div className="max-w-2xl">
-              <p className="eyebrow">Item profiles</p>
-              <h2 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">
-                Medicine catalog & expiry
+        <section className="page-intro">
+          <div className="page-intro-content flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
+            <div className="max-w-2xl min-w-0">
+              <p className="eyebrow">Stock & purchasing</p>
+              <h2 className="page-title mt-0.5">
+                Inventory & expiry ({inventoryMetrics.products})
               </h2>
-              <p className="mt-3 max-w-xl text-sm leading-6 text-neutral-600 sm:text-base">
-                Review product details, generic equivalents, active stock batches, pricing, and
-                expiry information from one clear catalog.
+              <p className="page-subtitle">
+                Every medicine with its stock on hand and nearest expiry. Open a product to see its
+                batches, prices and generic equivalents.
               </p>
             </div>
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
               <button
                 type="button"
-                className="secondary-button"
+                className="icon-button"
+                aria-label="Refresh inventory"
+                title="Refresh inventory"
                 disabled={isLoading}
                 onClick={() => void loadItems(true)}
               >
-                {isLoading ? 'Loading…' : 'Refresh'}
+                <FiRefreshCw className={isLoading ? 'animate-spin' : ''} aria-hidden="true" />
               </button>
               <button
                 type="button"
@@ -112,7 +142,7 @@ export default function ItemDirectory(): ReactElement {
                   void loadItems(true)
                 }}
               >
-                {report ? 'Hide report' : 'View inventory report'}
+                {report ? 'Hide report' : 'Inventory report'}
               </button>
               {account?.role === 'master' && (
                 <button
@@ -124,7 +154,10 @@ export default function ItemDirectory(): ReactElement {
                     void exportInventory()
                       .then((saved) => setMessage(saved ? 'Inventory report exported.' : ''))
                       .catch((cause: unknown) =>
-                        setMessage(cause instanceof Error ? cause.message : 'Export failed.')
+                        setMessage(
+                          cause instanceof Error ? cause.message : 'Export failed.',
+                          'error'
+                        )
                       )
                       .finally(() => setExporting(false))
                   }}
@@ -132,14 +165,6 @@ export default function ItemDirectory(): ReactElement {
                   {exporting ? 'Exporting…' : 'Export CSV'}
                 </button>
               )}
-              <div className="glass-surface rounded-2xl px-4 py-2.5">
-                <p className="text-[0.68rem] font-semibold tracking-[0.14em] text-neutral-500 uppercase">
-                  Products
-                </p>
-                <p className="mt-1 text-lg font-semibold text-neutral-900">
-                  {inventoryMetrics.products}
-                </p>
-              </div>
               {(account?.role === 'master' || account?.role === 'staff') && (
                 <Link to="/items/$itemId" params={{ itemId: 'new' }} className="primary-button">
                   <FiPlus /> Add product
@@ -150,22 +175,25 @@ export default function ItemDirectory(): ReactElement {
         </section>
 
         {message && (
-          <p role="status" className="text-sm">
-            {message}
+          <p
+            role={message.tone === 'error' ? 'alert' : 'status'}
+            className={`status-message ${message.tone === 'error' ? 'border-rose-200 bg-rose-50 text-rose-800' : 'border-emerald-200 bg-emerald-50 text-emerald-800'}`}
+          >
+            {message.text}
           </p>
         )}
         {report && !loadError && <InventoryReport items={items} />}
 
         <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_18rem]">
           <section className="panel min-w-0 overflow-hidden">
-            <header className="flex flex-col gap-4 border-b border-white/65 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+            <header className="flex flex-col gap-4 border-b border-slate-200 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
               <div>
-                <h3 className="font-semibold">Catalog directory</h3>
-                <p className="mt-1 text-sm text-neutral-500">
-                  Search a product, then open its complete inventory profile.
+                <h3 className="font-semibold">List of medicines</h3>
+                <p className="mt-1 text-sm text-slate-500">
+                  Search or filter, then open a product to see its batches and expiry dates.
                 </p>
               </div>
-              <span className="w-fit rounded-full border border-mauve-100 bg-mauve-50/80 px-3 py-1 text-xs font-semibold text-mauve-700">
+              <span className="border-brand-100 bg-brand-50/80 text-brand-700 w-fit rounded-full border px-3 py-1 text-xs font-semibold">
                 {filteredItems.length} shown
               </span>
             </header>
@@ -179,10 +207,10 @@ export default function ItemDirectory(): ReactElement {
               </p>
             )}
 
-            <div className="border-b border-white/65 p-4 sm:px-6 sm:py-5">
-              <label className="relative block max-w-xl">
+            <div className="flex flex-col gap-3 border-b border-slate-200 p-4 sm:flex-row sm:px-6">
+              <label className="relative block min-w-0 flex-1 sm:max-w-xl">
                 <span className="sr-only">Search medicines</span>
-                <FiSearch className="absolute top-1/2 left-3.5 -translate-y-1/2 text-neutral-400" />
+                <FiSearch className="absolute top-1/2 left-3.5 -translate-y-1/2 text-slate-400" />
                 <input
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
@@ -190,9 +218,21 @@ export default function ItemDirectory(): ReactElement {
                   className="field mt-0 pl-10"
                 />
               </label>
+              <select
+                value={filter}
+                onChange={(event) => setFilter(event.target.value as StockFilter)}
+                className="field mt-0 sm:w-56"
+                aria-label="Filter by stock or expiry status"
+              >
+                {stockFilters.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
             </div>
 
-            <div className="divide-y divide-white/65">
+            <div className="divide-y divide-slate-100">
               {filteredItems.map((item) => {
                 const status = getStockStatus(item)
                 const stock = getItemStock(item)
@@ -206,23 +246,21 @@ export default function ItemDirectory(): ReactElement {
                     key={item.id}
                     to="/items/$itemId"
                     params={{ itemId: String(item.id) }}
-                    className="group flex items-center gap-4 px-5 py-4 transition duration-200 hover:bg-white/45 sm:px-6 sm:py-5"
+                    className="group flex items-center gap-4 px-5 py-4 transition-colors hover:bg-slate-50 sm:px-6"
                   >
-                    <div className="grid size-11 shrink-0 place-items-center rounded-2xl border border-mauve-100 bg-mauve-50/80 text-mauve-700 shadow-sm shadow-mauve-100/60">
+                    <div className="border-brand-100 bg-brand-50/80 text-brand-700 shadow-brand-100/60 grid size-11 shrink-0 place-items-center rounded-lg border shadow-sm">
                       <FiArchive />
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="truncate font-semibold text-neutral-900">
-                          {item.brandName}
-                        </h3>
+                        <h3 className="truncate font-semibold text-slate-900">{item.brandName}</h3>
                         <span
                           className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${status === 'in-stock' ? 'border-emerald-100 bg-emerald-50/80 text-emerald-700' : status === 'low-stock' ? 'border-amber-100 bg-amber-50/80 text-amber-700' : 'border-rose-100 bg-rose-50/80 text-rose-700'}`}
                         >
                           {statusLabels[status]}
                         </span>
                       </div>
-                      <p className="mt-1 truncate text-sm text-neutral-500">
+                      <p className="mt-1 truncate text-sm text-slate-500">
                         {item.genericName} · {item.formulation}
                       </p>
                       {item.batches.some(
@@ -242,37 +280,40 @@ export default function ItemDirectory(): ReactElement {
                       )}
                     </div>
                     <div className="hidden w-40 text-right md:block">
-                      <p className="text-xs text-neutral-500">Next expiry</p>
-                      <p className="text-sm font-medium text-neutral-800">
+                      <p className="text-xs text-slate-500">Next expiry</p>
+                      <p className="text-sm font-medium text-slate-800">
                         {nextExpiry ? expiryDate.format(new Date(nextExpiry)) : 'No stock on hand'}
                       </p>
                     </div>
                     <div className="hidden text-right sm:block">
-                      <p className="font-semibold text-neutral-900">{stock} on hand</p>
-                      <p className="text-xs text-neutral-500">{getSellableStock(item)} sellable</p>
-                      <p className="mt-1 text-xs text-neutral-500">
-                        {item.batches.length} recorded batches
+                      <p className="font-semibold text-slate-900">{stock} on hand</p>
+                      <p className="text-xs text-slate-500">{getSellableStock(item)} sellable</p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        {item.batches.length} recorded batch
+                        {item.batches.length === 1 ? '' : 'es'}
                       </p>
                     </div>
-                    <FiChevronRight className="shrink-0 text-neutral-400 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-mauve-700" />
+                    <FiChevronRight className="group-hover:text-brand-700 shrink-0 text-slate-400 transition-transform duration-200 group-hover:translate-x-0.5" />
                   </Link>
                 )
               })}
               {isLoading && (
-                <p role="status" className="p-5 text-sm text-neutral-500">
+                <p role="status" className="p-5 text-sm text-slate-500">
                   Loading current inventory…
                 </p>
               )}
               {!isLoading && filteredItems.length === 0 && (
                 <div className="px-5 py-14 text-center sm:px-6">
-                  <div className="mx-auto grid size-12 place-items-center rounded-2xl bg-neutral-100/80 text-neutral-400">
+                  <div className="mx-auto grid size-12 place-items-center rounded-lg bg-slate-100/80 text-slate-400">
                     <FiArchive />
                   </div>
-                  <p className="mt-4 font-medium text-neutral-700">
-                    No medicines match this search.
+                  <p className="mt-4 font-medium text-slate-700">
+                    {items.length === 0 ? 'No products yet.' : 'No medicines match this search.'}
                   </p>
-                  <p className="mt-1 text-sm text-neutral-500">
-                    Try another product name, category, or formulation.
+                  <p className="mt-1 text-sm text-slate-500">
+                    {items.length === 0
+                      ? 'Add a product to the catalog, then receive stock for it through a purchase order.'
+                      : 'Try another name, or set the filter back to All products.'}
                   </p>
                 </div>
               )}
@@ -317,15 +358,14 @@ function InventoryMetric({
   description: string
 }): ReactElement {
   return (
-    <section className="glass-surface relative overflow-hidden rounded-3xl p-5">
-      <div className="absolute -top-8 -right-8 size-24 rounded-full bg-indigo-200/35 blur-2xl" />
+    <section className="panel p-5">
       <div className="relative">
-        <div className="grid size-10 place-items-center rounded-2xl border border-white/80 bg-white/65 text-mauve-700 shadow-sm">
+        <div className="text-brand-700 grid size-10 place-items-center rounded-lg border border-slate-200 bg-white shadow-sm">
           {icon}
         </div>
-        <p className="mt-5 text-sm text-neutral-500">{label}</p>
-        <p className="mt-1 text-2xl font-semibold tracking-tight text-neutral-950">{value}</p>
-        <p className="mt-2 text-xs leading-5 text-neutral-500">{description}</p>
+        <p className="mt-5 text-sm text-slate-500">{label}</p>
+        <p className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">{value}</p>
+        <p className="mt-2 text-xs leading-5 text-slate-500">{description}</p>
       </div>
     </section>
   )

@@ -8,7 +8,7 @@ export default function InventoryReport({ items }: { items: ItemProfile[] }): Re
       <h3 className="p-5 font-semibold">Current inventory report</h3>
       <div className="max-h-[65vh] overflow-auto" tabIndex={0} aria-label="Inventory report table">
         <table className="w-full min-w-[850px] text-left text-sm">
-          <thead className="sticky top-0 bg-neutral-50">
+          <thead className="sticky top-0 bg-slate-50">
             <tr>
               {[
                 'Product',
@@ -25,13 +25,13 @@ export default function InventoryReport({ items }: { items: ItemProfile[] }): Re
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-neutral-100">
+          <tbody className="divide-y divide-slate-100">
             {items.flatMap((item) =>
               (item.batches.length ? item.batches : [null]).map((batch) => (
                 <tr key={`${item.id}-${batch?.id ?? 'empty'}`}>
                   <td className="max-w-60 px-4 py-3 break-words">
                     {item.brandName}
-                    <p className="text-xs text-neutral-500">
+                    <p className="text-xs text-slate-500">
                       {item.genericName} · {item.formulation}
                     </p>
                   </td>
@@ -57,7 +57,7 @@ export default function InventoryReport({ items }: { items: ItemProfile[] }): Re
                       className={
                         batch && getExpiryStatus(batch.expiresAt) === 'expired'
                           ? 'text-rose-700'
-                          : 'text-neutral-500'
+                          : 'text-slate-500'
                       }
                     >
                       {batch ? expiryLabels[getExpiryStatus(batch.expiresAt)] : '—'}
@@ -75,7 +75,7 @@ export default function InventoryReport({ items }: { items: ItemProfile[] }): Re
             )}
           </tbody>
         </table>
-        {!items.length && <p className="p-5 text-sm text-neutral-500">No products recorded.</p>}
+        {!items.length && <p className="p-5 text-sm text-slate-500">No products recorded.</p>}
       </div>
     </section>
   )

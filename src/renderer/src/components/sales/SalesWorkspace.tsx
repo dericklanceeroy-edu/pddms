@@ -163,10 +163,14 @@ export default function SalesWorkspace(): ReactElement {
   return (
     <DashboardShell pageTitle="Sales & dispensing">
       <div className="space-y-5">
-        <header className="page-intro flex flex-wrap items-center justify-between gap-4 p-6">
+        <header className="page-intro flex flex-wrap items-center justify-between gap-4">
           <div>
-            <p className="eyebrow">Point of sale</p>
-            <h2 className="text-2xl font-semibold">Sales & dispensing</h2>
+            <p className="eyebrow">Daily work</p>
+            <h2 className="page-title mt-0.5">Sales & dispensing</h2>
+            <p className="page-subtitle">
+              Search a medicine, add it to the cart, apply a Senior Citizen or PWD discount when
+              eligible, then complete the sale.
+            </p>
           </div>
           <div className="flex flex-wrap gap-2">
             <button
@@ -190,19 +194,22 @@ export default function SalesWorkspace(): ReactElement {
           </div>
         </header>
         {error && (
-          <p role="alert" className="rounded-xl bg-rose-50 p-4 text-rose-700">
+          <p role="alert" className="status-message border-rose-200 bg-rose-50 text-rose-800">
             {error}
           </p>
         )}
         {notice && (
-          <p role="status" className="rounded-xl bg-emerald-50 p-4 text-emerald-800">
+          <p
+            role="status"
+            className="status-message border-emerald-200 bg-emerald-50 text-emerald-800"
+          >
             {notice}
           </p>
         )}
         {history ? (
           <section className="panel space-y-3 p-5">
             <h3 className="font-semibold">Completed transactions</h3>
-            <p className="text-sm text-neutral-500">
+            <p className="text-sm text-slate-500">
               Newest first · {account?.role === 'master' ? 'All cashiers' : 'Your sales only'}
             </p>
             <div className="max-h-[65vh] overflow-auto">
@@ -220,7 +227,7 @@ export default function SalesWorkspace(): ReactElement {
                 </thead>
                 <tbody>
                   {history.map((sale) => (
-                    <tr className="border-t border-neutral-100" key={sale.id}>
+                    <tr className="border-t border-slate-100" key={sale.id}>
                       <td className="max-w-64 p-3 break-all">
                         {sale.reference}
                         <p>{new Date(sale.createdAt).toLocaleString()}</p>
@@ -276,12 +283,12 @@ export default function SalesWorkspace(): ReactElement {
                 {matches.map((item) => (
                   <button
                     key={item.id}
-                    className={`block w-full rounded-xl border p-3 text-left ${selected === item.id ? 'border-mauve-500 bg-mauve-50' : 'border-neutral-200'}`}
+                    className={`block w-full rounded-md border p-3 text-left ${selected === item.id ? 'border-brand-500 bg-brand-50' : 'border-slate-200'}`}
                     onClick={() => setSelected(item.id)}
                   >
                     <span className="font-semibold break-words">{item.brandName}</span>
                     <span className="ml-2 text-sm">{getSellableStock(item)} sellable</span>
-                    <p className="text-sm text-neutral-500">
+                    <p className="text-sm text-slate-500">
                       {item.genericName} · {item.formulation} · {item.category}
                     </p>
                   </button>
@@ -291,7 +298,7 @@ export default function SalesWorkspace(): ReactElement {
               {product ? (
                 <div className="space-y-3 border-t pt-4">
                   <h3 className="font-semibold break-words">{product.brandName} — batches</h3>
-                  <p className="text-sm text-neutral-500">
+                  <p className="text-sm text-slate-500">
                     Select the batch being dispensed.{' '}
                     {product.prescriptionRequired ? 'Prescription required. ' : ''}
                     {product.controlled ? 'Controlled medicine.' : ''}
@@ -299,7 +306,7 @@ export default function SalesWorkspace(): ReactElement {
                   {product.batches.map((batch) => (
                     <div
                       key={batch.id}
-                      className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-neutral-200 p-3"
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-slate-200 p-3"
                     >
                       <div className="min-w-0 break-words">
                         <p className="font-medium">
@@ -309,7 +316,7 @@ export default function SalesWorkspace(): ReactElement {
                           {batch.stock} on hand · Expires {batch.expiresAt}
                         </p>
                         <p
-                          className={`text-sm ${isBatchSellable(batch.stock, batch.expiresAt) ? 'text-neutral-500' : 'text-rose-700'}`}
+                          className={`text-sm ${isBatchSellable(batch.stock, batch.expiresAt) ? 'text-slate-500' : 'text-rose-700'}`}
                         >
                           {expiryLabels[getExpiryStatus(batch.expiresAt)]}
                         </p>
@@ -331,7 +338,7 @@ export default function SalesWorkspace(): ReactElement {
                   {!product.batches.length && <p>No stock batches recorded.</p>}
                 </div>
               ) : (
-                <p className="text-sm text-neutral-500">
+                <p className="text-sm text-slate-500">
                   Select a product to view batch, expiry, and price details.
                 </p>
               )}
@@ -339,7 +346,7 @@ export default function SalesWorkspace(): ReactElement {
             <section className="panel min-w-0 space-y-4 p-5">
               <h3 className="text-lg font-semibold">Current cart</h3>
               {!cart.length && (
-                <p className="text-sm text-neutral-500">Add a product to start a transaction.</p>
+                <p className="text-sm text-slate-500">Add a product to start a transaction.</p>
               )}
               <div className="max-h-80 space-y-3 overflow-auto">
                 {cart.map((line) => {
@@ -349,7 +356,7 @@ export default function SalesWorkspace(): ReactElement {
                   const batch = item?.batches.find((value) => value.id === line.batchId)
                   return (
                     <div
-                      className="space-y-2 rounded-xl border border-neutral-200 p-3"
+                      className="space-y-2 rounded-md border border-slate-200 p-3"
                       key={line.batchId}
                     >
                       <p className="font-medium break-words">
@@ -407,7 +414,7 @@ export default function SalesWorkspace(): ReactElement {
                   ))}
                 </select>
               </label>
-              <p className="text-xs text-neutral-500">
+              <p className="text-xs text-slate-500">
                 Registered Senior/PWD eligibility applies 12% VAT exemption, then 20% discount.
               </p>
               {pricing.error && (
@@ -415,7 +422,7 @@ export default function SalesWorkspace(): ReactElement {
                   {pricing.error}
                 </p>
               )}
-              <dl className="space-y-2 rounded-xl bg-neutral-50 p-4">
+              <dl className="space-y-2 rounded-md bg-slate-50 p-4">
                 <div className="flex justify-between gap-3">
                   <dt>Subtotal</dt>
                   <dd>{money(pricing.totals.subtotalCents)}</dd>
@@ -487,12 +494,12 @@ export function Receipt({ sale, close }: { sale: SaleRecord; close: VoidFunction
   const [message, setMessage] = useState('')
   const [saving, setSaving] = useState(false)
   return (
-    <div className="fixed inset-0 z-[70] grid place-items-center overflow-y-auto bg-neutral-950/50 p-4">
+    <div className="fixed inset-0 z-[70] grid place-items-center overflow-y-auto bg-slate-950/50 p-4">
       <section
         role="dialog"
         aria-modal="true"
         aria-label="Completed sale receipt"
-        className="max-h-[calc(100dvh-2rem)] w-full max-w-xl overflow-auto rounded-2xl bg-white p-5"
+        className="max-h-[calc(100dvh-2rem)] w-full max-w-xl overflow-auto rounded-lg bg-white p-5"
       >
         <div className="mb-4 flex flex-wrap justify-between gap-3">
           <h2 className="text-xl font-semibold">Completed sale</h2>

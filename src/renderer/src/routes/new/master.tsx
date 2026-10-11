@@ -1,5 +1,6 @@
 import Form from '@renderer/components/Form/Form'
 import { CenteredPageHeader } from '@renderer/components/layout/CenteredPage'
+import FormField from '@renderer/components/ui/FormField'
 import { useAccount } from '@renderer/hooks/useAccount'
 import { createMaster, type MasterSetup } from '@renderer/services/setup'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
@@ -38,37 +39,48 @@ function RouteComponent(): ReactElement {
         description="This first account controls system access and administration."
       />
       <Form<MasterSetup> noValidate onSubmit={submit} className="space-y-4">
-        <Form.Text
-          name="fullName"
-          placeholder="e.g. Juan Dela Cruz"
-          autoComplete="name"
+        <FormField label="Full name" required>
+          <Form.Text
+            name="fullName"
+            placeholder="e.g. Juan Dela Cruz"
+            autoComplete="name"
+            required
+            minLength={2}
+            disabled={isSubmitting}
+          />
+        </FormField>
+        <FormField
+          label="Username"
           required
-          minLength={2}
-          disabled={isSubmitting}
-        />
-        <Form.Text
-          name="username"
-          placeholder="e.g. juan.delacruz"
-          autoComplete="username"
+          hint="At least 4 characters. You will use this to sign in."
+        >
+          <Form.Text
+            name="username"
+            placeholder="e.g. juan.delacruz"
+            autoComplete="username"
+            required
+            minLength={4}
+            disabled={isSubmitting}
+          />
+        </FormField>
+        <FormField
+          label="Password"
           required
-          minLength={4}
-          disabled={isSubmitting}
-        />
-        <Form.Password
-          name="password"
-          placeholder="At least 8 characters"
-          autoComplete="new-password"
-          show={BsEyeFill}
-          hide={BsEyeSlashFill}
-          required
-          minLength={8}
-          disabled={isSubmitting}
-        />
+          hint="At least 8 characters. Keep it private; this account controls the whole system."
+        >
+          <Form.Password
+            name="password"
+            placeholder="At least 8 characters"
+            autoComplete="new-password"
+            show={BsEyeFill}
+            hide={BsEyeSlashFill}
+            required
+            minLength={8}
+            disabled={isSubmitting}
+          />
+        </FormField>
         {error && (
-          <p
-            role="alert"
-            className="status-message border-rose-200/80 bg-rose-50/75 text-rose-700 backdrop-blur-md"
-          >
+          <p role="alert" className="status-message border-rose-200 bg-rose-50 text-rose-800">
             {error}
           </p>
         )}

@@ -27,7 +27,7 @@ const timeFormatter = new Intl.DateTimeFormat('en-PH', {
 const severityStyles: Record<DashboardAlertSeverity, string> = {
   critical: 'bg-rose-50 text-rose-700 ring-rose-100',
   warning: 'bg-amber-50 text-amber-700 ring-amber-100',
-  watch: 'bg-mauve-50 text-mauve-700 ring-mauve-100'
+  watch: 'bg-brand-50 text-brand-700 ring-brand-100'
 }
 
 const severityLabels: Record<DashboardAlertSeverity, string> = {
@@ -55,18 +55,18 @@ function PanelHeader({
     <header className="surface-header flex items-start justify-between gap-4 px-5 py-5 sm:px-6">
       <div className="flex min-w-0 gap-3">
         <div
-          className={`grid size-10 shrink-0 place-items-center rounded-2xl ring-1 ring-white/60 ${tone}`}
+          className={`grid size-10 shrink-0 place-items-center rounded-lg ring-1 ring-white/60 ${tone}`}
         >
           <Icon className="size-4.5" aria-hidden="true" />
         </div>
         <div className="min-w-0">
-          <h3 id={headingId} className="font-semibold tracking-tight text-neutral-950">
+          <h3 id={headingId} className="font-semibold tracking-tight text-slate-950">
             {title}
           </h3>
-          <p className="mt-0.5 text-xs leading-5 text-neutral-500">{description}</p>
+          <p className="mt-0.5 text-xs leading-5 text-slate-500">{description}</p>
         </div>
       </div>
-      <span className="rounded-full bg-white/70 px-2.5 py-1 text-xs font-semibold text-neutral-600 ring-1 ring-white/70 backdrop-blur-sm">
+      <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-slate-600 ring-1 ring-white/70">
         {count}
       </span>
     </header>
@@ -77,11 +77,11 @@ function EmptyTable({ colSpan, label }: { colSpan: number; label: string }): Rea
   return (
     <tr>
       <td colSpan={colSpan} className="px-5 py-12 text-center">
-        <div className="mx-auto grid size-10 place-items-center rounded-2xl bg-emerald-50/80 text-emerald-600 ring-1 ring-emerald-100">
+        <div className="mx-auto grid size-10 place-items-center rounded-lg bg-emerald-50/80 text-emerald-600 ring-1 ring-emerald-100">
           <FiClock className="size-4" aria-hidden="true" />
         </div>
-        <p className="mt-3 text-sm font-medium text-neutral-700">{label}</p>
-        <p className="mt-1 text-xs text-neutral-500">New records will appear here automatically.</p>
+        <p className="mt-3 text-sm font-medium text-slate-700">{label}</p>
+        <p className="mt-1 text-xs text-slate-500">New records will appear here automatically.</p>
       </td>
     </tr>
   )
@@ -113,7 +113,7 @@ export function ExpiryWatchlist({ alerts }: { alerts: DashboardExpiryAlert[] }):
           aria-labelledby="expiry-watchlist-title"
           className="w-full min-w-[35rem] text-left text-sm"
         >
-          <thead className="border-b border-white/70 bg-slate-50/60 text-[0.68rem] tracking-wide text-neutral-500 uppercase">
+          <thead className="border-b border-slate-200 bg-slate-50/60 text-[0.68rem] tracking-wide text-slate-500 uppercase">
             <tr>
               <th scope="col" className="px-5 py-3 font-semibold sm:px-6">
                 Product
@@ -132,22 +132,22 @@ export function ExpiryWatchlist({ alerts }: { alerts: DashboardExpiryAlert[] }):
               </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-white/60">
+          <tbody className="divide-y divide-slate-100">
             {alerts.length === 0 ? (
               <EmptyTable colSpan={5} label="No batches are nearing expiry." />
             ) : (
               alerts.map((alert) => (
-                <tr key={alert.id} className="transition-colors hover:bg-mauve-50/35">
-                  <th scope="row" className="px-5 py-4 font-medium text-neutral-800 sm:px-6">
+                <tr key={alert.id} className="hover:bg-brand-50/35 transition-colors">
+                  <th scope="row" className="px-5 py-4 font-medium text-slate-800 sm:px-6">
                     {alert.productName}
                   </th>
-                  <td className="px-4 py-4 font-mono text-xs text-neutral-500">
+                  <td className="px-4 py-4 font-mono text-xs text-slate-500">
                     {alert.batchNumber}
                   </td>
-                  <td className="px-4 py-4 text-right font-medium text-neutral-700 tabular-nums">
+                  <td className="px-4 py-4 text-right font-medium text-slate-700 tabular-nums">
                     {alert.stockRemaining}
                   </td>
-                  <td className="px-4 py-4 whitespace-nowrap text-neutral-600">
+                  <td className="px-4 py-4 whitespace-nowrap text-slate-600">
                     {alert.expiryStatus === 'unknown'
                       ? 'Invalid expiry date'
                       : dateFormatter.format(new Date(alert.expiresAt))}
@@ -189,7 +189,7 @@ export function LowStockWatchlist({ alerts }: { alerts: DashboardLowStockAlert[]
           aria-labelledby="low-stock-watchlist-title"
           className="w-full min-w-[34rem] text-left text-sm"
         >
-          <thead className="border-b border-white/70 bg-slate-50/60 text-[0.68rem] tracking-wide text-neutral-500 uppercase">
+          <thead className="border-b border-slate-200 bg-slate-50/60 text-[0.68rem] tracking-wide text-slate-500 uppercase">
             <tr>
               <th scope="col" className="px-5 py-3 font-semibold sm:px-6">
                 Product
@@ -208,13 +208,13 @@ export function LowStockWatchlist({ alerts }: { alerts: DashboardLowStockAlert[]
               </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-white/60">
+          <tbody className="divide-y divide-slate-100">
             {alerts.length === 0 ? (
               <EmptyTable colSpan={5} label="Every product is above its reorder level." />
             ) : (
               alerts.map((alert) => (
-                <tr key={alert.id} className="transition-colors hover:bg-mauve-50/35">
-                  <th scope="row" className="px-5 py-4 font-medium text-neutral-800 sm:px-6">
+                <tr key={alert.id} className="hover:bg-brand-50/35 transition-colors">
+                  <th scope="row" className="px-5 py-4 font-medium text-slate-800 sm:px-6">
                     {alert.productName}
                   </th>
                   <td className="px-4 py-4 text-right">
@@ -222,10 +222,10 @@ export function LowStockWatchlist({ alerts }: { alerts: DashboardLowStockAlert[]
                       {alert.stockRemaining}
                     </span>
                   </td>
-                  <td className="px-4 py-4 text-right font-medium text-neutral-700 tabular-nums">
+                  <td className="px-4 py-4 text-right font-medium text-slate-700 tabular-nums">
                     {alert.reorderLevel}
                   </td>
-                  <td className="px-4 py-4 whitespace-nowrap text-neutral-600">
+                  <td className="px-4 py-4 whitespace-nowrap text-slate-600">
                     {alert.lastRestockedAt
                       ? dateFormatter.format(new Date(alert.lastRestockedAt))
                       : 'Not recorded'}
@@ -256,14 +256,14 @@ export function RecentTransactions({
         headingId="recent-transactions-title"
         count={transactions.length}
         icon={FiShoppingBag}
-        tone="bg-mauve-50 text-mauve-700"
+        tone="bg-brand-50 text-brand-700"
       />
       <div className="overflow-x-auto">
         <table
           aria-labelledby="recent-transactions-title"
           className="w-full min-w-[58rem] text-left text-sm"
         >
-          <thead className="border-b border-white/70 bg-slate-50/60 text-[0.68rem] tracking-wide text-neutral-500 uppercase">
+          <thead className="border-b border-slate-200 bg-slate-50/60 text-[0.68rem] tracking-wide text-slate-500 uppercase">
             <tr>
               <th scope="col" className="px-5 py-3 font-semibold sm:px-6">
                 Receipt
@@ -288,7 +288,7 @@ export function RecentTransactions({
               </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-white/60">
+          <tbody className="divide-y divide-slate-100">
             {transactions.length === 0 ? (
               <EmptyTable colSpan={7} label="No transactions have been recorded yet." />
             ) : (
@@ -296,27 +296,27 @@ export function RecentTransactions({
                 const occurredAt = new Date(transaction.occurredAt)
 
                 return (
-                  <tr key={transaction.id} className="transition-colors hover:bg-mauve-50/35">
-                    <th scope="row" className="px-5 py-4 font-semibold text-mauve-700 sm:px-6">
+                  <tr key={transaction.id} className="hover:bg-brand-50/35 transition-colors">
+                    <th scope="row" className="text-brand-700 px-5 py-4 font-semibold sm:px-6">
                       {transaction.id}
                     </th>
                     <td className="px-4 py-4 whitespace-nowrap">
-                      <p className="font-medium text-neutral-700">
+                      <p className="font-medium text-slate-700">
                         {dateFormatter.format(occurredAt)}
                       </p>
-                      <p className="mt-0.5 text-xs text-neutral-500">
+                      <p className="mt-0.5 text-xs text-slate-500">
                         {timeFormatter.format(occurredAt)}
                       </p>
                     </td>
-                    <td className="px-4 py-4 text-neutral-600">{transaction.cashierName}</td>
-                    <td className="px-4 py-4 text-right font-medium text-neutral-700 tabular-nums">
+                    <td className="px-4 py-4 text-slate-600">{transaction.cashierName}</td>
+                    <td className="px-4 py-4 text-right font-medium text-slate-700 tabular-nums">
                       {transaction.itemCount}
                     </td>
                     <td className="px-4 py-4">
                       <span
                         className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${
                           transaction.discountType === 'None'
-                            ? 'bg-neutral-100 text-neutral-600'
+                            ? 'bg-slate-100 text-slate-600'
                             : 'bg-emerald-50 text-emerald-700'
                         }`}
                       >
@@ -328,7 +328,7 @@ export function RecentTransactions({
                         {transaction.paymentMethod}
                       </span>
                     </td>
-                    <td className="px-5 py-4 text-right font-semibold whitespace-nowrap text-neutral-900 tabular-nums sm:px-6">
+                    <td className="px-5 py-4 text-right font-semibold whitespace-nowrap text-slate-900 tabular-nums sm:px-6">
                       {currencyFormatter.format(transaction.amount)}
                     </td>
                   </tr>

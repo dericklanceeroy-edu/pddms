@@ -32,7 +32,7 @@ function RouteComponent(): ReactElement {
         <motion.span
           {...progress}
           aria-hidden="true"
-          className="absolute inset-0 origin-left bg-mauve-600"
+          className="bg-brand-600 absolute inset-0 origin-left"
         />
         <span className="relative">Finish</span>
       </Link>

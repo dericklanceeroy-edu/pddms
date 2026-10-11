@@ -78,7 +78,7 @@ export const orderStatusLabels: Record<OrderStatus, string> = {
 }
 
 export const orderStatusTone: Record<OrderStatus, string> = {
-  draft: 'bg-neutral-100 text-neutral-700',
+  draft: 'bg-slate-100 text-slate-700',
   submitted: 'bg-amber-50 text-amber-800',
   partially_received: 'bg-sky-50 text-sky-800',
   received: 'bg-emerald-50 text-emerald-800',

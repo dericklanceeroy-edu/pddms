@@ -40,7 +40,7 @@ export function useConfirm(): [ReactElement | null, (options: ConfirmOptions) =>
             <FiAlertTriangle aria-hidden="true" />
           </span>
         )}
-        <div className="text-sm leading-6 text-neutral-700">{options.message}</div>
+        <div className="text-sm leading-6 text-slate-700">{options.message}</div>
       </div>
       <div className="mt-6 flex justify-end gap-2">
         <button
