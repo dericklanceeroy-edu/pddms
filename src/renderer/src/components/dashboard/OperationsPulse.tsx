@@ -64,7 +64,7 @@ export default function OperationsPulse({
           <div>
             <h3 className="font-semibold tracking-tight text-slate-950">Purchasing and stock</h3>
             <p className="mt-0.5 text-xs leading-5 text-slate-500">
-              Open purchase orders, supplier balances and inventory value
+              Open purchase orders, supplier invoices due and stock signals
             </p>
           </div>
         </div>

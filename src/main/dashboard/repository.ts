@@ -1,7 +1,12 @@
 import { db } from '@main/db'
 import { findInvoices } from '@main/procurement/repository'
 import { stockValuation } from '@main/reporting/repository'
-import type { AdminDashboardData, DashboardAlertSeverity } from '@shared/dashboard'
+import type {
+  AdminDashboardData,
+  DashboardAlertSeverity,
+  DashboardSummaryMetric,
+  DashboardView
+} from '@shared/dashboard'
 import { EXPIRY_WARNING_DAYS, getExpiryStatus } from '@shared/inventory'
 
 const millisecondsPerDay = 86_400_000
@@ -20,7 +25,109 @@ const getSeverity = (ratio: number): DashboardAlertSeverity => {
   return 'watch'
 }
 
-export async function getAdminDashboard(): Promise<AdminDashboardData> {
+const metric = (
+  id: DashboardSummaryMetric['id'],
+  label: string,
+  value: number,
+  format: DashboardSummaryMetric['format'],
+  detail: string
+): DashboardSummaryMetric => ({
+  id,
+  label,
+  value,
+  format,
+  trend: { direction: 'flat', percentage: 0, label: detail },
+  sparkline: []
+})
+
+/**
+ * Builds the dashboard for the signed-in role. Every figure comes from live records; the role only
+ * decides which figures are included (cashiers see their own sales, staff see no sales totals).
+ */
+export async function getDashboard(account: {
+  id: number
+  role: string
+}): Promise<AdminDashboardData> {
+  const view: DashboardView =
+    account.role === 'master' ? 'admin' : account.role === 'cashier' ? 'cashier' : 'staff'
+  const data = await getAdminDashboard(view === 'cashier' ? account.id : undefined)
+  if (view === 'admin') return data
+  const metrics = new Map(data.summaryMetrics.map((item) => [item.id, item]))
+  const pulse = new Map(data.operationsPulse.map((item) => [item.id, item]))
+  if (view === 'cashier') {
+    const transactionsToday = await countSalesToday(account.id)
+    return {
+      ...data,
+      view,
+      summaryMetrics: [
+        { ...metrics.get('daily-sales')!, label: 'My sales today' },
+        metric(
+          'my-transactions',
+          'My transactions today',
+          transactionsToday,
+          'integer',
+          'Completed sales you recorded today'
+        ),
+        { ...metrics.get('items-sold')!, label: 'Units I sold today' },
+        metrics.get('low-stock-items')!
+      ],
+      expiryAlerts: [],
+      operationsPulse: []
+    }
+  }
+  const awaiting = await db
+    .selectFrom('purchaseOrders')
+    .select(({ fn }) => fn.count<number>('id').as('count'))
+    .where('status', 'in', ['submitted', 'partially_received'])
+    .executeTakeFirstOrThrow()
+  return {
+    ...data,
+    view,
+    summaryMetrics: [
+      metrics.get('low-stock-items')!,
+      metrics.get('expiring-batches')!,
+      metric(
+        'awaiting-delivery',
+        'Orders awaiting delivery',
+        Number(awaiting.count),
+        'integer',
+        'Submitted or partially received purchase orders'
+      ),
+      metric(
+        'supplier-payments-due',
+        'Supplier invoices due',
+        pulse.get('supplier-payments')!.value,
+        'integer',
+        'Unpaid invoices overdue or due within 7 days'
+      )
+    ],
+    recentTransactions: [],
+    operationsPulse: data.operationsPulse.filter((item) => item.id !== 'stock-valuation')
+  }
+}
+
+async function countSalesToday(cashierId: number): Promise<number> {
+  const { start, end } = todayRange(new Date())
+  const result = await db
+    .selectFrom('sales')
+    .select(({ fn }) => fn.count<number>('id').as('count'))
+    .where('cashierId', '=', cashierId)
+    .where('createdAt', '>=', start)
+    .where('createdAt', '<', end)
+    .executeTakeFirstOrThrow()
+  return Number(result.count)
+}
+
+function todayRange(now: Date): { start: string; end: string } {
+  const start = new Date(now)
+  start.setHours(0, 0, 0, 0)
+  const end = new Date(start)
+  end.setDate(end.getDate() + 1)
+  return { start: start.toISOString(), end: end.toISOString() }
+}
+
+/** Full (master) dashboard. Passing `cashierId` limits the sales figures to that cashier. */
+export async function getAdminDashboard(cashierId?: number): Promise<AdminDashboardData> {
   const generatedAt = new Date()
   const paymentDeadlineLimit = localDate(new Date(generatedAt.getTime() + 7 * millisecondsPerDay))
   const products = await db
@@ -113,22 +220,21 @@ export async function getAdminDashboard(): Promise<AdminDashboardData> {
   const supplierPaymentsDue = (await findInvoices()).filter(
     (invoice) => invoice.dueDate <= paymentDeadlineLimit && invoice.status !== 'paid'
   ).length
-  const start = new Date(generatedAt)
-  start.setHours(0, 0, 0, 0)
-  const end = new Date(start)
-  end.setDate(end.getDate() + 1)
+  const { start, end } = todayRange(generatedAt)
   const dailySales = await db
     .selectFrom('sales')
     .select(({ fn }) => fn.sum<number>('totalCents').as('total'))
-    .where('createdAt', '>=', start.toISOString())
-    .where('createdAt', '<', end.toISOString())
+    .where('createdAt', '>=', start)
+    .where('createdAt', '<', end)
+    .$if(cashierId !== undefined, (query) => query.where('cashierId', '=', cashierId!))
     .executeTakeFirstOrThrow()
   const dailyItems = await db
     .selectFrom('saleItems')
     .innerJoin('sales', 'sales.id', 'saleItems.saleId')
     .select(({ fn }) => fn.sum<number>('saleItems.quantity').as('quantity'))
-    .where('sales.createdAt', '>=', start.toISOString())
-    .where('sales.createdAt', '<', end.toISOString())
+    .where('sales.createdAt', '>=', start)
+    .where('sales.createdAt', '<', end)
+    .$if(cashierId !== undefined, (query) => query.where('sales.cashierId', '=', cashierId!))
     .executeTakeFirstOrThrow()
   const recentSales = await db
     .selectFrom('sales')
@@ -142,12 +248,14 @@ export async function getAdminDashboard(): Promise<AdminDashboardData> {
       'sales.cashierName'
     ])
     .select(({ fn }) => fn.sum<number>('saleItems.quantity').as('itemCount'))
+    .$if(cashierId !== undefined, (query) => query.where('sales.cashierId', '=', cashierId!))
     .groupBy('sales.id')
     .orderBy('sales.id', 'desc')
     .limit(10)
     .execute()
 
   return {
+    view: 'admin',
     source: { kind: 'database', label: 'Live database', generatedAt: generatedAt.toISOString() },
     summaryMetrics: [
       {

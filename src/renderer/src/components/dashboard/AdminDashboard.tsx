@@ -1,9 +1,11 @@
+import type { DashboardView } from '@renderer/data/adminDashboard'
 import { useAdminDashboard } from '@renderer/hooks/useAdminDashboard'
 import type { ReactElement } from 'react'
 import { FiAlertCircle, FiRefreshCw } from 'react-icons/fi'
 import DashboardShell from './DashboardShell'
 import { ExpiryWatchlist, LowStockWatchlist, RecentTransactions } from './DashboardTables'
 import OperationsPulse from './OperationsPulse'
+import QuickActions from './QuickActions'
 import SummaryCard from './SummaryCard'
 
 function DashboardLoading(): ReactElement {
@@ -60,12 +62,35 @@ function DashboardError({
   )
 }
 
+const views: Record<DashboardView, { title: string; subtitle: string }> = {
+  admin: {
+    title: 'Admin dashboard',
+    subtitle:
+      'Today’s sales, stock that needs attention and purchasing status, taken live from the pharmacy database.'
+  },
+  staff: {
+    title: 'Pharmacy operations',
+    subtitle:
+      'Stock that needs attention, deliveries to receive and supplier invoices due, taken live from the database.'
+  },
+  cashier: {
+    title: 'Checkout',
+    subtitle:
+      'Your sales today and products running low. Start a sale to search products and stock.'
+  }
+}
+
+/**
+ * One dashboard route for every role. The main process decides which figures each role receives;
+ * this component only arranges them and offers the shortcuts the role is allowed to open.
+ */
 export default function AdminDashboard(): ReactElement {
   const { data, error, isLoading, reload } = useAdminDashboard()
+  const view = data?.view ?? 'admin'
 
   return (
     <DashboardShell
-      pageTitle="Overview"
+      pageTitle={data ? views[view].title : 'Dashboard'}
       source={data?.source ?? null}
       isLoading={!data && isLoading}
       isRefreshing={isLoading}
@@ -91,36 +116,53 @@ export default function AdminDashboard(): ReactElement {
           <section id="overview" className="scroll-mt-28">
             <div className="page-intro">
               <div className="page-intro-content">
-                <h2 className="page-title">Dashboard</h2>
-                <p className="page-subtitle">
-                  Today’s sales and stock that needs attention, taken live from the pharmacy
-                  database.
-                </p>
+                <h2 className="page-title">{views[view].title}</h2>
+                <p className="page-subtitle">{views[view].subtitle}</p>
               </div>
             </div>
-
+            <QuickActions view={view} />
             <div className="mt-5 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
               {data.summaryMetrics.map((metric) => (
                 <SummaryCard key={metric.id} metric={metric} />
               ))}
             </div>
           </section>
-          <section id="inventory-alerts" className="scroll-mt-28">
-            <div className="grid gap-5 2xl:grid-cols-2">
-              <div className="min-w-0">
-                <ExpiryWatchlist alerts={data.expiryAlerts} />
-              </div>
-              <div className="min-w-0">
+          {view === 'cashier' ? (
+            <>
+              <section id="sales-activity" className="scroll-mt-28">
+                <RecentTransactions
+                  transactions={data.recentTransactions}
+                  title="My recent sales"
+                  description="Your latest completed sales. Open Sales & dispensing for receipts."
+                  showCashier={false}
+                />
+              </section>
+              <section id="inventory-alerts" className="scroll-mt-28 pb-2">
                 <LowStockWatchlist alerts={data.lowStockAlerts} />
-              </div>
-            </div>
-          </section>
-          <section id="sales-activity" className="scroll-mt-28">
-            <RecentTransactions transactions={data.recentTransactions} />
-          </section>
-          <section id="operations" className="scroll-mt-28 pb-2">
-            <OperationsPulse items={data.operationsPulse} />
-          </section>
+              </section>
+            </>
+          ) : (
+            <>
+              <section id="inventory-alerts" className="scroll-mt-28">
+                <div className="grid gap-5 2xl:grid-cols-2">
+                  <div className="min-w-0">
+                    <ExpiryWatchlist alerts={data.expiryAlerts} />
+                  </div>
+                  <div className="min-w-0">
+                    <LowStockWatchlist alerts={data.lowStockAlerts} />
+                  </div>
+                </div>
+              </section>
+              {view === 'admin' && (
+                <section id="sales-activity" className="scroll-mt-28">
+                  <RecentTransactions transactions={data.recentTransactions} />
+                </section>
+              )}
+              <section id="operations" className="scroll-mt-28 pb-2">
+                <OperationsPulse items={data.operationsPulse} />
+              </section>
+            </>
+          )}
         </div>
       ) : null}
     </DashboardShell>

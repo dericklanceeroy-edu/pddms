@@ -4,7 +4,15 @@ export type DashboardAlertSeverity = 'critical' | 'warning' | 'watch'
 export type DashboardOperationStatus = 'healthy' | 'attention' | 'critical'
 export type DashboardDiscountType = 'None' | 'Senior Citizen' | 'PWD'
 export type DashboardSummaryMetricId =
-  'daily-sales' | 'items-sold' | 'low-stock-items' | 'expiring-batches'
+  | 'daily-sales'
+  | 'items-sold'
+  | 'low-stock-items'
+  | 'expiring-batches'
+  | 'my-transactions'
+  | 'awaiting-delivery'
+  | 'supplier-payments-due'
+/** Which role-specific dashboard the data was built for. */
+export type DashboardView = 'admin' | 'staff' | 'cashier'
 export type DashboardOperationsPulseId =
   'purchase-orders' | 'supplier-payments' | 'stock-valuation' | 'inventory-alerts'
 
@@ -69,6 +77,7 @@ export interface DashboardOperationsPulseItem {
 }
 
 export interface AdminDashboardData {
+  view: DashboardView
   source: DashboardSourceMetadata
   summaryMetrics: DashboardSummaryMetric[]
   expiryAlerts: DashboardExpiryAlert[]

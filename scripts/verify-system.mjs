@@ -261,7 +261,7 @@ if (!process.env.SYSTEM_TEST_PHASE) {
       assert.equal((await invoke(channels.auth.getStatus)).success, false)
       renderer.mainFrame.url = 'file:///pddms-test/index.html#/suppliers'
       assert.equal((await ok(channels.auth.getStatus)).account.id, actorId)
-      const dashboard = (await ok(channels.dashboard.getAdmin)).data
+      const dashboard = (await ok(channels.dashboard.get)).data
       assert.ok(dashboard.summaryMetrics.every((metric) => metric.value === 0))
       const supplier = (
         await ok(channels.supplier.createOne, {
@@ -377,7 +377,7 @@ if (!process.env.SYSTEM_TEST_PHASE) {
       )
       assert.equal((await db.selectFrom('batches').selectAll().execute())[0].currentStock, 4)
       await ok(channels.auth.signOut)
-      await bad(channels.dashboard.getAdmin)
+      await bad(channels.dashboard.get)
       assert.equal((await ok(channels.auth.getStatus)).account, null)
     }
     assert.deepEqual(database.pragma('foreign_key_check'), [])

@@ -13,7 +13,7 @@ export async function fetchAdminDashboardData(signal?: AbortSignal): Promise<Adm
   if (signal?.aborted) throw new DOMException('The request was aborted.', 'AbortError')
 
   const response = (await window.electron.ipcRenderer.invoke(
-    channels.dashboard.getAdmin
+    channels.dashboard.get
   )) as DashboardResponse
 
   if (signal?.aborted) throw new DOMException('The request was aborted.', 'AbortError')
