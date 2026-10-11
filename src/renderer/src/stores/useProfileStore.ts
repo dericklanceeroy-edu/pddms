@@ -34,6 +34,9 @@ interface ProfileStore {
   reset: () => void
 }
 
+let itemRequest = 0
+let customerRequest = 0
+
 export const useProfileStore = create<ProfileStore>((set, get) => ({
   items: [],
   customers: [],
@@ -63,29 +66,36 @@ export const useProfileStore = create<ProfileStore>((set, get) => ({
     }
   },
   loadItems: async (force = false) => {
-    if (get().isLoading || (get().areItemsLoaded && !force)) return
+    if (get().areItemsLoaded && !force) return
+    // Note: A forced load always issues a new request; only the newest response is kept, so stock
+    // received while an older request was running is never dropped or overwritten by stale data.
+    const request = ++itemRequest
     set({ isLoading: true, error: '' })
     try {
       const items = await getProducts()
-      set({ items, areItemsLoaded: true, isLoading: false })
+      if (request === itemRequest) set({ items, areItemsLoaded: true, isLoading: false })
     } catch (error) {
-      set({
-        isLoading: false,
-        error: error instanceof Error ? error.message : 'Unable to load inventory data.'
-      })
+      if (request === itemRequest)
+        set({
+          isLoading: false,
+          error: error instanceof Error ? error.message : 'Unable to load inventory data.'
+        })
     }
   },
   loadCustomers: async (force = false) => {
-    if (get().isLoading || (get().areCustomersLoaded && !force)) return
+    if (get().areCustomersLoaded && !force) return
+    const request = ++customerRequest
     set({ isLoading: true, error: '' })
     try {
       const customers = await getCustomers()
-      set({ customers, areCustomersLoaded: true, isLoading: false })
+      if (request === customerRequest)
+        set({ customers, areCustomersLoaded: true, isLoading: false })
     } catch (error) {
-      set({
-        isLoading: false,
-        error: error instanceof Error ? error.message : 'Unable to load customer data.'
-      })
+      if (request === customerRequest)
+        set({
+          isLoading: false,
+          error: error instanceof Error ? error.message : 'Unable to load customer data.'
+        })
     }
   },
   addItem: async (draft) => {
@@ -118,7 +128,9 @@ export const useProfileStore = create<ProfileStore>((set, get) => ({
     await requestRemoveCustomer(id)
     set((state) => ({ customers: state.customers.filter((value) => value.id !== id) }))
   },
-  reset: () =>
+  reset: () => {
+    itemRequest += 1
+    customerRequest += 1
     set({
       items: [],
       customers: [],
@@ -128,4 +140,5 @@ export const useProfileStore = create<ProfileStore>((set, get) => ({
       isLoading: false,
       error: ''
     })
+  }
 }))

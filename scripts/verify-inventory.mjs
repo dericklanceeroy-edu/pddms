@@ -290,7 +290,52 @@ if (!process.env.INVENTORY_TEST_DATABASE) {
         notes: null,
         items: [{ drugId: product.id, quantity: 20, unitCost: 10 }]
       })
+      assert.match(
+        (
+          await denied(channels.purchaseOrder.createOne, {
+            supplierId: supplier.id,
+            expectedAt: offsetDate(-1),
+            notes: null,
+            items: [{ drugId: product.id, quantity: 1, unitCost: 1 }]
+          })
+        ).error,
+        /expected delivery date/i
+      )
+      assert.match(
+        (
+          await denied(channels.purchaseOrder.createOne, {
+            supplierId: supplier.id,
+            expectedAt: null,
+            notes: null,
+            items: [
+              { drugId: product.id, quantity: 1, unitCost: 1 },
+              { drugId: product.id, quantity: 2, unitCost: 1 }
+            ]
+          })
+        ).error,
+        /already on the order/i
+      )
+      const draftEdit = await success(channels.purchaseOrder.updateOneById, order.id, {
+        supplierId: supplier.id,
+        expectedAt: localDate(),
+        notes: 'Edited draft',
+        items: [{ drugId: product.id, quantity: 20, unitCost: 10 }]
+      })
+      assert.equal(draftEdit.order.notes, 'Edited draft')
+      assert.equal(draftEdit.order.totalAmount, 200)
+      order.items = draftEdit.order.items
       await success(channels.purchaseOrder.updateStatusById, order.id, { status: 'submitted' })
+      assert.match(
+        (
+          await denied(channels.purchaseOrder.updateOneById, order.id, {
+            supplierId: supplier.id,
+            expectedAt: null,
+            notes: null,
+            items: [{ drugId: product.id, quantity: 99, unitCost: 10 }]
+          })
+        ).error,
+        /Only draft orders/
+      )
       const delivery = (quantity, expiresAt = offsetDate(30), batchNumber = 'TEST-NEAR') => ({
         requestId: randomUUID(),
         deliveredAt: offsetDate(-10),
@@ -305,7 +350,29 @@ if (!process.env.INVENTORY_TEST_DATABASE) {
           }
         ]
       })
-      await denied(channels.purchaseOrder.recordDeliveryById, order.id, delivery(21))
+      assert.match(
+        (await denied(channels.purchaseOrder.recordDeliveryById, order.id, delivery(21))).error,
+        /remain to be received/
+      )
+      assert.match(
+        (
+          await denied(channels.purchaseOrder.recordDeliveryById, order.id, {
+            ...delivery(1),
+            deliveredAt: offsetDate(1)
+          })
+        ).error,
+        /future/
+      )
+      assert.match(
+        (
+          await denied(
+            channels.purchaseOrder.recordDeliveryById,
+            order.id,
+            delivery(1, offsetDate(30), 'BAD<>')
+          )
+        ).error,
+        /Batch number/
+      )
       await denied(channels.purchaseOrder.recordDeliveryById, order.id, delivery(-1))
       await denied(channels.purchaseOrder.recordDeliveryById, order.id, delivery(1, '2026-02-30'))
       await denied(channels.purchaseOrder.recordDeliveryById, order.id, {
@@ -339,7 +406,22 @@ if (!process.env.INVENTORY_TEST_DATABASE) {
       assert.equal(paymentSummary.paidAmount, 40)
       assert.equal(paymentSummary.outstandingAmount, 160)
       assert.equal(paymentSummary.status, 'partially_paid')
+      const chosen = (await success(channels.procurement.chooseInvoiceFile)).file
+      assert.equal(chosen.name, 'supplier-invoice.pdf')
+      assert.match(
+        (
+          await denied(channels.procurement.uploadInvoice, {
+            purchaseOrderId: order.id,
+            invoiceNumber: 'INV-NO-FILE',
+            invoiceDate: localDate(),
+            dueDate: offsetDate(30),
+            amount: 100
+          })
+        ).error,
+        /invoice file/i
+      )
       const uploaded = await success(channels.procurement.uploadInvoice, {
+        fileToken: chosen.token,
         purchaseOrderId: order.id,
         invoiceNumber: 'INV-FUTURE',
         invoiceDate: localDate(),

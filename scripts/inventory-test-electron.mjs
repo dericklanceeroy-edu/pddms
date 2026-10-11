@@ -20,6 +20,7 @@ export const dialog = {
     filePaths: [process.env.INVENTORY_TEST_INVOICE]
   })
 }
+export const BrowserWindow = { fromWebContents: () => null }
 export const app = {
   isPackaged: process.env.SYSTEM_TEST_PHASE === 'packaged',
   getPath: () => process.env.INVENTORY_TEST_USER_DATA

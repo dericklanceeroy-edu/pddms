@@ -518,3 +518,66 @@ export function reportCsv(report: BusinessReport): string {
   ]
   return '\uFEFF' + rows.map((row) => row.map(csvCell).join(',')).join('\r\n')
 }
+
+const html = (value: unknown): string =>
+  String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;')
+
+/**
+ * Print-ready HTML for a report, rendered to PDF by the main process. Uses the same persisted
+ * report data and formatting rules as the on-screen table and CSV export.
+ */
+export function reportHtml(report: BusinessReport): string {
+  const peso = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' })
+  const cell = (row: ReportRow, column: ReportColumn): string => {
+    const value = row[column.key]
+    if (value === null || value === undefined || value === '') return '—'
+    if (column.format === 'money') return peso.format(Number(value) / 100)
+    if (column.format === 'dateTime') return new Date(String(value)).toLocaleString('en-PH')
+    return String(value)
+  }
+  const period = ['inventory', 'overdue'].includes(report.filter.kind)
+    ? 'Current snapshot'
+    : `${report.filter.from} to ${report.filter.to}`
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${html(report.title)}</title>
+<style>
+  @page { size: A4 landscape; margin: 12mm; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; color: #171221; font-size: 10px; }
+  h1 { font-size: 18px; margin: 0 0 2px; }
+  .meta { color: #555; margin: 0 0 8px; }
+  .notes p { margin: 2px 0; color: #444; }
+  .metrics { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+  .metric { border: 1px solid #ddd; border-radius: 6px; padding: 6px 10px; min-width: 120px; }
+  .metric b { display: block; font-size: 12px; }
+  table { width: 100%; border-collapse: collapse; }
+  th { background: #f1eef8; text-align: left; }
+  th, td { border: 1px solid #ddd; padding: 4px 6px; vertical-align: top; }
+  tr { break-inside: avoid; }
+  thead { display: table-header-group; }
+</style></head><body>
+<h1>Med Prix · ${html(report.title)}</h1>
+<p class="meta">${html(period)} · Generated ${html(new Date(report.generatedAt).toLocaleString('en-PH'))}${report.filter.search ? ` · Search: ${html(report.filter.search)}` : ''} · ${report.totalRows} row(s)</p>
+<div class="notes">${report.notes.map((note) => `<p>${html(note)}</p>`).join('')}</div>
+<div class="metrics">${report.metrics
+    .map(
+      (metric) =>
+        `<div class="metric">${html(metric.label)}<b>${html(metric.format === 'money' ? peso.format(metric.value / 100) : metric.value.toLocaleString('en-PH'))}</b></div>`
+    )
+    .join('')}</div>
+<table><thead><tr>${report.columns.map((column) => `<th>${html(column.label)}</th>`).join('')}</tr></thead>
+<tbody>${
+    report.rows.length
+      ? report.rows
+          .map(
+            (row) =>
+              `<tr>${report.columns.map((column) => `<td>${html(cell(row, column))}</td>`).join('')}</tr>`
+          )
+          .join('')
+      : `<tr><td colspan="${report.columns.length}">No matching records for this report.</td></tr>`
+  }</tbody></table>
+</body></html>`
+}

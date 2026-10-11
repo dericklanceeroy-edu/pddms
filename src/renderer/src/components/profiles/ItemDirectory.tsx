@@ -16,6 +16,8 @@ import {
 } from 'react-icons/fi'
 import InventoryReport from './InventoryReport'
 
+const expiryDate = new Intl.DateTimeFormat('en-PH', { dateStyle: 'medium' })
+
 const statusLabels = {
   'in-stock': 'In stock',
   'low-stock': 'Low stock',
@@ -86,7 +88,7 @@ export default function ItemDirectory(): ReactElement {
             <div className="max-w-2xl">
               <p className="eyebrow">Item profiles</p>
               <h2 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">
-                Medicine catalog
+                Medicine catalog & expiry
               </h2>
               <p className="mt-3 max-w-xl text-sm leading-6 text-neutral-600 sm:text-base">
                 Review product details, generic equivalents, active stock batches, pricing, and
@@ -194,6 +196,10 @@ export default function ItemDirectory(): ReactElement {
               {filteredItems.map((item) => {
                 const status = getStockStatus(item)
                 const stock = getItemStock(item)
+                const nextExpiry = item.batches
+                  .filter((batch) => batch.stock > 0)
+                  .map((batch) => batch.expiresAt.slice(0, 10))
+                  .sort()[0]
 
                 return (
                   <Link
@@ -234,6 +240,12 @@ export default function ItemDirectory(): ReactElement {
                           Stock nearing expiry
                         </p>
                       )}
+                    </div>
+                    <div className="hidden w-40 text-right md:block">
+                      <p className="text-xs text-neutral-500">Next expiry</p>
+                      <p className="text-sm font-medium text-neutral-800">
+                        {nextExpiry ? expiryDate.format(new Date(nextExpiry)) : 'No stock on hand'}
+                      </p>
                     </div>
                     <div className="hidden text-right sm:block">
                       <p className="font-semibold text-neutral-900">{stock} on hand</p>

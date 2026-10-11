@@ -1,5 +1,5 @@
 import DashboardShell from '@renderer/components/dashboard/DashboardShell'
-import { exportReport, getReport } from '@renderer/services/reporting'
+import { exportReport, exportReportPdf, getReport } from '@renderer/services/reporting'
 import { localDate } from '@shared/inventory'
 import {
   reportTitles,
@@ -12,6 +12,7 @@ import {
 import { money } from '@shared/sales'
 import { Link } from '@tanstack/react-router'
 import { useEffect, useRef, useState, type ReactElement } from 'react'
+import { FiDownload, FiFileText, FiPackage } from 'react-icons/fi'
 
 const initialFilter = (): ReportFilter => ({
   kind: 'sales',
@@ -118,6 +119,23 @@ export default function ReportingWorkspace(): ReactElement {
             Philippine pesos.
           </p>
         </header>
+        <section className="panel flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-mauve-50 text-mauve-700">
+              <FiPackage aria-hidden="true" />
+            </span>
+            <div>
+              <h3 className="font-semibold">Receiving reports</h3>
+              <p className="text-sm text-neutral-500">
+                Deliveries received against purchase orders, with batch numbers and expiry dates.
+                They open in Suppliers & purchasing, where stock is received.
+              </p>
+            </div>
+          </div>
+          <Link to="/suppliers" search={{ tab: 'receiving' }} className="secondary-button shrink-0">
+            Open receiving reports
+          </Link>
+        </section>
         <form
           className="panel space-y-4 p-5"
           onSubmit={(event) => {
@@ -131,9 +149,14 @@ export default function ReportingWorkspace(): ReactElement {
               <select
                 className="field"
                 value={filter.kind}
-                onChange={(event) =>
-                  setFilter({ ...filter, kind: event.target.value as ReportKind, page: 1 })
-                }
+                onChange={(event) => {
+                  // Note: Switching report type loads it immediately so the table never shows
+                  // the previous report under the new title.
+                  const next = { ...filter, kind: event.target.value as ReportKind, page: 1 }
+                  setFilter(next)
+                  setReport(null)
+                  void run(async () => setReport(await getReport(next)))
+                }}
               >
                 {Object.entries(reportTitles).map(([kind, title]) => (
                   <option value={kind} key={kind}>
@@ -176,7 +199,9 @@ export default function ReportingWorkspace(): ReactElement {
                 placeholder="Search relevant report fields"
               />
             </label>
-            <button className="primary-button">{busy ? 'Generating…' : 'Generate report'}</button>
+            <button type="submit" className="primary-button">
+              {busy ? 'Generating…' : 'Apply filters'}
+            </button>
           </fieldset>
           {currentOnly && (
             <p className="text-sm text-neutral-500">
@@ -212,20 +237,34 @@ export default function ReportingWorkspace(): ReactElement {
                       : 'All matching records'}
                   </p>
                 </div>
-                <button
-                  className="secondary-button"
-                  disabled={busy}
-                  onClick={() =>
-                    void run(async () => {
-                      if (await exportReport(report.filter))
-                        setNotice(
-                          'CSV exported with all matching rows and current database totals.'
-                        )
-                    })
-                  }
-                >
-                  Export all matching rows (CSV)
-                </button>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="primary-button h-10"
+                    disabled={busy}
+                    onClick={() =>
+                      void run(async () => {
+                        if (await exportReportPdf(report.filter))
+                          setNotice('PDF saved with all matching rows and current totals.')
+                      })
+                    }
+                  >
+                    <FiFileText aria-hidden="true" /> Save as PDF
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    disabled={busy}
+                    onClick={() =>
+                      void run(async () => {
+                        if (await exportReport(report.filter))
+                          setNotice('CSV exported with all matching rows for spreadsheet use.')
+                      })
+                    }
+                  >
+                    <FiDownload aria-hidden="true" /> Export CSV
+                  </button>
+                </div>
               </div>
               {report.notes.map((note) => (
                 <p className="text-sm text-neutral-600" key={note}>

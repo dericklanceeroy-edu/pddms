@@ -204,3 +204,21 @@
     background-image: linear-gradient(135deg, rgba(255, 255, 255, 0.62), rgba(255, 255, 255, 0.24));
   }
 }
+
+@layer components {
+  .field[aria-invalid='true'] {
+    @apply border-rose-400 bg-rose-50/60 focus:border-rose-500 focus:ring-rose-100;
+  }
+
+  .app-dialog .field {
+    @apply border-neutral-200 bg-neutral-50 backdrop-blur-none focus:border-mauve-400 focus:bg-white;
+  }
+
+  .app-dialog .field[aria-invalid='true'] {
+    @apply border-rose-400 bg-rose-50/60 focus:border-rose-500 focus:ring-rose-100;
+  }
+
+  .status-badge {
+    @apply inline-flex w-fit items-center rounded-full px-2.5 py-1 text-xs font-semibold;
+  }
+}

@@ -7,6 +7,7 @@ import type {
   PaymentSummary,
   PurchaseOrderFormValues,
   PurchaseOrderRecord,
+  SelectedInvoiceFile,
   SupplierFormValues,
   SupplierPaymentValues
 } from '@renderer/data/supplierOrders'
@@ -16,6 +17,7 @@ import {
   newSupplierSchema,
   purchaseOrderDeliverySchema,
   purchaseOrderStatusUpdateSchema,
+  purchaseOrderUpdateSchema,
   supplierInvoiceUploadSchema,
   supplierPaymentSchema,
   supplierUpdateSchema
@@ -40,6 +42,7 @@ interface OrderResult {
 interface ProcurementResult {
   success: boolean
   cancelled?: boolean
+  file?: SelectedInvoiceFile
   deliveries?: DeliveryRecord[]
   invoices?: InvoiceRecord[]
   payments?: PaymentRecord[]
@@ -95,6 +98,22 @@ export async function createPurchaseOrder(
   )) as OrderResult
   if (!result.success || !result.order) {
     throw new Error(result.error ?? 'Unable to create the purchase order.')
+  }
+  return result.order
+}
+
+export async function updatePurchaseOrder(
+  id: number,
+  values: PurchaseOrderFormValues
+): Promise<PurchaseOrderRecord> {
+  const payload = validate(purchaseOrderUpdateSchema, values)
+  const result = (await window.electron.ipcRenderer.invoke(
+    channels.purchaseOrder.updateOneById,
+    id,
+    payload
+  )) as OrderResult
+  if (!result.success || !result.order) {
+    throw new Error(result.error ?? 'Unable to update the purchase order.')
   }
   return result.order
 }
@@ -157,17 +176,24 @@ export async function getProcurementRecords(): Promise<{
   }
 }
 
-export async function uploadSupplierInvoice(
-  values: InvoiceUploadValues
-): Promise<InvoiceRecord | null> {
+export async function chooseInvoiceFile(): Promise<SelectedInvoiceFile | null> {
+  const result = (await window.electron.ipcRenderer.invoke(
+    channels.procurement.chooseInvoiceFile
+  )) as ProcurementResult
+  if (!result.success) throw new Error(result.error ?? 'Unable to select the invoice file.')
+  if (result.cancelled) return null
+  if (!result.file) throw new Error('The selected invoice file was not returned.')
+  return result.file
+}
+
+export async function uploadSupplierInvoice(values: InvoiceUploadValues): Promise<InvoiceRecord> {
   const payload = validate(supplierInvoiceUploadSchema, values)
   const result = (await window.electron.ipcRenderer.invoke(
     channels.procurement.uploadInvoice,
     payload
   )) as ProcurementResult
-  if (!result.success) throw new Error(result.error ?? 'Unable to upload the supplier invoice.')
-  if (result.cancelled) return null
-  if (!result.invoice) throw new Error('The supplier invoice was not returned after upload.')
+  if (!result.success) throw new Error(result.error ?? 'Unable to save the supplier invoice.')
+  if (!result.invoice) throw new Error('The supplier invoice was not returned after saving.')
   return result.invoice
 }
 
@@ -177,6 +203,16 @@ export async function openSupplierInvoice(id: number): Promise<void> {
     id
   )) as ProcurementResult
   if (!result.success) throw new Error(result.error ?? 'Unable to open the supplier invoice.')
+}
+
+/** Saves a copy of the stored invoice; resolves `false` when the save dialog is cancelled. */
+export async function downloadSupplierInvoice(id: number): Promise<boolean> {
+  const result = (await window.electron.ipcRenderer.invoke(
+    channels.procurement.downloadInvoice,
+    id
+  )) as ProcurementResult
+  if (!result.success) throw new Error(result.error ?? 'Unable to download the supplier invoice.')
+  return !result.cancelled
 }
 
 export async function createSupplierPayment(values: SupplierPaymentValues): Promise<PaymentRecord> {

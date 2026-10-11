@@ -35,6 +35,12 @@ const usernamePattern = /^[A-Za-z0-9._-]+$/
 const phonePattern = /^09\d{9}$/
 const catalogTextPattern = /^[\p{L}0-9][\p{L}0-9 .,&()/'-]*$/u
 const isoDatePattern = /^\d{4}-\d{2}-\d{2}$/
+// Note: No reference format is specified by the business; allow common document characters only.
+const referencePattern = /^[A-Za-z0-9][A-Za-z0-9 ./#_()-]*$/
+const referenceText = (max: number): z.ZodString =>
+  z.string().trim().min(1).max(max).regex(referencePattern)
+// Note: Whole-unit quantities stored as SQLite integers; the bound only prevents unsafe totals.
+const MAX_LINE_QUANTITY = 1_000_000_000
 
 const isCalendarDate = (value: string): boolean => {
   const [year, month, day] = value.split('-').map(Number)
@@ -49,10 +55,12 @@ const isCalendarDate = (value: string): boolean => {
 export const isoDateSchema = (message: string): z.ZodType<string> =>
   z.string().regex(isoDatePattern, message).refine(isCalendarDate, message)
 
+// Note: Upper bound keeps peso amounts well inside exact floating-point cents.
+export const MAX_CURRENCY_AMOUNT = 10_000_000
 const currencyAmount = z
   .number()
   .nonnegative()
-  .max(10_000_000)
+  .max(MAX_CURRENCY_AMOUNT)
   .refine(
     (value) => Math.abs(value * 100 - Math.round(value * 100)) < 0.000001,
     'Use an amount with at most two decimal places.'
@@ -137,8 +145,8 @@ export const stockOutSchema = z.strictObject({
 })
 
 const supplierFields = {
-  organization: z.string().trim().min(2),
-  person: z.string().trim().min(2).regex(namePattern),
+  organization: z.string().trim().min(1).min(2),
+  person: z.string().trim().min(1).min(2).regex(namePattern),
   phone: z.string().trim().regex(phonePattern),
   telephone: z.string().trim().nullable(),
   email: z.string().trim().email().nullable(),
@@ -164,49 +172,109 @@ export const purchaseOrderStatusSchema = z.enum([
   'cancelled'
 ])
 
-export const newPurchaseOrderSchema = z.strictObject({
+const purchaseOrderLineSchema = z.strictObject({
+  drugId: z.number().int().positive(),
+  quantity: z.number().int().positive().max(MAX_LINE_QUANTITY),
+  unitCost: currencyAmount
+})
+
+const purchaseOrderFields = {
   supplierId: z.number().int().positive(),
   expectedAt: isoDateSchema('Enter a valid expected delivery date.').nullable().optional(),
-  notes: z.string().trim().nullable().optional(),
-  items: z
-    .array(
-      z.strictObject({
-        drugId: z.number().int().positive(),
-        quantity: z.number().int().positive(),
-        unitCost: currencyAmount
+  notes: z.string().trim().max(500).nullable().optional(),
+  items: z.array(purchaseOrderLineSchema).min(1)
+}
+
+const checkOrderLines = (
+  value: { items: Array<{ drugId: number; quantity: number; unitCost: number }> },
+  context: z.RefinementCtx
+): void => {
+  const seen = new Set<number>()
+  value.items.forEach((item, index) => {
+    if (seen.has(item.drugId))
+      context.addIssue({
+        code: 'custom',
+        path: ['items', index, 'drugId'],
+        message: 'This product is already on the order. Combine the quantities into one line.'
       })
-    )
-    .min(1)
-})
+    seen.add(item.drugId)
+  })
+  const total = value.items.reduce((sum, item) => sum + item.quantity * item.unitCost, 0)
+  if (!Number.isSafeInteger(Math.round(total * 100)))
+    context.addIssue({
+      code: 'custom',
+      path: ['items'],
+      message: 'The order total is too large to store accurately. Split it into smaller orders.'
+    })
+}
+
+export const newPurchaseOrderSchema = z
+  .strictObject(purchaseOrderFields)
+  .superRefine((value, context) => {
+    checkOrderLines(value, context)
+    if (value.expectedAt && value.expectedAt < localDate())
+      context.addIssue({
+        code: 'custom',
+        path: ['expectedAt'],
+        message: 'The expected delivery date cannot be before the order date (today).'
+      })
+  })
+
+// Note: Only draft orders can be edited; the order-date rule is checked against the stored order.
+export const purchaseOrderUpdateSchema = z
+  .strictObject(purchaseOrderFields)
+  .superRefine(checkOrderLines)
 
 export const purchaseOrderStatusUpdateSchema = z.strictObject({
   status: purchaseOrderStatusSchema
 })
 
-export const purchaseOrderDeliverySchema = z.strictObject({
-  requestId: z.string().uuid(),
-  deliveredAt: isoDateSchema('Enter a valid delivery date.'),
-  notes: z.string().trim().max(500).nullable().optional(),
-  items: z
-    .array(
-      z.strictObject({
-        itemId: z.number().int().positive(),
-        receivedQuantity: z.number().int().positive(),
-        batchNumber: z.string().trim().min(1).max(80),
-        sellPrice: currencyAmount,
-        expiresAt: isoDateSchema('Enter a valid expiry date.')
+export const purchaseOrderDeliverySchema = z
+  .strictObject({
+    requestId: z.string().uuid(),
+    deliveredAt: isoDateSchema('Enter a valid delivery date.'),
+    notes: z.string().trim().max(500).nullable().optional(),
+    items: z
+      .array(
+        z.strictObject({
+          itemId: z.number().int().positive(),
+          receivedQuantity: z.number().int().positive().max(MAX_LINE_QUANTITY),
+          batchNumber: referenceText(80),
+          sellPrice: currencyAmount,
+          expiresAt: isoDateSchema('Enter a valid expiry date.')
+        })
+      )
+      .min(1)
+  })
+  .superRefine((value, context) => {
+    if (value.deliveredAt > localDate())
+      context.addIssue({
+        code: 'custom',
+        path: ['deliveredAt'],
+        message: 'The delivery date cannot be in the future.'
       })
-    )
-    .min(1)
-})
+    value.items.forEach((item, index) => {
+      if (item.expiresAt <= value.deliveredAt)
+        context.addIssue({
+          code: 'custom',
+          path: ['items', index, 'expiresAt'],
+          message: 'The expiry date must be after the delivery date.'
+        })
+    })
+  })
 
 export const supplierInvoiceUploadSchema = z
   .strictObject({
     purchaseOrderId: z.number().int().positive(),
-    invoiceNumber: z.string().trim().min(1).max(80),
+    invoiceNumber: referenceText(80),
     invoiceDate: isoDateSchema('Enter a valid invoice date.'),
     dueDate: isoDateSchema('Enter a valid due date.'),
-    amount: currencyAmount.refine((value) => value >= 0.01, 'Amount must be at least 0.01.')
+    amount: currencyAmount.refine((value) => value >= 0.01, 'Amount must be at least ₱0.01.'),
+    fileToken: z.string().uuid()
+  })
+  .refine((value) => value.invoiceDate <= localDate(), {
+    path: ['invoiceDate'],
+    message: 'The invoice date cannot be in the future.'
   })
   .refine((value) => value.dueDate >= value.invoiceDate, {
     path: ['dueDate'],
@@ -217,10 +285,10 @@ export const supplierPaymentSchema = z
   .strictObject({
     purchaseOrderId: z.number().int().positive(),
     invoiceId: z.number().int().positive().nullable().optional(),
-    amount: currencyAmount.refine((value) => value >= 0.01, 'Amount must be at least 0.01.'),
+    amount: currencyAmount.refine((value) => value >= 0.01, 'Amount must be at least ₱0.01.'),
     paidAt: isoDateSchema('Enter a valid payment date.'),
     method: z.string().trim().min(1).max(80),
-    referenceNumber: z.string().trim().max(120).nullable().optional(),
+    referenceNumber: referenceText(120).nullable().optional(),
     notes: z.string().trim().max(500).nullable().optional()
   })
   .refine((value) => value.paidAt <= localDate(), {
