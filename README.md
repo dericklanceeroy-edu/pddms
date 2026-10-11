@@ -33,6 +33,9 @@ $ npm run dev
 the first-launch flow and requires creation of the master account. No default credentials or
 development account are created.
 
+For demonstrations, `npm run demo:dev` starts the app on a separate demo database with sample
+accounts and records. It never touches `pddms.db`. See [docs/demo-setup.md](docs/demo-setup.md).
+
 Authentication sessions are held by the Electron main process. Renderer refreshes retain the
 current session, while fully quitting and restarting the application requires signing in again.
 

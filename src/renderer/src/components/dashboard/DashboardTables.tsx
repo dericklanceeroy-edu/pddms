@@ -244,15 +244,23 @@ export function LowStockWatchlist({ alerts }: { alerts: DashboardLowStockAlert[]
 }
 
 export function RecentTransactions({
-  transactions
+  transactions,
+  title = 'Recent transactions',
+  description = 'Completed pharmacy sales from the database',
+  showCashier = true
 }: {
   transactions: DashboardRecentTransaction[]
+  title?: string
+  description?: string
+  /** Hidden on the cashier dashboard, where every sale listed is the cashier's own. */
+  showCashier?: boolean
 }): ReactElement {
+  const columnCount = showCashier ? 7 : 6
   return (
     <article className="panel min-w-0 overflow-hidden">
       <PanelHeader
-        title="Recent transactions"
-        description="Completed pharmacy sales from the database"
+        title={title}
+        description={description}
         headingId="recent-transactions-title"
         count={transactions.length}
         icon={FiShoppingBag}
@@ -261,7 +269,7 @@ export function RecentTransactions({
       <div className="overflow-x-auto">
         <table
           aria-labelledby="recent-transactions-title"
-          className="w-full min-w-[58rem] text-left text-sm"
+          className={`w-full text-left text-sm ${showCashier ? 'min-w-[58rem]' : 'min-w-[46rem]'}`}
         >
           <thead className="border-b border-slate-200 bg-slate-50/60 text-[0.68rem] tracking-wide text-slate-500 uppercase">
             <tr>
@@ -271,9 +279,11 @@ export function RecentTransactions({
               <th scope="col" className="px-4 py-3 font-semibold">
                 Date & time
               </th>
-              <th scope="col" className="px-4 py-3 font-semibold">
-                Cashier
-              </th>
+              {showCashier && (
+                <th scope="col" className="px-4 py-3 font-semibold">
+                  Cashier
+                </th>
+              )}
               <th scope="col" className="px-4 py-3 text-right font-semibold">
                 Items
               </th>
@@ -290,7 +300,7 @@ export function RecentTransactions({
           </thead>
           <tbody className="divide-y divide-slate-100">
             {transactions.length === 0 ? (
-              <EmptyTable colSpan={7} label="No transactions have been recorded yet." />
+              <EmptyTable colSpan={columnCount} label="No transactions have been recorded yet." />
             ) : (
               transactions.map((transaction) => {
                 const occurredAt = new Date(transaction.occurredAt)
@@ -308,7 +318,9 @@ export function RecentTransactions({
                         {timeFormatter.format(occurredAt)}
                       </p>
                     </td>
-                    <td className="px-4 py-4 text-slate-600">{transaction.cashierName}</td>
+                    {showCashier && (
+                      <td className="px-4 py-4 text-slate-600">{transaction.cashierName}</td>
+                    )}
                     <td className="px-4 py-4 text-right font-medium text-slate-700 tabular-nums">
                       {transaction.itemCount}
                     </td>
