@@ -113,7 +113,7 @@ export default function CustomerProfileView({
       <div className="space-y-5 sm:space-y-6">
         <Link
           to="/customers"
-          className="inline-flex items-center gap-2 rounded-2xl px-1 text-sm font-medium text-neutral-500 transition hover:text-mauve-700"
+          className="hover:text-brand-700 inline-flex items-center gap-2 rounded-lg px-1 text-sm font-medium text-slate-500 transition"
         >
           <FiArrowLeft /> Back to customers
         </Link>
@@ -121,7 +121,7 @@ export default function CustomerProfileView({
         {success && (
           <div
             role="status"
-            className="glass-surface flex items-center gap-3 rounded-2xl border-emerald-200/80 px-4 py-3 text-sm text-emerald-800"
+            className="glass-surface flex items-center gap-3 rounded-lg border-emerald-200/80 px-4 py-3 text-sm text-emerald-800"
           >
             <FiCheckCircle className="shrink-0" />
             {success}
@@ -133,10 +133,10 @@ export default function CustomerProfileView({
             <form noValidate onSubmit={save} className="panel space-y-6 p-6 sm:p-7">
               <div>
                 <p className="eyebrow">Customer details</p>
-                <h2 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">
+                <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">
                   {isNew ? 'Add customer profile' : 'Edit customer profile'}
                 </h2>
-                <p className="mt-3 max-w-2xl text-sm leading-6 text-neutral-500">
+                <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-500">
                   Keep contact and eligibility information accurate for a smoother dispensing
                   workflow.
                 </p>
@@ -229,13 +229,13 @@ export default function CustomerProfileView({
               {error && (
                 <p
                   role="alert"
-                  className="rounded-2xl border border-rose-200/80 bg-rose-50/80 px-4 py-3 text-sm text-rose-700"
+                  className="rounded-lg border border-rose-200/80 bg-rose-50/80 px-4 py-3 text-sm text-rose-700"
                 >
                   {error}
                 </p>
               )}
 
-              <div className="flex flex-wrap justify-end gap-2 border-t border-white/65 pt-5">
+              <div className="flex flex-wrap justify-end gap-2 border-t border-slate-200 pt-5">
                 {!isNew && (
                   <button
                     type="button"
@@ -256,25 +256,24 @@ export default function CustomerProfileView({
             </form>
 
             <aside className="grid content-start gap-5 sm:grid-cols-2 xl:grid-cols-1">
-              <section className="glass-surface relative overflow-hidden rounded-3xl p-6">
-                <div className="absolute -top-10 -right-10 size-28 rounded-full bg-indigo-200/45 blur-2xl" />
+              <section className="glass-surface relative overflow-hidden rounded-lg p-6">
                 <div className="relative">
-                  <div className="grid size-11 place-items-center rounded-2xl border border-white/80 bg-white/65 text-mauve-700 shadow-sm">
+                  <div className="text-brand-700 grid size-11 place-items-center rounded-lg border border-slate-200 bg-white shadow-sm">
                     <FiUser />
                   </div>
-                  <p className="mt-5 text-sm font-semibold text-neutral-900">Profile setup</p>
-                  <p className="mt-2 text-sm leading-6 text-neutral-500">
+                  <p className="mt-5 text-sm font-semibold text-slate-900">Profile setup</p>
+                  <p className="mt-2 text-sm leading-6 text-slate-500">
                     Capture the customer’s preferred contact details first, then record discount
                     eligibility when applicable.
                   </p>
                 </div>
               </section>
               <section className="panel p-6">
-                <div className="grid size-11 place-items-center rounded-2xl bg-mauve-50/80 text-mauve-700">
+                <div className="bg-brand-50/80 text-brand-700 grid size-11 place-items-center rounded-lg">
                   <FiShield />
                 </div>
-                <p className="mt-5 text-sm font-semibold text-neutral-900">Eligibility details</p>
-                <p className="mt-2 text-sm leading-6 text-neutral-500">
+                <p className="mt-5 text-sm font-semibold text-slate-900">Eligibility details</p>
+                <p className="mt-2 text-sm leading-6 text-slate-500">
                   Senior Citizen and PWD profiles require a valid discount ID before checkout
                   discounts can be applied.
                 </p>
@@ -284,18 +283,16 @@ export default function CustomerProfileView({
         ) : (
           <div className="grid gap-5 xl:grid-cols-12">
             <section className="panel relative overflow-hidden p-6 sm:p-7 xl:col-span-8">
-              <div className="mesh-glow -top-24 -right-12 size-64 bg-indigo-300/25" />
-              <div className="mesh-glow -bottom-32 left-1/4 size-64 bg-mauve-300/20" />
               <div className="relative flex gap-4 sm:gap-5">
-                <div className="grid size-14 shrink-0 place-items-center rounded-2xl border border-mauve-100 bg-mauve-50/85 text-xl text-mauve-700 shadow-sm">
+                <div className="border-brand-100 bg-brand-50/85 text-brand-700 grid size-14 shrink-0 place-items-center rounded-lg border text-xl shadow-sm">
                   <FiUser />
                 </div>
                 <div className="min-w-0">
                   <p className="eyebrow">Customer since {date.format(new Date(draft.createdAt))}</p>
-                  <h2 className="mt-2 truncate text-3xl font-semibold tracking-tight sm:text-4xl">
+                  <h2 className="mt-2 truncate text-2xl font-semibold tracking-tight text-slate-900">
                     {draft.fullName}
                   </h2>
-                  <p className="mt-3 text-sm text-neutral-600 sm:text-base">
+                  <p className="mt-3 text-sm text-slate-600 sm:text-base">
                     {draft.phone}
                     {draft.email ? ` · ${draft.email}` : ''}
                   </p>
@@ -303,11 +300,10 @@ export default function CustomerProfileView({
               </div>
             </section>
 
-            <section className="glass-surface relative overflow-hidden rounded-3xl p-5 sm:p-6 xl:col-span-4">
-              <div className="absolute -top-12 -right-10 size-28 rounded-full bg-mauve-200/35 blur-2xl" />
+            <section className="glass-surface relative overflow-hidden rounded-lg p-5 sm:p-6 xl:col-span-4">
               <div className="relative">
                 <p className="eyebrow">Profile actions</p>
-                <p className="mt-2 text-sm leading-6 text-neutral-500">
+                <p className="mt-2 text-sm leading-6 text-slate-500">
                   Make changes to this customer record or remove it from the active list.
                 </p>
                 <div className="mt-5 grid gap-2">
@@ -347,14 +343,14 @@ export default function CustomerProfileView({
             />
 
             <section className="panel min-w-0 overflow-hidden xl:col-span-12">
-              <header className="flex flex-col gap-3 border-b border-white/65 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+              <header className="flex flex-col gap-3 border-b border-slate-200 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
                 <div>
                   <h3 className="font-semibold">Transaction history</h3>
-                  <p className="mt-1 text-sm text-neutral-500">
+                  <p className="mt-1 text-sm text-slate-500">
                     Recorded purchases associated with this customer.
                   </p>
                 </div>
-                <span className="w-fit rounded-full border border-white/75 bg-white/55 px-3 py-1 text-xs font-semibold text-neutral-600">
+                <span className="w-fit rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600">
                   {draft.transactions.length} records
                 </span>
               </header>
@@ -368,11 +364,11 @@ export default function CustomerProfileView({
                       <th className="px-5 py-3 text-right sm:px-6">Total</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-white/65">
+                  <tbody className="divide-y divide-slate-100">
                     {draft.transactions.map((transaction) => (
-                      <tr key={transaction.id} className="transition hover:bg-white/30">
+                      <tr key={transaction.id} className="transition hover:bg-white">
                         <td className="px-5 py-4 font-medium sm:px-6">{transaction.id}</td>
-                        <td className="px-5 py-4 text-neutral-500">
+                        <td className="px-5 py-4 text-slate-500">
                           {date.format(new Date(transaction.purchasedAt))}
                         </td>
                         <td className="px-5 py-4">{transaction.itemCount}</td>
@@ -384,7 +380,7 @@ export default function CustomerProfileView({
                   </tbody>
                 </table>
                 {draft.transactions.length === 0 && (
-                  <p className="p-12 text-center text-sm text-neutral-500">
+                  <p className="p-12 text-center text-sm text-slate-500">
                     No transactions recorded.
                   </p>
                 )}
@@ -395,7 +391,7 @@ export default function CustomerProfileView({
       </div>
 
       {confirmRemove && (
-        <div className="fixed inset-0 z-[70] grid place-items-center bg-neutral-950/55 p-4 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[70] grid place-items-center bg-slate-950/55 p-4">
           <button
             className="absolute inset-0"
             aria-label="Cancel customer removal"
@@ -405,12 +401,12 @@ export default function CustomerProfileView({
             role="alertdialog"
             aria-modal="true"
             aria-labelledby="remove-customer-title"
-            className="glass-surface relative z-10 w-full max-w-md rounded-[1.75rem] p-6"
+            className="glass-surface relative z-10 w-full max-w-md rounded-lg p-6"
           >
             <h2 id="remove-customer-title" className="text-xl font-semibold">
               Remove customer?
             </h2>
-            <p className="mt-2 text-sm leading-6 text-neutral-500">
+            <p className="mt-2 text-sm leading-6 text-slate-500">
               {draft.fullName} will be removed from the customer list. This action cannot be undone
               from the database.
             </p>
@@ -439,7 +435,7 @@ export default function CustomerProfileView({
 
 function Field({ label, children }: { label: string; children: ReactElement }): ReactElement {
   return (
-    <label className="block text-[0.72rem] font-semibold tracking-[0.08em] text-neutral-600 uppercase">
+    <label className="block text-[0.72rem] font-semibold tracking-[0.08em] text-slate-600 uppercase">
       {label}
       <span className="mt-2 block">{children}</span>
     </label>
@@ -459,14 +455,13 @@ function ProfileDetail({
 }): ReactElement {
   return (
     <section className="panel relative overflow-hidden p-5 sm:p-6 xl:col-span-4">
-      <div className="absolute -top-10 -right-10 size-24 rounded-full bg-mauve-200/30 blur-2xl" />
       <div className="relative">
-        <div className="grid size-10 place-items-center rounded-2xl border border-white/80 bg-white/65 text-mauve-700 shadow-sm">
+        <div className="text-brand-700 grid size-10 place-items-center rounded-lg border border-slate-200 bg-white shadow-sm">
           {icon}
         </div>
-        <p className="mt-5 text-sm text-neutral-500">{label}</p>
-        <p className="mt-2 text-lg font-semibold break-words text-neutral-900">{value}</p>
-        <p className="mt-2 text-sm leading-6 break-words text-neutral-500">{description}</p>
+        <p className="mt-5 text-sm text-slate-500">{label}</p>
+        <p className="mt-2 text-lg font-semibold break-words text-slate-900">{value}</p>
+        <p className="mt-2 text-sm leading-6 break-words text-slate-500">{description}</p>
       </div>
     </section>
   )

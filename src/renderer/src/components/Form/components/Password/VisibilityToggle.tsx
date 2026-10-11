@@ -20,7 +20,7 @@ export default function VisibilityToggle({
       type="button"
       aria-label={visible ? 'Hide password' : 'Show password'}
       onClick={toggle}
-      className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-neutral-500 transition hover:text-neutral-950 focus-visible:ring-2 focus-visible:ring-mauve-300 focus-visible:outline-none"
+      className="focus-visible:ring-brand-300 absolute inset-y-0 right-0 flex w-11 items-center justify-center text-slate-500 transition hover:text-slate-950 focus-visible:ring-2 focus-visible:outline-none"
     >
       <Icon aria-hidden="true" className="size-5" />
     </button>

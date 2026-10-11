@@ -1,4 +1,5 @@
 import DashboardShell from '@renderer/components/dashboard/DashboardShell'
+import FormField from '@renderer/components/ui/FormField'
 import { useAccount } from '@renderer/hooks/useAccount'
 import { channels } from '@shared/constants'
 import { profileUpdateSchema } from '@shared/schemas'
@@ -48,28 +49,26 @@ function Profile(): ReactElement {
             .finally(() => setBusy(false))
         }}
       >
-        <h2 className="text-xl font-semibold">My profile</h2>
-        <p className="text-sm text-neutral-500">
-          Role: {account?.role}. Security permissions are administrator-controlled. Saving requires
-          your current password and signs you out.
+        <h2 className="page-title">My profile</h2>
+        <p className="text-sm text-slate-500">
+          Role: {account?.role}. Your access level is set by the master account. Saving asks for
+          your current password and signs you out so you can sign in with the new details.
         </p>
         {error && (
-          <p role="alert" className="text-rose-700">
+          <p role="alert" className="status-message border-rose-200 bg-rose-50 text-rose-800">
             {error}
           </p>
         )}
         <fieldset className="space-y-4" disabled={busy}>
-          <label className="block">
-            Full name
+          <FormField label="Full name" required>
             <input
               required
               className="field"
               value={fullName}
               onChange={(event) => setFullName(event.target.value)}
             />
-          </label>
-          <label className="block">
-            Username
+          </FormField>
+          <FormField label="Username" required>
             <input
               required
               className="field"
@@ -77,9 +76,8 @@ function Profile(): ReactElement {
               value={username}
               onChange={(event) => setUsername(event.target.value)}
             />
-          </label>
-          <label className="block">
-            Current password
+          </FormField>
+          <FormField label="Current password" required hint="Needed to confirm any change.">
             <input
               required
               type="password"
@@ -88,9 +86,11 @@ function Profile(): ReactElement {
               value={currentPassword}
               onChange={(event) => setCurrentPassword(event.target.value)}
             />
-          </label>
-          <label className="block">
-            New password (optional)
+          </FormField>
+          <FormField
+            label="New password"
+            hint="Leave blank to keep your current password. At least 8 characters."
+          >
             <input
               type="password"
               autoComplete="new-password"
@@ -98,7 +98,7 @@ function Profile(): ReactElement {
               value={password}
               onChange={(event) => setPassword(event.target.value)}
             />
-          </label>
+          </FormField>
           <button className="primary-button">{busy ? 'Saving…' : 'Save and sign out'}</button>
         </fieldset>
       </form>

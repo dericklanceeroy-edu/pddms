@@ -59,7 +59,7 @@ export default function Modal({
     xl: 'max-w-6xl'
   }[size]
   return createPortal(
-    <div className="fixed inset-0 z-[70] grid place-items-center overflow-y-auto bg-neutral-950/50 p-4">
+    <div className="fixed inset-0 z-[70] grid place-items-center overflow-y-auto bg-slate-950/50 p-4">
       <button
         type="button"
         tabIndex={-1}
@@ -73,14 +73,14 @@ export default function Modal({
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className={`app-dialog relative z-10 max-h-[calc(100dvh-2rem)] w-full ${width} min-w-0 overflow-x-hidden overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl outline-none sm:p-6`}
+        className={`app-dialog relative z-10 max-h-[calc(100dvh-2rem)] w-full ${width} min-w-0 overflow-x-hidden overflow-y-auto rounded-lg bg-white p-5 shadow-2xl outline-none sm:p-6`}
       >
         <div className="mb-5 flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <h2 className="text-xl font-semibold tracking-tight break-words text-neutral-950">
+            <h2 className="text-xl font-semibold tracking-tight break-words text-slate-950">
               {title}
             </h2>
-            {description && <p className="mt-1 text-sm text-neutral-500">{description}</p>}
+            {description && <p className="mt-1 text-sm text-slate-500">{description}</p>}
           </div>
           <button
             type="button"

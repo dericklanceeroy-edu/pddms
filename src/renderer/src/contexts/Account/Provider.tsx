@@ -97,7 +97,7 @@ export default function AccountProvider({ children }: PropsWithChildren): ReactE
   }
 
   if (isInitializing) {
-    return <main className="setup-stage text-sm text-neutral-500">Starting Med Prix…</main>
+    return <main className="setup-stage text-sm text-slate-500">Starting Med Prix…</main>
   }
 
   const isSetupRoute = path === '/new' || path.startsWith('/new/')

@@ -3,6 +3,9 @@ import type {
   DashboardSummaryMetricId,
   DashboardTrendDirection
 } from '@renderer/data/adminDashboard'
+import { useAccount } from '@renderer/hooks/useAccount'
+import { canAccessPath } from '@renderer/navigation/access'
+import { Link } from '@tanstack/react-router'
 import type { ReactElement } from 'react'
 import type { IconType } from 'react-icons'
 import {
@@ -10,6 +13,7 @@ import {
   FiArrowDown,
   FiArrowUp,
   FiCalendar,
+  FiChevronsRight,
   FiDollarSign,
   FiMinus,
   FiShoppingBag
@@ -35,7 +39,7 @@ const presentation: Record<
   'daily-sales': {
     icon: FiDollarSign,
     color: '#7d3d6f',
-    iconClassName: 'bg-mauve-50 text-mauve-600 ring-mauve-100',
+    iconClassName: 'bg-brand-50 text-brand-600 ring-brand-100',
     positiveDirection: 'up'
   },
   'items-sold': {
@@ -56,6 +60,17 @@ const presentation: Record<
     iconClassName: 'bg-amber-50 text-amber-600 ring-amber-100',
     positiveDirection: null
   }
+}
+
+/** Where each metric's underlying records can be reviewed. */
+const destinations: Record<
+  DashboardSummaryMetricId,
+  { to: '/reports' | '/inventory'; label: string }
+> = {
+  'daily-sales': { to: '/reports', label: 'View sales report' },
+  'items-sold': { to: '/reports', label: 'View sales report' },
+  'low-stock-items': { to: '/inventory', label: 'Review stock levels' },
+  'expiring-batches': { to: '/inventory', label: 'Review expiring batches' }
 }
 
 function formatMetric(metric: DashboardSummaryMetric): string {
@@ -100,6 +115,9 @@ function Sparkline({ values, color }: { values: number[]; color: string }): Reac
 
 export default function SummaryCard({ metric }: { metric: DashboardSummaryMetric }): ReactElement {
   const config = presentation[metric.id]
+  const { account } = useAccount()
+  const destination = destinations[metric.id]
+  const canOpen = account !== null && canAccessPath(account.role, destination.to)
   const TrendIcon =
     metric.trend.direction === 'up'
       ? FiArrowUp
@@ -109,43 +127,52 @@ export default function SummaryCard({ metric }: { metric: DashboardSummaryMetric
   const isPositive = config.positiveDirection === metric.trend.direction
   const trendClassName =
     metric.trend.direction === 'flat'
-      ? 'bg-neutral-100 text-neutral-600'
+      ? 'bg-slate-100 text-slate-600'
       : isPositive
         ? 'bg-emerald-50 text-emerald-700'
         : 'bg-rose-50 text-rose-700'
 
   return (
-    <article className="metric-card group relative min-w-0 overflow-hidden transition duration-200 hover:-translate-y-0.5 hover:shadow-2xl hover:shadow-mauve-200/30">
-      <div className="pointer-events-none absolute -right-14 -bottom-16 size-36 rounded-full bg-mauve-300/15 opacity-80 blur-3xl transition-opacity duration-200 group-hover:opacity-100" />
-      <div className="relative flex items-start justify-between gap-3">
-        <div
-          className={`grid size-10 shrink-0 place-items-center rounded-2xl ring-1 ${config.iconClassName}`}
-        >
-          <config.icon className="size-4.5" aria-hidden="true" />
-        </div>
-        {metric.sparkline.length > 1 && (
-          <div className="-mt-1 -mr-1 opacity-85">
-            <Sparkline values={metric.sparkline} color={config.color} />
-          </div>
-        )}
-      </div>
-      <div className="relative mt-5">
-        <p className="text-sm font-medium text-neutral-500">{metric.label}</p>
-        <p className="mt-1 text-2xl font-semibold tracking-tight break-words text-neutral-950 tabular-nums sm:text-[1.7rem]">
-          {formatMetric(metric)}
-        </p>
-      </div>
-      <div className="relative mt-4 flex min-w-0 flex-wrap items-center gap-2 text-xs">
-        {metric.sparkline.length > 1 && (
-          <span
-            className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-1 font-semibold ${trendClassName}`}
+    <article className="metric-card group relative flex min-w-0 flex-col overflow-hidden p-0">
+      <div className="flex-1 p-5">
+        <div className="relative flex items-start justify-between gap-3">
+          <div
+            className={`grid size-10 shrink-0 place-items-center rounded-lg ring-1 ${config.iconClassName}`}
           >
-            <TrendIcon className="size-3" aria-hidden="true" />
-            {metric.trend.direction === 'flat' ? 'Stable' : `${metric.trend.percentage}%`}
-          </span>
-        )}
-        <span className="text-neutral-500">{metric.trend.label}</span>
+            <config.icon className="size-4.5" aria-hidden="true" />
+          </div>
+          {metric.sparkline.length > 1 && (
+            <div className="-mt-1 -mr-1 opacity-85">
+              <Sparkline values={metric.sparkline} color={config.color} />
+            </div>
+          )}
+        </div>
+        <div className="relative mt-5">
+          <p className="text-sm font-medium text-slate-500">{metric.label}</p>
+          <p className="mt-1 text-2xl font-semibold tracking-tight break-words text-slate-900 tabular-nums">
+            {formatMetric(metric)}
+          </p>
+        </div>
+        <div className="relative mt-4 flex min-w-0 flex-wrap items-center gap-2 text-xs">
+          {metric.sparkline.length > 1 && (
+            <span
+              className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-1 font-semibold ${trendClassName}`}
+            >
+              <TrendIcon className="size-3" aria-hidden="true" />
+              {metric.trend.direction === 'flat' ? 'Stable' : `${metric.trend.percentage}%`}
+            </span>
+          )}
+          <span className="text-slate-500">{metric.trend.label}</span>
+        </div>
       </div>
+      {canOpen && (
+        <Link
+          to={destination.to}
+          className="hover:bg-brand-50 hover:text-brand-800 flex items-center justify-center gap-1.5 border-t border-slate-200 bg-slate-50 px-4 py-2 text-xs font-medium text-slate-700 transition-colors"
+        >
+          {destination.label} <FiChevronsRight aria-hidden="true" />
+        </Link>
+      )}
     </article>
   )
 }
