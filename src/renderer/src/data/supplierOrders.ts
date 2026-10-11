@@ -37,11 +37,18 @@ export interface DeliveryFormValues {
 }
 
 export interface InvoiceUploadValues {
+  fileToken: string
   purchaseOrderId: number
   invoiceNumber: string
   invoiceDate: string
   dueDate: string
   amount: number
+}
+
+export interface SelectedInvoiceFile {
+  token: string
+  name: string
+  size: number
 }
 
 export interface SupplierPaymentValues {
@@ -71,7 +78,7 @@ export const orderStatusLabels: Record<OrderStatus, string> = {
 }
 
 export const orderStatusTone: Record<OrderStatus, string> = {
-  draft: 'bg-neutral-100 text-neutral-700',
+  draft: 'bg-slate-100 text-slate-700',
   submitted: 'bg-amber-50 text-amber-800',
   partially_received: 'bg-sky-50 text-sky-800',
   received: 'bg-emerald-50 text-emerald-800',
@@ -91,3 +98,26 @@ export const deadlineTone: Record<InvoiceRecord['deadlineStatus'], string> = {
   upcoming: 'bg-sky-50 text-sky-800',
   paid: 'bg-emerald-50 text-emerald-800'
 }
+
+/**
+ * Plain-language explanation of what can still happen to an order in each status.
+ */
+export const orderStatusHelp: Record<OrderStatus, string> = {
+  draft: 'Not yet sent to the supplier. You can still edit, submit, cancel or delete it.',
+  submitted: 'Sent to the supplier and waiting for delivery. Record deliveries as stock arrives.',
+  partially_received:
+    'Some stock has arrived. Record the remaining deliveries, or cancel the undelivered balance.',
+  received: 'All ordered stock has been received. The order is complete.',
+  cancelled:
+    'Cancelled orders are closed permanently. Received stock and payments remain on record.'
+}
+
+export type ProcurementTab = 'suppliers' | 'orders' | 'receiving' | 'invoices' | 'history'
+
+export const procurementTabs: Array<{ id: ProcurementTab; label: string }> = [
+  { id: 'suppliers', label: 'Suppliers' },
+  { id: 'orders', label: 'Purchase orders' },
+  { id: 'receiving', label: 'Receiving' },
+  { id: 'invoices', label: 'Invoices & payments' },
+  { id: 'history', label: 'History' }
+]

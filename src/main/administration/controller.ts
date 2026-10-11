@@ -1,5 +1,6 @@
 import { accessControl, authorize } from '@main/access-control'
 import { state } from '@main/api'
+import { windowDialog } from '@main/api/dialogs'
 import { ipcMain } from '@main/api/ipc'
 import { listAudit } from '@main/audit/repository'
 import {
@@ -10,7 +11,6 @@ import {
   validateBackup
 } from '@main/backup/local'
 import { channels, resources, roles } from '@shared/constants'
-import { dialog } from 'electron'
 import { dirname } from 'node:path'
 import z from 'zod'
 
@@ -39,9 +39,9 @@ ipcMain.handle(channels.administration.backups, async () => {
   admin()
   return { success: true, backups: await listBackups() }
 })
-ipcMain.handle(channels.administration.backup, async () => {
+ipcMain.handle(channels.administration.backup, async (event) => {
   admin()
-  const choice = await dialog.showOpenDialog({
+  const choice = await windowDialog(event).showOpenDialog({
     title: 'Choose backup destination folder',
     defaultPath: backupDirectory(),
     properties: ['openDirectory', 'createDirectory']
@@ -57,9 +57,9 @@ ipcMain.handle(channels.administration.backup, async () => {
     }
   }
 })
-ipcMain.handle(channels.administration.restore, async () => {
+ipcMain.handle(channels.administration.restore, async (event) => {
   admin()
-  const choice = await dialog.showOpenDialog({
+  const choice = await windowDialog(event).showOpenDialog({
     title: 'Select backup manifest.json',
     defaultPath: backupDirectory(),
     filters: [{ name: 'PDDMS backup manifest', extensions: ['json'] }],
@@ -69,7 +69,7 @@ ipcMain.handle(channels.administration.restore, async () => {
   const directory = dirname(choice.filePaths[0])
   try {
     const info = await validateBackup(directory)
-    const confirm = await dialog.showMessageBox({
+    const confirm = await windowDialog(event).showMessageBox({
       type: 'warning',
       title: 'Restore application data?',
       message: `Replace current data with the backup from ${info.createdAt}?`,

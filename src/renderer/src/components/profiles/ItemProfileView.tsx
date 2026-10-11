@@ -96,18 +96,20 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
         <div className="space-y-5 sm:space-y-6">
           <Link
             to="/inventory"
-            className="inline-flex items-center gap-2 rounded-2xl px-1 text-sm font-medium text-neutral-500 transition hover:text-mauve-700"
+            className="hover:text-brand-700 inline-flex items-center gap-2 rounded-lg px-1 text-sm font-medium text-slate-500 transition"
           >
             <FiArrowLeft /> Back to inventory
           </Link>
           <form noValidate onSubmit={save} className="panel mx-auto max-w-3xl space-y-6 p-6 sm:p-7">
             <div>
-              <p className="eyebrow">Item details</p>
-              <h2 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">
-                Add new product
-              </h2>
-              <p className="mt-3 text-sm leading-6 text-neutral-500">
-                Create the product profile. Stock is recorded separately through inventory batches.
+              <p className="eyebrow">Inventory</p>
+              <h2 className="page-title mt-0.5">Add new product</h2>
+              <p className="page-subtitle">
+                Create the product record first. Stock, batch numbers and expiry dates are added
+                when you receive products against a purchase order.
+              </p>
+              <p className="mt-3 text-xs text-slate-500">
+                Fields marked <span className="text-rose-600">*</span> are required.
               </p>
             </div>
             <ProductFields
@@ -115,14 +117,11 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
               update={(field, value) => setDraft((current) => ({ ...current, [field]: value }))}
             />
             {error && (
-              <p
-                role="alert"
-                className="rounded-2xl border border-rose-200/80 bg-rose-50/80 px-4 py-3 text-sm text-rose-700"
-              >
+              <p role="alert" className="status-message border-rose-200 bg-rose-50 text-rose-800">
                 {error}
               </p>
             )}
-            <div className="flex flex-wrap justify-end gap-2 border-t border-white/65 pt-5">
+            <div className="flex flex-wrap justify-end gap-2 border-t border-slate-200 pt-5">
               <Link to="/inventory" className="secondary-button">
                 Cancel
               </Link>
@@ -197,13 +196,11 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
       <div className="space-y-5 sm:space-y-6">
         <Link
           to="/inventory"
-          className="inline-flex items-center gap-2 rounded-2xl px-1 text-sm font-medium text-neutral-500 transition hover:text-mauve-700"
+          className="hover:text-brand-700 inline-flex items-center gap-2 rounded-lg px-1 text-sm font-medium text-slate-500 transition"
         >
           <FiArrowLeft /> Back to inventory
         </Link>
         <section className="panel relative overflow-hidden p-6 sm:p-7">
-          <div className="mesh-glow -top-24 -right-12 size-64 bg-indigo-300/25" />
-          <div className="mesh-glow -bottom-32 left-1/4 size-64 bg-mauve-300/20" />
           <div className="relative flex flex-col justify-between gap-5 md:flex-row">
             <div>
               <div className="flex flex-wrap items-center gap-2">
@@ -214,26 +211,26 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
                   {status.replaceAll('-', ' ')}
                 </span>
               </div>
-              <h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
+              <h2 className="mt-3 text-2xl font-semibold tracking-tight text-slate-900">
                 {item.brandName}
               </h2>
-              <p className="mt-3 text-sm text-neutral-600 sm:text-base">
+              <p className="mt-3 text-sm text-slate-600 sm:text-base">
                 {item.genericName} · {item.formulation}
               </p>
               <div className="mt-5 flex flex-wrap gap-2">
                 {item.prescriptionRequired && (
-                  <span className="rounded-xl border border-violet-100 bg-violet-50/80 px-3 py-1.5 text-xs font-semibold text-violet-700">
+                  <span className="rounded-md border border-violet-100 bg-violet-50/80 px-3 py-1.5 text-xs font-semibold text-violet-700">
                     Prescription required
                   </span>
                 )}
                 {item.controlled && (
-                  <span className="rounded-xl border border-rose-100 bg-rose-50/80 px-3 py-1.5 text-xs font-semibold text-rose-700">
+                  <span className="rounded-md border border-rose-100 bg-rose-50/80 px-3 py-1.5 text-xs font-semibold text-rose-700">
                     Controlled medicine
                   </span>
                 )}
               </div>
             </div>
-            <div className="glass-surface flex h-fit flex-wrap gap-2 rounded-3xl p-3">
+            <div className="flex h-fit flex-wrap gap-2">
               {canEdit && (
                 <button
                   type="button"
@@ -268,10 +265,10 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="eyebrow">Item details</p>
-                <h2 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">
+                <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">
                   Edit product
                 </h2>
-                <p className="mt-3 text-sm leading-6 text-neutral-500">
+                <p className="mt-3 text-sm leading-6 text-slate-500">
                   Update catalog information without changing stock batch history.
                 </p>
               </div>
@@ -289,14 +286,11 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
               update={(field, value) => setDraft((current) => ({ ...current, [field]: value }))}
             />
             {error && (
-              <p
-                role="alert"
-                className="rounded-2xl border border-rose-200/80 bg-rose-50/80 px-4 py-3 text-sm text-rose-700"
-              >
+              <p role="alert" className="status-message border-rose-200 bg-rose-50 text-rose-800">
                 {error}
               </p>
             )}
-            <div className="flex flex-wrap justify-end gap-2 border-t border-white/65 pt-5">
+            <div className="flex flex-wrap justify-end gap-2 border-t border-slate-200 pt-5">
               <button
                 type="button"
                 className="secondary-button"
@@ -341,19 +335,19 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
                     <th className="px-5 py-3">Expiry</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-white/65">
+                <tbody className="divide-y divide-slate-100">
                   {item.batches.map((batch) => (
-                    <tr key={batch.id} className="transition hover:bg-white/30">
+                    <tr key={batch.id} className="transition hover:bg-white">
                       <td className="max-w-64 px-5 py-4 font-medium break-words">
                         {batch.batchNumber}
                         {batch.receipts.map((receipt, index) => (
-                          <p key={index} className="mt-1 text-xs font-normal text-neutral-500">
+                          <p key={index} className="mt-1 text-xs font-normal text-slate-500">
                             {receipt.deliveredAt} · {receipt.orderNumber} · {receipt.quantity}{' '}
                             received
                           </p>
                         ))}
                       </td>
-                      <td className="max-w-48 px-5 py-4 break-words text-neutral-500">
+                      <td className="max-w-48 px-5 py-4 break-words text-slate-500">
                         {batch.supplier}
                       </td>
                       <td className="px-5 py-4">{batch.stock}</td>
@@ -373,9 +367,7 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
                 </tbody>
               </table>
               {item.batches.length === 0 && (
-                <p className="p-10 text-center text-sm text-neutral-500">
-                  No active stock batches.
-                </p>
+                <p className="p-10 text-center text-sm text-slate-500">No active stock batches.</p>
               )}
             </div>
           </div>
@@ -384,32 +376,32 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
               title="Generic equivalents"
               description="Products sharing the same generic formulation."
             />
-            <div className="divide-y divide-white/65">
+            <div className="divide-y divide-slate-100">
               {equivalents.map((equivalent) => (
                 <Link
                   key={equivalent.id}
                   to="/items/$itemId"
                   params={{ itemId: String(equivalent.id) }}
-                  className="group flex items-center gap-3 p-5 transition hover:bg-white/45"
+                  className="group flex items-center gap-3 p-5 transition hover:bg-white"
                 >
-                  <div className="grid size-10 place-items-center rounded-2xl bg-mauve-50/80 text-mauve-700">
+                  <div className="bg-brand-50/80 text-brand-700 grid size-10 place-items-center rounded-lg">
                     <FiPackage />
                   </div>
                   <div className="min-w-0">
                     <p className="font-medium">{equivalent.brandName}</p>
-                    <p className="text-xs text-neutral-500">{equivalent.formulation}</p>
+                    <p className="text-xs text-slate-500">{equivalent.formulation}</p>
                   </div>
                 </Link>
               ))}
               {equivalents.length === 0 && (
-                <p className="p-5 text-sm text-neutral-500">No equivalent products recorded.</p>
+                <p className="p-5 text-sm text-slate-500">No equivalent products recorded.</p>
               )}
             </div>
           </div>
         </section>
         {canEdit && (
-          <Link to="/suppliers" className="secondary-button w-fit">
-            Record stock-in through supplier receiving
+          <Link to="/suppliers" search={{ tab: 'receiving' }} className="secondary-button w-fit">
+            Receive stock for this product
           </Link>
         )}
         {account?.role === 'master' && <StockOutPanel item={item} />}
@@ -428,11 +420,24 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
   )
 }
 
-function Field({ label, children }: { label: string; children: ReactElement }): ReactElement {
+/** Required product field with a visible label, matching the shared FormField style. */
+function Field({
+  label,
+  hint,
+  children
+}: {
+  label: string
+  hint?: string
+  children: ReactElement
+}): ReactElement {
   return (
-    <label className="block text-[0.72rem] font-semibold tracking-[0.08em] text-neutral-600 uppercase">
+    <label className="block text-sm font-medium text-slate-700">
       {label}
-      <span className="mt-2 block">{children}</span>
+      <span className="ml-0.5 text-rose-600" aria-hidden="true">
+        *
+      </span>
+      <span className="mt-1.5 block font-normal">{children}</span>
+      {hint && <span className="mt-1 block text-xs font-normal text-slate-500">{hint}</span>}
     </label>
   )
 }
@@ -491,7 +496,7 @@ function ProductFields({
           onChange={(event) => update('formulation', event.target.value)}
         />
       </Field>
-      <Field label="Reorder level">
+      <Field label="Reorder level" hint="A low-stock alert appears when stock falls to this level.">
         <input
           required
           type="number"
@@ -508,26 +513,26 @@ function ProductFields({
           }
         />
       </Field>
-      <section className="rounded-2xl border border-white/80 bg-white/40 p-4 shadow-inner shadow-white/50 sm:col-span-2">
-        <p className="text-[0.72rem] font-semibold tracking-[0.08em] text-neutral-600 uppercase">
-          Dispensing controls
+      <section className="rounded-md border border-slate-200 bg-slate-50 p-4 sm:col-span-2">
+        <p className="text-sm font-medium text-slate-700">
+          Dispensing controls <span className="text-xs font-normal text-slate-400">(optional)</span>
         </p>
         <div className="mt-3 flex flex-wrap gap-x-6 gap-y-3">
-          <label className="flex items-center gap-3 text-sm text-neutral-700">
+          <label className="flex items-center gap-3 text-sm text-slate-700">
             <input
               type="checkbox"
               checked={draft.prescriptionRequired}
               onChange={(event) => update('prescriptionRequired', event.target.checked)}
-              className="size-4 rounded border-neutral-300 text-mauve-700"
+              className="text-brand-700 size-4 rounded border-slate-300"
             />
             Prescription required
           </label>
-          <label className="flex items-center gap-3 text-sm text-neutral-700">
+          <label className="flex items-center gap-3 text-sm text-slate-700">
             <input
               type="checkbox"
               checked={draft.controlled}
               onChange={(event) => update('controlled', event.target.checked)}
-              className="size-4 rounded border-neutral-300 text-mauve-700"
+              className="text-brand-700 size-4 rounded border-slate-300"
             />
             Controlled medicine
           </label>
@@ -553,15 +558,15 @@ function ConfirmationDialog({
   confirm: VoidFunction
 }): ReactElement {
   return (
-    <div className="fixed inset-0 z-[70] grid place-items-center bg-neutral-950/55 p-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[70] grid place-items-center bg-slate-950/55 p-4">
       <button className="absolute inset-0" aria-label="Cancel removal" onClick={close} />
       <section
         role="alertdialog"
         aria-modal="true"
-        className="glass-surface relative z-10 w-full max-w-md rounded-[1.75rem] p-6"
+        className="glass-surface relative z-10 w-full max-w-md rounded-lg p-6"
       >
         <h2 className="text-xl font-semibold">{title}</h2>
-        <p className="mt-2 text-sm leading-6 text-neutral-500">{description}</p>
+        <p className="mt-2 text-sm leading-6 text-slate-500">{description}</p>
         <div className="mt-6 flex justify-end gap-2">
           <button
             disabled={disabled}
@@ -586,9 +591,8 @@ function ConfirmationDialog({
 function Metric({ label, value }: { label: string; value: string }): ReactElement {
   return (
     <div className="panel relative overflow-hidden p-5 sm:p-6">
-      <div className="absolute -top-10 -right-10 size-24 rounded-full bg-indigo-200/30 blur-2xl" />
       <div className="relative">
-        <p className="text-sm text-neutral-500">{label}</p>
+        <p className="text-sm text-slate-500">{label}</p>
         <p className="mt-2 text-2xl font-semibold tracking-tight">{value}</p>
       </div>
     </div>
@@ -597,9 +601,9 @@ function Metric({ label, value }: { label: string; value: string }): ReactElemen
 
 function Header({ title, description }: { title: string; description: string }): ReactElement {
   return (
-    <header className="border-b border-white/65 px-5 py-5 sm:px-6">
+    <header className="border-b border-slate-200 px-5 py-5 sm:px-6">
       <h3 className="font-semibold">{title}</h3>
-      <p className="mt-1 text-sm text-neutral-500">{description}</p>
+      <p className="mt-1 text-sm text-slate-500">{description}</p>
     </header>
   )
 }

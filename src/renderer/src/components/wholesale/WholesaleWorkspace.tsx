@@ -1,4 +1,5 @@
 import DashboardShell from '@renderer/components/dashboard/DashboardShell'
+import { useConfirm } from '@renderer/components/ui/ConfirmDialog'
 import type { CustomerProfile, ItemProfile } from '@renderer/data/profiles'
 import { useAccount } from '@renderer/hooks/useAccount'
 import { getCustomers, getProducts } from '@renderer/services/profiles'
@@ -27,6 +28,7 @@ import {
 import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react'
 
 export default function WholesaleWorkspace(): ReactElement {
+  const [confirmDialog, confirm] = useConfirm()
   const { account } = useAccount()
   const admin = account?.role === 'master'
   const [products, setProducts] = useState<ItemProfile[]>([])
@@ -175,12 +177,15 @@ export default function WholesaleWorkspace(): ReactElement {
     totalError = cause instanceof Error ? cause.message : 'Invalid total.'
   }
   return (
-    <DashboardShell pageTitle="Wholesale & distributor">
+    <DashboardShell pageTitle="Wholesale & deliveries">
       <div className="space-y-5">
-        <header className="page-intro flex flex-wrap items-center justify-between gap-3 p-5">
+        <header className="page-intro flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="eyebrow">Client orders & deliveries</p>
-            <h2 className="text-2xl font-semibold">Wholesale & distributor</h2>
+            <p className="eyebrow">Business</p>
+            <h2 className="page-title mt-0.5">Wholesale & deliveries</h2>
+            <p className="page-subtitle">
+              Orders from wholesale clients, their deliveries and the balances they owe.
+            </p>
           </div>
           <div className="flex flex-wrap gap-2">
             <button
@@ -203,24 +208,27 @@ export default function WholesaleWorkspace(): ReactElement {
               disabled={busy}
               onClick={() => setCreating(!creating)}
             >
-              {creating ? 'Hide order form' : 'New order'}
+              {creating ? 'Hide order form' : 'Create wholesale order'}
             </button>
           </div>
         </header>
         {error && (
-          <p role="alert" className="rounded-xl bg-rose-50 p-4 text-rose-800">
+          <p role="alert" className="status-message border-rose-200 bg-rose-50 text-rose-800">
             {error}
           </p>
         )}
         {notice && (
-          <p role="status" className="rounded-xl bg-emerald-50 p-4 text-emerald-800">
+          <p
+            role="status"
+            className="status-message border-emerald-200 bg-emerald-50 text-emerald-800"
+          >
             {notice}
           </p>
         )}
         {admin && (
           <div
             role="status"
-            className={`rounded-xl p-4 ${alerts.count ? 'bg-amber-50 text-amber-900' : 'bg-emerald-50 text-emerald-800'}`}
+            className={`rounded-md p-4 ${alerts.count ? 'bg-amber-50 text-amber-900' : 'bg-emerald-50 text-emerald-800'}`}
           >
             {alerts.count
               ? `${alerts.count} overdue accounts · ${money(alerts.remainingCents)} outstanding`
@@ -277,7 +285,7 @@ export default function WholesaleWorkspace(): ReactElement {
             }}
           >
             <h3 className="text-lg font-semibold">Record wholesale order</h3>
-            <p className="text-sm text-neutral-500">
+            <p className="text-sm text-slate-500">
               Uses catalog prices. Stock is not reserved; availability is rechecked at delivery.
               Partial payments are supported.
             </p>
@@ -405,7 +413,7 @@ export default function WholesaleWorkspace(): ReactElement {
               <div className="max-h-64 space-y-2 overflow-auto">
                 {lines.map((line) => (
                   <div
-                    className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-neutral-200 p-3"
+                    className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 p-3"
                     key={line.batchId}
                   >
                     <span className="min-w-0 break-words">
@@ -425,7 +433,7 @@ export default function WholesaleWorkspace(): ReactElement {
                   </div>
                 ))}
               </div>
-              {!lines.length && <p className="text-sm text-neutral-500">No products added.</p>}
+              {!lines.length && <p className="text-sm text-slate-500">No products added.</p>}
               {totalError && (
                 <p role="alert" className="text-rose-700">
                   {totalError}
@@ -511,10 +519,10 @@ export default function WholesaleWorkspace(): ReactElement {
               </thead>
               <tbody>
                 {orders.map((order) => (
-                  <tr key={order.id} className="border-t border-neutral-100">
+                  <tr key={order.id} className="border-t border-slate-100">
                     <td className="max-w-64 p-3 break-words">
                       {order.customerName}
-                      <p className="text-xs break-all text-neutral-500">{order.reference}</p>
+                      <p className="text-xs break-all text-slate-500">{order.reference}</p>
                     </td>
                     <td className="p-3">
                       {order.orderDate}
@@ -612,7 +620,7 @@ export default function WholesaleWorkspace(): ReactElement {
                 </thead>
                 <tbody>
                   {selected.items.map((item) => (
-                    <tr className="border-t border-neutral-100" key={item.batchId}>
+                    <tr className="border-t border-slate-100" key={item.batchId}>
                       <td className="max-w-72 p-3 break-words">{item.productName}</td>
                       <td className="p-3">
                         {item.batchNumber}
@@ -629,7 +637,7 @@ export default function WholesaleWorkspace(): ReactElement {
             {['pending', 'scheduled'].includes(selected.status) && (
               <>
                 <form
-                  className="space-y-3 rounded-xl border border-neutral-200 p-4"
+                  className="space-y-3 rounded-md border border-slate-200 p-4"
                   onSubmit={(event) => {
                     event.preventDefault()
                     void run(() =>
@@ -686,13 +694,14 @@ export default function WholesaleWorkspace(): ReactElement {
                     <button
                       className="primary-button"
                       disabled={busy}
-                      onClick={() => {
-                        if (
-                          !window.confirm(
-                            'Confirm the full order has been delivered? This deducts the ordered stock once and cannot be undone here.'
-                          )
-                        )
-                          return
+                      onClick={async () => {
+                        const accepted = await confirm({
+                          title: 'Record full delivery?',
+                          message:
+                            'Confirm the full order has been delivered. This deducts the ordered stock once and cannot be undone here.',
+                          confirmLabel: 'Record delivery'
+                        })
+                        if (!accepted) return
                         void run(async () => {
                           await update(
                             () => deliverWholesale(selected.id),
@@ -709,12 +718,16 @@ export default function WholesaleWorkspace(): ReactElement {
                   <button
                     className="secondary-button"
                     disabled={busy}
-                    onClick={() => {
-                      if (
-                        window.confirm(
-                          'Cancel this undelivered order? Orders with payments cannot be cancelled.'
-                        )
-                      )
+                    onClick={async () => {
+                      const accepted = await confirm({
+                        title: 'Cancel this order?',
+                        message:
+                          'Cancel this undelivered order? Cancellation is permanent. Orders with payments cannot be cancelled.',
+                        confirmLabel: 'Cancel order',
+                        cancelLabel: 'Keep order',
+                        tone: 'danger'
+                      })
+                      if (accepted)
                         void run(() =>
                           update(
                             () => cancelWholesale(selected.id),
@@ -742,7 +755,7 @@ export default function WholesaleWorkspace(): ReactElement {
                   {showReceipt ? 'Hide receipt' : 'View delivery receipt'}
                 </button>
                 {showReceipt && (
-                  <div className="max-h-[65vh] space-y-3 overflow-auto rounded-xl border border-neutral-200 p-4">
+                  <div className="max-h-[65vh] space-y-3 overflow-auto rounded-md border border-slate-200 p-4">
                     <pre className="text-sm break-words whitespace-pre-wrap">
                       {deliveryReceiptText(selected)}
                     </pre>
@@ -763,7 +776,7 @@ export default function WholesaleWorkspace(): ReactElement {
               </div>
             )}
             {admin && selected.receivable && (
-              <section className="space-y-4 border-t border-neutral-200 pt-4">
+              <section className="space-y-4 border-t border-slate-200 pt-4">
                 <h4 className="text-lg font-semibold">Accounts receivable</h4>
                 <p className="font-semibold">
                   Paid {money(selected.receivable.paidCents)} · Remaining{' '}
@@ -894,7 +907,7 @@ export default function WholesaleWorkspace(): ReactElement {
                     </thead>
                     <tbody>
                       {selected.payments?.map((payment) => (
-                        <tr key={payment.id} className="border-t border-neutral-100">
+                        <tr key={payment.id} className="border-t border-slate-100">
                           <td className="p-3">{payment.paidAt}</td>
                           <td className="max-w-52 p-3 break-all">{payment.reference}</td>
                           <td className="p-3">{payment.method}</td>
@@ -927,6 +940,7 @@ export default function WholesaleWorkspace(): ReactElement {
           </section>
         )}
       </div>
+      {confirmDialog}
     </DashboardShell>
   )
 }

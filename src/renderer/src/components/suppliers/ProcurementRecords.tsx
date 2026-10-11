@@ -1,33 +1,36 @@
+import { splitErrors, type FieldErrors } from '@renderer/components/ui/fieldErrors'
+import FormField, { FormError, RequiredNote } from '@renderer/components/ui/FormField'
+import Modal from '@renderer/components/ui/Modal'
 import type {
   InvoiceRecord,
   InvoiceUploadValues,
   PaymentRecord,
   PaymentSummary,
   PurchaseOrderRecord,
+  SelectedInvoiceFile,
   SupplierPaymentValues
 } from '@renderer/data/supplierOrders'
 import { deadlineLabels, deadlineTone, orderStatusLabels } from '@renderer/data/supplierOrders'
 import type { SupplierOrdersState } from '@renderer/hooks/useSupplierOrders'
-import { useMemo, useState, type FormEvent, type ReactElement, type ReactNode } from 'react'
-import { createPortal } from 'react-dom'
+import { localDate } from '@shared/inventory'
+import { useMemo, useRef, useState, type FormEvent, type ReactElement } from 'react'
 import {
   FiAlertCircle,
   FiClock,
   FiCreditCard,
+  FiDownload,
   FiExternalLink,
   FiFilePlus,
   FiFileText,
-  FiTruck,
-  FiX
+  FiPaperclip,
+  FiTruck
 } from 'react-icons/fi'
 
 const currency = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' })
 const date = new Intl.DateTimeFormat('en-PH', { dateStyle: 'medium' })
 
-const today = (): string => {
-  const current = new Date()
-  return `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}-${String(current.getDate()).padStart(2, '0')}`
-}
+const today = (): string => localDate()
+const toNumber = (value: string): number => (value.trim() === '' ? Number.NaN : Number(value))
 
 export default function ProcurementRecords({
   view,
@@ -38,7 +41,7 @@ export default function ProcurementRecords({
   view: 'receiving' | 'invoices' | 'history'
   query: string
   procurement: SupplierOrdersState
-  feedback: (message: string) => void
+  feedback: (message: string, tone?: 'success' | 'error') => void
 }): ReactElement {
   const [invoiceDialog, setInvoiceDialog] = useState(false)
   const [paymentDialog, setPaymentDialog] = useState<{
@@ -64,7 +67,7 @@ export default function ProcurementRecords({
 
   return (
     <div>
-      <div className="grid gap-3 border-b border-neutral-200 p-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 border-b border-slate-200 p-4 sm:grid-cols-2 xl:grid-cols-4">
         <InvoiceMetric
           label="Overdue"
           value={overdue.length}
@@ -90,28 +93,29 @@ export default function ProcurementRecords({
           className="primary-button justify-center"
           onClick={() => setInvoiceDialog(true)}
         >
-          <FiFilePlus /> Upload invoice
+          <FiFilePlus /> Add supplier invoice
         </button>
       </div>
-      <section className="border-b border-neutral-200 p-4">
+      <section className="border-b border-slate-200 p-4">
         <div className="mb-3">
-          <h3 className="font-semibold text-neutral-900">Delivered PO payment balances</h3>
-          <p className="text-xs text-neutral-500">
-            Balances use delivered quantities and remain available before an invoice is uploaded.
+          <h3 className="font-semibold text-slate-900">Balances owed to suppliers</h3>
+          <p className="text-xs text-slate-500">
+            Based on the products actually received for each purchase order. You can record a
+            payment before the supplier invoice is added.
           </p>
         </div>
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {procurement.paymentSummaries.map((summary) => (
             <article
               key={summary.purchaseOrderId}
-              className="min-w-0 rounded-xl border border-neutral-200 bg-neutral-50 p-4"
+              className="min-w-0 rounded-md border border-slate-200 bg-slate-50 p-4"
             >
               <div className="flex min-w-0 items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="truncate font-semibold" title={summary.supplierName}>
                     {summary.supplierName}
                   </p>
-                  <p className="text-xs text-neutral-500">{summary.orderNumber}</p>
+                  <p className="text-xs text-slate-500">{summary.orderNumber}</p>
                 </div>
                 <span
                   className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${
@@ -119,7 +123,7 @@ export default function ProcurementRecords({
                       ? 'bg-emerald-50 text-emerald-700'
                       : summary.status === 'partially_paid'
                         ? 'bg-amber-50 text-amber-800'
-                        : 'bg-neutral-200 text-neutral-700'
+                        : 'bg-slate-200 text-slate-700'
                   }`}
                 >
                   {summary.status === 'paid'
@@ -131,19 +135,19 @@ export default function ProcurementRecords({
               </div>
               <dl className="mt-3 grid grid-cols-3 gap-2 text-xs">
                 <div>
-                  <dt className="text-neutral-500">Owed</dt>
+                  <dt className="text-slate-500">Owed</dt>
                   <dd className="mt-1 truncate font-semibold">
                     {currency.format(summary.totalAmount)}
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-neutral-500">Paid</dt>
+                  <dt className="text-slate-500">Paid</dt>
                   <dd className="mt-1 truncate font-semibold">
                     {currency.format(summary.paidAmount)}
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-neutral-500">Remaining</dt>
+                  <dt className="text-slate-500">Remaining</dt>
                   <dd className="mt-1 truncate font-semibold">
                     {currency.format(summary.outstandingAmount)}
                   </dd>
@@ -161,14 +165,18 @@ export default function ProcurementRecords({
             </article>
           ))}
           {!procurement.isLoading && procurement.paymentSummaries.length === 0 && (
-            <p className="text-sm text-neutral-500">
-              No delivered purchase orders have a balance yet.
+            <p className="text-sm text-slate-500 sm:col-span-2 xl:col-span-3">
+              No balances yet. A balance appears here after products are received for a purchase
+              order.
             </p>
           )}
         </div>
       </section>
-      <div className="border-b border-neutral-200 px-4 py-3">
-        <h3 className="font-semibold text-neutral-900">Supplier-provided invoice documents</h3>
+      <div className="border-b border-slate-200 px-4 py-3">
+        <h3 className="font-semibold text-slate-900">Supplier invoices</h3>
+        <p className="text-xs text-slate-500">
+          Invoice documents attached to purchase orders, with their due dates and amounts paid.
+        </p>
       </div>
       <div className="min-w-0 overflow-x-auto">
         <table className="w-full min-w-[850px] table-fixed text-sm">
@@ -180,7 +188,7 @@ export default function ProcurementRecords({
             <col className="hidden w-[17%] xl:table-column" />
             <col className="w-24" />
           </colgroup>
-          <thead className="bg-neutral-50 text-left text-neutral-500">
+          <thead className="bg-slate-50 text-left text-slate-500">
             <tr>
               <th className="px-3 py-3">Invoice</th>
               <th className="px-3 py-3">Supplier / order</th>
@@ -190,21 +198,21 @@ export default function ProcurementRecords({
               <th className="px-3 py-3 text-right">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-neutral-100">
+          <tbody className="divide-y divide-slate-100">
             {invoices.map((invoice) => (
               <tr key={invoice.id}>
                 <td className="min-w-0 px-3 py-4">
                   <p
-                    className="truncate font-semibold text-neutral-900"
+                    className="truncate font-semibold text-slate-900"
                     title={invoice.invoiceNumber}
                   >
                     {invoice.invoiceNumber}
                   </p>
-                  <p className="text-xs text-neutral-500">
+                  <p className="text-xs text-slate-500">
                     Issued {date.format(new Date(invoice.invoiceDate))}
                   </p>
                   <p
-                    className="mt-1 truncate text-xs text-neutral-500 xl:hidden"
+                    className="mt-1 truncate text-xs text-slate-500 xl:hidden"
                     title={invoice.originalFilename}
                   >
                     {invoice.originalFilename}
@@ -214,7 +222,7 @@ export default function ProcurementRecords({
                   <p className="truncate" title={invoice.supplierName}>
                     {invoice.supplierName}
                   </p>
-                  <p className="truncate text-xs text-neutral-500" title={invoice.orderNumber}>
+                  <p className="truncate text-xs text-slate-500" title={invoice.orderNumber}>
                     {invoice.orderNumber}
                   </p>
                 </td>
@@ -230,7 +238,7 @@ export default function ProcurementRecords({
                   <p className="font-semibold break-words tabular-nums">
                     {currency.format(invoice.outstandingAmount)} due
                   </p>
-                  <p className="text-xs text-neutral-500">
+                  <p className="text-xs text-slate-500">
                     {currency.format(invoice.paidAmount)} of {currency.format(invoice.amount)} paid
                   </p>
                 </td>
@@ -238,9 +246,7 @@ export default function ProcurementRecords({
                   <p className="truncate" title={invoice.originalFilename}>
                     {invoice.originalFilename}
                   </p>
-                  <p className="text-xs text-neutral-500">
-                    {Math.ceil(invoice.fileSize / 1024)} KB
-                  </p>
+                  <p className="text-xs text-slate-500">{Math.ceil(invoice.fileSize / 1024)} KB</p>
                 </td>
                 <td className="px-3 py-4 align-top">
                   <div className="flex flex-col items-stretch gap-2">
@@ -252,12 +258,34 @@ export default function ProcurementRecords({
                           .openInvoice(invoice.id)
                           .catch((cause: unknown) =>
                             feedback(
-                              cause instanceof Error ? cause.message : 'Unable to open invoice.'
+                              cause instanceof Error ? cause.message : 'Unable to open invoice.',
+                              'error'
                             )
                           )
                       }
                     >
                       <FiExternalLink /> View
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary-button justify-center px-2 text-xs"
+                      onClick={() =>
+                        void procurement
+                          .downloadInvoice(invoice.id)
+                          .then((saved) => {
+                            if (saved) feedback(`Invoice ${invoice.invoiceNumber} saved.`)
+                          })
+                          .catch((cause: unknown) =>
+                            feedback(
+                              cause instanceof Error
+                                ? cause.message
+                                : 'Unable to download the invoice.',
+                              'error'
+                            )
+                          )
+                      }
+                    >
+                      <FiDownload /> Download
                     </button>
                     {procurement.paymentSummaries.some(
                       (summary) =>
@@ -276,7 +304,7 @@ export default function ProcurementRecords({
                           })
                         }
                       >
-                        <FiCreditCard /> Pay
+                        <FiCreditCard /> Record payment
                       </button>
                     )}
                   </div>
@@ -286,21 +314,22 @@ export default function ProcurementRecords({
           </tbody>
         </table>
         {!procurement.isLoading && invoices.length === 0 && (
-          <p className="p-10 text-center text-sm text-neutral-500">
-            No invoices match this search.
+          <p className="p-10 text-center text-sm text-slate-500">
+            {procurement.invoices.length === 0
+              ? 'No supplier invoices yet. Use Add supplier invoice once the supplier sends one.'
+              : 'No invoices match this search.'}
           </p>
         )}
       </div>
       {invoiceDialog && (
         <InvoiceDialog
           orders={procurement.orders}
+          chooseFile={procurement.chooseInvoiceFile}
           close={() => setInvoiceDialog(false)}
           save={async (values) => {
             const uploaded = await procurement.uploadInvoice(values)
-            if (uploaded) {
-              setInvoiceDialog(false)
-              feedback('Supplier invoice uploaded.')
-            }
+            setInvoiceDialog(false)
+            feedback(`Supplier invoice ${uploaded.invoiceNumber} saved.`)
           }}
         />
       )}
@@ -340,9 +369,9 @@ function ReceivingReports({
   return (
     <div className="space-y-4 p-4 sm:p-5">
       <div>
-        <h3 className="font-semibold text-neutral-900">Receiving reports</h3>
-        <p className="text-sm text-neutral-500">
-          Live stock-in records linked to purchase orders and inventory batches.
+        <h3 className="font-semibold text-slate-900">Receiving reports</h3>
+        <p className="text-sm text-slate-500">
+          Each report is one recorded delivery and the inventory batches it added stock to.
         </p>
       </div>
       {deliveries.map((delivery) => {
@@ -350,24 +379,24 @@ function ReceivingReports({
         return (
           <article
             key={delivery.id}
-            className="min-w-0 overflow-hidden rounded-2xl border border-neutral-200 bg-white"
+            className="min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-white"
           >
-            <header className="flex flex-col gap-3 border-b border-neutral-200 bg-neutral-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <header className="flex flex-col gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0">
-                <p className="truncate font-semibold text-neutral-900">
+                <p className="truncate font-semibold text-slate-900">
                   Receiving report #{delivery.id} · {delivery.orderNumber}
                 </p>
-                <p className="truncate text-sm text-neutral-500">{delivery.supplierName}</p>
+                <p className="truncate text-sm text-slate-500">{delivery.supplierName}</p>
               </div>
               <div className="shrink-0 text-sm sm:text-right">
                 <p>{date.format(new Date(delivery.deliveredAt))}</p>
-                <p className="text-xs text-neutral-500">
+                <p className="text-xs text-slate-500">
                   Recorded by {delivery.recordedByName}
                   {order ? ` · ${orderStatusLabels[order.status]}` : ''}
                 </p>
               </div>
             </header>
-            <div className="divide-y divide-neutral-100">
+            <div className="divide-y divide-slate-100">
               {delivery.items.map((item) => {
                 const expired = item.expiresAt < today()
                 return (
@@ -376,21 +405,25 @@ function ReceivingReports({
                     className="grid min-w-0 gap-3 px-4 py-4 sm:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1fr)] sm:items-center"
                   >
                     <div className="min-w-0">
-                      <p className="truncate font-medium text-neutral-900" title={item.productName}>
+                      <p className="truncate font-medium text-slate-900" title={item.productName}>
                         {item.productName}
                       </p>
-                      <p className="text-xs text-neutral-500">
-                        {item.orderedQuantity} ordered · {item.quantity} received in this report
+                      <p className="text-xs text-slate-500">
+                        {item.orderedQuantity} ordered ·{' '}
+                        <span className="font-semibold text-slate-700">
+                          {item.quantity} received
+                        </span>{' '}
+                        in this delivery
                       </p>
                     </div>
                     <div className="min-w-0 text-sm">
-                      <p className="text-xs text-neutral-500">Inventory batch</p>
+                      <p className="text-xs text-slate-500">Inventory batch</p>
                       <p className="truncate font-medium" title={item.batchNumber}>
                         {item.batchNumber}
                       </p>
                     </div>
                     <div className="text-sm">
-                      <p className="text-xs text-neutral-500">Expiry</p>
+                      <p className="text-xs text-slate-500">Expiry</p>
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="font-medium">{date.format(new Date(item.expiresAt))}</p>
                         {expired && (
@@ -405,7 +438,7 @@ function ReceivingReports({
               })}
             </div>
             {delivery.notes && (
-              <p className="border-t border-neutral-100 px-4 py-3 text-sm break-words text-neutral-600">
+              <p className="border-t border-slate-100 px-4 py-3 text-sm break-words text-slate-600">
                 {delivery.notes}
               </p>
             )}
@@ -413,8 +446,10 @@ function ReceivingReports({
         )
       })}
       {!procurement.isLoading && deliveries.length === 0 && (
-        <p className="py-10 text-center text-sm text-neutral-500">
-          No receiving reports match this search.
+        <p className="py-10 text-center text-sm text-slate-500">
+          {procurement.deliveries.length === 0
+            ? 'No deliveries recorded yet. Receive products against a submitted purchase order above.'
+            : 'No receiving reports match this search.'}
         </p>
       )}
     </div>
@@ -487,7 +522,7 @@ function TransactionHistory({
   return (
     <div className="overflow-x-auto">
       <table className="w-full min-w-[850px] text-sm">
-        <thead className="bg-neutral-50 text-left text-neutral-500">
+        <thead className="bg-slate-50 text-left text-slate-500">
           <tr>
             <th className="px-5 py-3">Transaction</th>
             <th className="px-5 py-3">Reference</th>
@@ -496,21 +531,21 @@ function TransactionHistory({
             <th className="px-5 py-3 text-right">Amount</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-neutral-100">
+        <tbody className="divide-y divide-slate-100">
           {transactions.map((transaction) => (
             <tr key={transaction.id}>
               <td className="px-5 py-4">
-                <span className="inline-flex items-center gap-2 font-semibold text-neutral-900">
-                  <span className="text-mauve-600">{transaction.icon}</span>
+                <span className="inline-flex items-center gap-2 font-semibold text-slate-900">
+                  <span className="text-brand-600">{transaction.icon}</span>
                   {transaction.type}
                 </span>
-                <p className="mt-1 text-xs text-neutral-500">
+                <p className="mt-1 text-xs text-slate-500">
                   {date.format(new Date(transaction.occurredAt))}
                 </p>
               </td>
               <td className="px-5 py-4 font-medium">{transaction.reference}</td>
               <td className="px-5 py-4">{transaction.supplier}</td>
-              <td className="px-5 py-4 text-neutral-600">{transaction.details}</td>
+              <td className="px-5 py-4 text-slate-600">{transaction.details}</td>
               <td className="px-5 py-4 text-right font-semibold">
                 {transaction.amount === null ? '—' : currency.format(transaction.amount)}
               </td>
@@ -519,7 +554,7 @@ function TransactionHistory({
         </tbody>
       </table>
       {!procurement.isLoading && transactions.length === 0 && (
-        <p className="p-10 text-center text-sm text-neutral-500">
+        <p className="p-10 text-center text-sm text-slate-500">
           No supplier transactions match this search.
         </p>
       )}
@@ -529,10 +564,12 @@ function TransactionHistory({
 
 function InvoiceDialog({
   orders,
+  chooseFile,
   close,
   save
 }: {
   orders: PurchaseOrderRecord[]
+  chooseFile: () => Promise<SelectedInvoiceFile | null>
   close: VoidFunction
   save: (values: InvoiceUploadValues) => Promise<void>
 }): ReactElement {
@@ -547,99 +584,176 @@ function InvoiceDialog({
   const [invoiceDate, setInvoiceDate] = useState(today())
   const [dueDate, setDueDate] = useState('')
   const [amount, setAmount] = useState(String(selectedOrder?.totalAmount ?? ''))
+  const [file, setFile] = useState<SelectedInvoiceFile | null>(null)
+  const [choosing, setChoosing] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [errors, setErrors] = useState<FieldErrors>({})
   const [error, setError] = useState('')
+  const clear = (key: string): void => setErrors((current) => ({ ...current, [key]: '' }))
+
+  const pickFile = async (): Promise<void> => {
+    setChoosing(true)
+    setError('')
+    try {
+      const selected = await chooseFile()
+      if (selected) {
+        setFile(selected)
+        clear('fileToken')
+      }
+    } catch (cause) {
+      setErrors((current) => ({
+        ...current,
+        fileToken: cause instanceof Error ? cause.message : 'Unable to select the file.'
+      }))
+    } finally {
+      setChoosing(false)
+    }
+  }
 
   const submit = async (event: FormEvent): Promise<void> => {
     event.preventDefault()
+    if (saving) return
     setSaving(true)
     setError('')
+    setErrors({})
     try {
-      await save({ purchaseOrderId, invoiceNumber, invoiceDate, dueDate, amount: Number(amount) })
+      await save({
+        fileToken: file?.token ?? '',
+        purchaseOrderId,
+        invoiceNumber,
+        invoiceDate,
+        dueDate,
+        amount: toNumber(amount)
+      })
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Unable to upload the invoice.')
-    } finally {
+      const result = splitErrors(cause, 'Unable to save the invoice.')
+      if (!file && !result.fields.fileToken)
+        result.fields.fileToken = 'Invoice file is required. Choose the invoice document to attach.'
+      setErrors(result.fields)
+      setError(result.form)
       setSaving(false)
     }
   }
 
   return (
-    <Modal title="Upload supplier invoice" close={close}>
-      <form className="space-y-4" onSubmit={(event) => void submit(event)}>
-        <Field label="Purchase order">
+    <Modal
+      title="Add supplier invoice"
+      description="Record the supplier's invoice and attach the document they provided."
+      close={close}
+      busy={saving || choosing}
+    >
+      <form noValidate className="space-y-4" onSubmit={(event) => void submit(event)}>
+        <RequiredNote />
+        {eligibleOrders.length === 0 && (
+          <FormError message="Submit a purchase order before attaching a supplier invoice." />
+        )}
+        <FormField label="Purchase order" required error={errors.purchaseOrderId}>
           <select
-            required
             className="field"
             value={purchaseOrderId}
             onChange={(event) => {
               const id = Number(event.target.value)
               setPurchaseOrderId(id)
+              clear('purchaseOrderId')
               setAmount(String(eligibleOrders.find((order) => order.id === id)?.totalAmount ?? ''))
             }}
           >
             <option value={0}>Select purchase order</option>
             {eligibleOrders.map((order) => (
               <option key={order.id} value={order.id}>
-                {order.orderNumber} · {order.supplierName}
+                {order.orderNumber} · {order.supplierName} · {orderStatusLabels[order.status]}
               </option>
             ))}
           </select>
-        </Field>
+        </FormField>
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Invoice number">
+          <FormField label="Invoice number" required error={errors.invoiceNumber}>
             <input
-              required
               className="field"
+              maxLength={80}
+              placeholder="e.g. SI-2026-0042"
               value={invoiceNumber}
-              onChange={(event) => setInvoiceNumber(event.target.value)}
+              onChange={(event) => {
+                setInvoiceNumber(event.target.value)
+                clear('invoiceNumber')
+              }}
             />
-          </Field>
-          <Field label="Amount">
+          </FormField>
+          <FormField
+            label="Invoice amount (₱)"
+            required
+            hint={selectedOrder ? `Order total ${currency.format(selectedOrder.totalAmount)}` : ''}
+            error={errors.amount}
+          >
             <input
-              required
               min="0.01"
               step="0.01"
               type="number"
+              inputMode="decimal"
               className="field"
               value={amount}
-              onChange={(event) => setAmount(event.target.value)}
+              onChange={(event) => {
+                setAmount(event.target.value)
+                clear('amount')
+              }}
             />
-          </Field>
-          <Field label="Invoice date">
+          </FormField>
+          <FormField label="Invoice date" required error={errors.invoiceDate}>
             <input
-              required
               type="date"
               max={today()}
               className="field"
               value={invoiceDate}
-              onChange={(event) => setInvoiceDate(event.target.value)}
+              onChange={(event) => {
+                setInvoiceDate(event.target.value)
+                clear('invoiceDate')
+              }}
             />
-          </Field>
-          <Field label="Payment due date">
+          </FormField>
+          <FormField
+            label="Payment due date"
+            required
+            hint="On or after the invoice date."
+            error={errors.dueDate}
+          >
             <input
-              required
               min={invoiceDate}
               type="date"
               className="field"
               value={dueDate}
-              onChange={(event) => setDueDate(event.target.value)}
+              onChange={(event) => {
+                setDueDate(event.target.value)
+                clear('dueDate')
+              }}
             />
-          </Field>
+          </FormField>
         </div>
-        <p className="text-xs leading-5 text-neutral-500">
-          Upload the invoice document received from the supplier. After you continue, choose the PDF
-          or image file to store securely with this record.
-        </p>
-        {error && (
-          <p role="alert" className="rounded-xl bg-rose-50 p-3 text-sm text-rose-700">
-            {error}
-          </p>
-        )}
+        <FormField
+          label="Invoice document"
+          required
+          hint="PDF, PNG, JPEG or WebP. A copy is stored with the record."
+          error={errors.fileToken}
+        >
+          <div className="flex min-w-0 flex-wrap items-center gap-3">
+            <button
+              type="button"
+              className="secondary-button"
+              disabled={choosing || saving}
+              onClick={() => void pickFile()}
+            >
+              <FiPaperclip /> {choosing ? 'Choosing…' : file ? 'Change file' : 'Choose file'}
+            </button>
+            <span className="min-w-0 truncate text-sm text-slate-600">
+              {file ? `${file.name} · ${Math.ceil(file.size / 1024)} KB` : 'No file chosen'}
+            </span>
+          </div>
+        </FormField>
+        <FormError message={error} />
         <Actions
           close={close}
           saving={saving}
-          label="Choose file & upload"
-          disabled={!purchaseOrderId}
+          label="Save supplier invoice"
+          disabled={eligibleOrders.length === 0 || choosing}
         />
       </form>
     </Modal>
@@ -675,49 +789,73 @@ function PaymentDialog({
   )
   const matchingInvoices = invoices.filter((invoice) => invoice.purchaseOrderId === purchaseOrderId)
   const [invoiceId, setInvoiceId] = useState<number | null>(initialInvoice?.id ?? null)
+  const selectedInvoice = matchingInvoices.find((invoice) => invoice.id === invoiceId)
   const [amount, setAmount] = useState(
-    String(initialSummary?.outstandingAmount ?? supplierSummaries[0]?.outstandingAmount ?? '')
+    String(
+      initialInvoice
+        ? Math.min(initialInvoice.outstandingAmount, initialSummary?.outstandingAmount ?? Infinity)
+        : (initialSummary?.outstandingAmount ?? supplierSummaries[0]?.outstandingAmount ?? '')
+    )
   )
   const [paidAt, setPaidAt] = useState(today())
   const [method, setMethod] = useState('Bank transfer')
   const [referenceNumber, setReferenceNumber] = useState('')
   const [notes, setNotes] = useState('')
   const [saving, setSaving] = useState(false)
+  const submitting = useRef(false)
+  const [errors, setErrors] = useState<FieldErrors>({})
   const [error, setError] = useState('')
+  const clear = (key: string): void => setErrors((current) => ({ ...current, [key]: '' }))
+  const maximum = Math.min(
+    selectedSummary?.outstandingAmount ?? 0,
+    selectedInvoice?.outstandingAmount ?? Infinity
+  )
 
   const submit = async (event: FormEvent): Promise<void> => {
     event.preventDefault()
-    setSaving(true)
+    if (submitting.current) return
     setError('')
+    setErrors({})
+    const value = toNumber(amount)
+    if (Number.isFinite(value) && value > maximum) {
+      setErrors({
+        amount: `Payment cannot exceed the ${selectedInvoice ? 'invoice' : 'delivered order'} balance of ${currency.format(maximum)}.`
+      })
+      return
+    }
+    submitting.current = true
+    setSaving(true)
     try {
       await save({
         purchaseOrderId,
         invoiceId,
-        amount: Number(amount),
+        amount: value,
         paidAt,
         method,
-        referenceNumber: referenceNumber || null,
-        notes: notes || null
+        referenceNumber: referenceNumber.trim() || null,
+        notes: notes.trim() || null
       })
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Unable to record the payment.')
+      const result = splitErrors(cause, 'Unable to record the payment.')
+      setErrors(result.fields)
+      setError(result.form)
+      submitting.current = false
       setSaving(false)
     }
   }
 
   return (
-    <Modal title="Record supplier payment" close={close}>
-      <form className="space-y-4" onSubmit={(event) => void submit(event)}>
-        <div className="rounded-xl bg-neutral-50 p-4 text-sm">
-          <p className="font-medium">Payment is recorded against delivered PO value.</p>
-          <p className="mt-1 text-neutral-500">
-            A supplier invoice is optional and may be attached later.
-          </p>
-        </div>
+    <Modal
+      title="Record supplier payment"
+      description="Payments are recorded against the value of stock already delivered. Linking an invoice is optional."
+      close={close}
+      busy={saving}
+    >
+      <form noValidate className="space-y-4" onSubmit={(event) => void submit(event)}>
+        <RequiredNote />
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Supplier">
+          <FormField label="Supplier" required error={errors.supplierId}>
             <select
-              required
               className="field"
               value={supplierId}
               onChange={(event) => {
@@ -738,10 +876,9 @@ function PaymentDialog({
                 </option>
               ))}
             </select>
-          </Field>
-          <Field label="Delivered purchase order">
+          </FormField>
+          <FormField label="Purchase order" required error={errors.purchaseOrderId}>
             <select
-              required
               className="field"
               value={purchaseOrderId}
               onChange={(event) => {
@@ -751,65 +888,87 @@ function PaymentDialog({
                 )
                 setPurchaseOrderId(id)
                 setInvoiceId(null)
+                clear('purchaseOrderId')
                 setAmount(String(nextSummary?.outstandingAmount ?? ''))
               }}
             >
-              <option value={0}>Select delivered PO</option>
+              <option value={0}>Select purchase order</option>
               {supplierSummaries.map((summary) => (
                 <option key={summary.purchaseOrderId} value={summary.purchaseOrderId}>
                   {summary.orderNumber} · {currency.format(summary.outstandingAmount)} remaining
                 </option>
               ))}
             </select>
-          </Field>
-          <Field label="Supplier invoice (optional)">
+          </FormField>
+          <FormField
+            label="Supplier invoice"
+            hint="Link the invoice this payment settles, if any."
+            error={errors.invoiceId}
+          >
             <select
               className="field"
               value={invoiceId ?? ''}
-              onChange={(event) =>
-                setInvoiceId(event.target.value ? Number(event.target.value) : null)
-              }
+              onChange={(event) => {
+                const id = event.target.value ? Number(event.target.value) : null
+                setInvoiceId(id)
+                const invoice = matchingInvoices.find((item) => item.id === id)
+                if (invoice)
+                  setAmount(
+                    String(
+                      Math.min(invoice.outstandingAmount, selectedSummary?.outstandingAmount ?? 0)
+                    )
+                  )
+              }}
             >
-              <option value="">No invoice uploaded yet</option>
+              <option value="">Not linked to an invoice</option>
               {matchingInvoices.map((invoice) => (
                 <option key={invoice.id} value={invoice.id}>
-                  {invoice.invoiceNumber}
+                  {invoice.invoiceNumber} · {currency.format(invoice.outstandingAmount)} due
                 </option>
               ))}
             </select>
-          </Field>
-          <div className="rounded-xl border border-neutral-200 p-3 text-sm">
-            <p className="text-neutral-500">Delivered amount owed</p>
+          </FormField>
+          <div className="rounded-md border border-slate-200 p-3 text-sm">
+            <p className="text-slate-500">Delivered amount owed</p>
             <p className="font-semibold">{currency.format(selectedSummary?.totalAmount ?? 0)}</p>
-            <p className="mt-1 text-xs text-neutral-500">
+            <p className="mt-1 text-xs text-slate-500">
               Paid {currency.format(selectedSummary?.paidAmount ?? 0)} · Remaining{' '}
               {currency.format(selectedSummary?.outstandingAmount ?? 0)}
             </p>
           </div>
-          <Field label="Payment amount">
+          <FormField
+            label="Payment amount (₱)"
+            required
+            hint={purchaseOrderId ? `Up to ${currency.format(maximum)}` : undefined}
+            error={errors.amount}
+          >
             <input
-              required
               min="0.01"
-              max={selectedSummary?.outstandingAmount}
               step="0.01"
               type="number"
+              inputMode="decimal"
               className="field"
               value={amount}
-              onChange={(event) => setAmount(event.target.value)}
+              onChange={(event) => {
+                setAmount(event.target.value)
+                clear('amount')
+              }}
             />
-          </Field>
-          <Field label="Payment date">
+          </FormField>
+          <FormField label="Payment date" required error={errors.paidAt}>
             <input
-              required
               type="date"
+              max={today()}
               className="field"
               value={paidAt}
-              onChange={(event) => setPaidAt(event.target.value)}
+              onChange={(event) => {
+                setPaidAt(event.target.value)
+                clear('paidAt')
+              }}
             />
-          </Field>
-          <Field label="Method">
+          </FormField>
+          <FormField label="Payment method" required error={errors.method}>
             <select
-              required
               className="field"
               value={method}
               onChange={(event) => setMethod(event.target.value)}
@@ -820,74 +979,36 @@ function PaymentDialog({
               <option>E-wallet</option>
               <option>Other</option>
             </select>
-          </Field>
-          <Field label="Reference number">
+          </FormField>
+          <FormField
+            label="Reference number"
+            hint="Check, transfer or receipt number. Each reference can be used once."
+            error={errors.referenceNumber}
+          >
             <input
               className="field"
+              maxLength={120}
+              placeholder="e.g. BT-0098123"
               value={referenceNumber}
-              onChange={(event) => setReferenceNumber(event.target.value)}
+              onChange={(event) => {
+                setReferenceNumber(event.target.value)
+                clear('referenceNumber')
+              }}
             />
-          </Field>
+          </FormField>
         </div>
-        <Field label="Notes">
+        <FormField label="Notes" error={errors.notes}>
           <textarea
             className="field min-h-20"
+            maxLength={500}
             value={notes}
             onChange={(event) => setNotes(event.target.value)}
           />
-        </Field>
-        {error && (
-          <p role="alert" className="rounded-xl bg-rose-50 p-3 text-sm text-rose-700">
-            {error}
-          </p>
-        )}
+        </FormField>
+        <FormError message={error} />
         <Actions close={close} saving={saving} label="Record payment" disabled={!purchaseOrderId} />
       </form>
     </Modal>
-  )
-}
-
-function Modal({
-  title,
-  close,
-  children
-}: {
-  title: string
-  close: VoidFunction
-  children: ReactNode
-}): ReactElement {
-  return createPortal(
-    <div className="fixed inset-0 z-[70] grid place-items-center overflow-y-auto bg-neutral-950/55 p-4 backdrop-blur-sm">
-      <button
-        type="button"
-        className="absolute inset-0"
-        aria-label="Close dialog"
-        onClick={close}
-      />
-      <section
-        role="dialog"
-        aria-modal="true"
-        className="procurement-dialog relative z-10 max-h-[calc(100dvh-2rem)] w-full max-w-2xl min-w-0 overflow-x-hidden overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl sm:p-6"
-      >
-        <div className="mb-5 flex items-center justify-between">
-          <h2 className="text-xl font-semibold">{title}</h2>
-          <button type="button" onClick={close} className="icon-button" aria-label="Close dialog">
-            <FiX />
-          </button>
-        </div>
-        {children}
-      </section>
-    </div>,
-    document.body
-  )
-}
-
-function Field({ label, children }: { label: string; children: ReactElement }): ReactElement {
-  return (
-    <label className="block text-sm font-medium text-neutral-700">
-      {label}
-      {children}
-    </label>
   )
 }
 
@@ -903,11 +1024,11 @@ function Actions({
   disabled?: boolean
 }): ReactElement {
   return (
-    <div className="flex justify-end gap-2 pt-2">
-      <button type="button" className="secondary-button" onClick={close}>
+    <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
+      <button type="button" className="secondary-button" onClick={close} disabled={saving}>
         Cancel
       </button>
-      <button disabled={saving || disabled} className="primary-button">
+      <button type="submit" disabled={saving || disabled} className="primary-button">
         {saving ? 'Saving…' : label}
       </button>
     </div>
@@ -926,10 +1047,10 @@ function InvoiceMetric({
   icon: ReactElement
 }): ReactElement {
   return (
-    <div className="flex items-center gap-3 rounded-xl bg-neutral-50 px-4 py-3">
+    <div className="flex items-center gap-3 rounded-md bg-slate-50 px-4 py-3">
       <span className={tone}>{icon}</span>
       <div>
-        <p className="text-xs text-neutral-500">{label}</p>
+        <p className="text-xs text-slate-500">{label}</p>
         <p className="font-semibold">{value}</p>
       </div>
     </div>

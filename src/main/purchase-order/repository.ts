@@ -148,6 +148,71 @@ export async function insertOne(data: CreateOrderInput): Promise<PurchaseOrderWi
   return (await findOneById(orderId)) as PurchaseOrderWithDetails
 }
 
+export async function updateDraftById(
+  id: number,
+  data: Omit<CreateOrderInput, 'createdBy'>
+): Promise<PurchaseOrderWithDetails> {
+  await db.transaction().execute(async (transaction) => {
+    const order = await transaction
+      .selectFrom('purchaseOrders')
+      .select(['status', 'orderedAt'])
+      .where('id', '=', id)
+      .executeTakeFirst()
+    if (!order) throw new Error('Purchase order not found.')
+    if (order.status !== 'draft') {
+      throw new Error(
+        'Only draft orders can be edited. Submitted orders are already with the supplier; cancel and create a new order instead.'
+      )
+    }
+    if (data.expectedAt && data.expectedAt < String(order.orderedAt).slice(0, 10)) {
+      throw new Error('The expected delivery date cannot be before the order date.')
+    }
+    const supplier = await transaction
+      .selectFrom('suppliers')
+      .select('id')
+      .where('id', '=', data.supplierId)
+      .executeTakeFirst()
+    if (!supplier) throw new Error('Supplier not found.')
+    const drugIds = [...new Set(data.items.map((item) => item.drugId))]
+    const drugs = await transaction
+      .selectFrom('drugs')
+      .select('id')
+      .where('id', 'in', drugIds)
+      .where('isArchived', '=', 0)
+      .execute()
+    if (drugs.length !== drugIds.length) throw new Error('One or more products were not found.')
+
+    // Note: Draft lines have never been received, so replacing them loses no stock history.
+    await transaction.deleteFrom('purchaseOrderItems').where('purchaseOrderId', '=', id).execute()
+    await transaction
+      .insertInto('purchaseOrderItems')
+      .values(
+        data.items.map((item) => ({
+          purchaseOrderId: id,
+          drugId: item.drugId,
+          quantity: item.quantity,
+          unitCost: item.unitCost,
+          receivedQuantity: 0
+        }))
+      )
+      .execute()
+    await transaction
+      .updateTable('purchaseOrders')
+      .set({
+        supplierId: data.supplierId,
+        expectedAt: data.expectedAt,
+        notes: data.notes,
+        totalAmount: data.items.reduce((total, item) => total + item.quantity * item.unitCost, 0),
+        updatedAt: sql`CURRENT_TIMESTAMP`
+      })
+      .where('id', '=', id)
+      .where('status', '=', 'draft')
+      .executeTakeFirstOrThrow()
+  })
+
+  return (await findOneById(id)) as PurchaseOrderWithDetails
+}
+
 export async function updateStatusById(
   id: number,
   status: PurchaseOrderStatus
@@ -193,7 +258,11 @@ export async function recordDelivery(
       .where('id', '=', id)
       .executeTakeFirstOrThrow()
     if (!['submitted', 'partially_received'].includes(order.status)) {
-      throw new Error('Submit the purchase order before recording a delivery.')
+      throw new Error(
+        order.status === 'draft'
+          ? 'Submit the purchase order before recording a delivery.'
+          : 'This purchase order is closed and cannot receive more stock.'
+      )
     }
 
     const orderItems = await transaction
@@ -220,7 +289,9 @@ export async function recordDelivery(
       const item = itemMap.get(deliveredItem.itemId)
       if (!item) throw new Error('The delivery line does not belong to this order.')
       if (item.receivedQuantity + deliveredItem.receivedQuantity > item.quantity) {
-        throw new Error('Received quantity cannot exceed the ordered quantity.')
+        throw new Error(
+          `Only ${item.quantity - item.receivedQuantity} unit(s) remain to be received for this line. Over-receiving is not allowed.`
+        )
       }
       if (deliveredItem.expiresAt <= data.deliveredAt) {
         throw new Error('Delivered stock must expire after the delivery date.')
@@ -233,13 +304,17 @@ export async function recordDelivery(
         .executeTakeFirst()
       let batchId: number
       if (existingBatch) {
-        const sameBatch =
-          existingBatch.drugId === item.drugId &&
-          existingBatch.supplierId === order.supplierId &&
-          existingBatch.buyPrice === item.unitCost &&
-          existingBatch.sellPrice === deliveredItem.sellPrice &&
-          String(existingBatch.expiresAt) === deliveredItem.expiresAt
-        if (!sameBatch) throw new Error('That batch number is already used by different stock.')
+        const differences = [
+          existingBatch.drugId !== item.drugId && 'product',
+          existingBatch.supplierId !== order.supplierId && 'supplier',
+          existingBatch.buyPrice !== item.unitCost && 'unit cost',
+          existingBatch.sellPrice !== deliveredItem.sellPrice && 'selling price',
+          String(existingBatch.expiresAt) !== deliveredItem.expiresAt && 'expiry date'
+        ].filter(Boolean)
+        if (differences.length > 0)
+          throw new Error(
+            `Batch number ${deliveredItem.batchNumber} is already recorded with a different ${differences.join(', ')}. Check the batch details or use the batch number printed on this delivery.`
+          )
         await transaction
           .updateTable('batches')
           .set({

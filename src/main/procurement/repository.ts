@@ -341,11 +341,13 @@ export async function insertInvoice(data: InvoiceFileInput): Promise<SupplierInv
   ) as SupplierInvoiceWithDetails
 }
 
-export async function findInvoiceFile(id: number): Promise<{ storedFilename: string } | null> {
+export async function findInvoiceFile(
+  id: number
+): Promise<{ storedFilename: string; originalFilename: string } | null> {
   return (
     (await db
       .selectFrom('supplierInvoices')
-      .select('storedFilename')
+      .select(['storedFilename', 'originalFilename'])
       .where('id', '=', id)
       .executeTakeFirst()) ?? null
   )

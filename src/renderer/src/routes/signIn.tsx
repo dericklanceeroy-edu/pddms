@@ -1,5 +1,6 @@
 import Form from '@renderer/components/Form/Form'
 import { CenteredPage, CenteredPageHeader } from '@renderer/components/layout/CenteredPage'
+import FormField from '@renderer/components/ui/FormField'
 import { useAccount } from '@renderer/hooks/useAccount'
 import type { Credentials } from '@shared/types'
 import { createFileRoute } from '@tanstack/react-router'
@@ -34,38 +35,39 @@ function RouteComponent(): ReactElement {
         title="Sign in to your account"
         description="Use your assigned pharmacy account."
       />
-      <p className="mb-5 text-center text-sm text-neutral-500">
+      <p className="mb-5 text-center text-sm text-slate-500">
         If you encounter any issues, contact the master account holder.
       </p>
       <Form<Credentials> noValidate onSubmit={submit} className="space-y-4">
-        <Form.Text
-          name="username"
-          placeholder="e.g. juan.delacruz"
-          autoComplete="username"
-          required
-          minLength={4}
-          disabled={isSubmitting}
-        />
-        <Form.Password
-          name="password"
-          placeholder="Your password"
-          autoComplete="current-password"
-          required
-          minLength={8}
-          disabled={isSubmitting}
-          show={BsEyeFill}
-          hide={BsEyeSlashFill}
-        />
+        <FormField label="Username" required>
+          <Form.Text
+            name="username"
+            placeholder="e.g. juan.delacruz"
+            autoComplete="username"
+            required
+            minLength={4}
+            disabled={isSubmitting}
+          />
+        </FormField>
+        <FormField label="Password" required>
+          <Form.Password
+            name="password"
+            placeholder="Your password"
+            autoComplete="current-password"
+            required
+            minLength={8}
+            disabled={isSubmitting}
+            show={BsEyeFill}
+            hide={BsEyeSlashFill}
+          />
+        </FormField>
         {error && (
-          <p
-            role="alert"
-            className="status-message border-rose-200/80 bg-rose-50/75 text-rose-700 backdrop-blur-md"
-          >
+          <p role="alert" className="status-message border-rose-200 bg-rose-50 text-rose-800">
             {error}
           </p>
         )}
         <button type="submit" disabled={isSubmitting} className="primary-button w-full">
-          {isSubmitting ? 'Signing in…' : 'Continue'}
+          {isSubmitting ? 'Signing in…' : 'Sign in'}
         </button>
       </Form>
     </CenteredPage>

@@ -50,7 +50,7 @@ export default function StockOutPanel({ item }: { item: ItemProfile }): ReactEle
   return (
     <section className="panel min-w-0 space-y-4 p-5">
       <h3 className="font-semibold">Stock-out adjustments</h3>
-      <p className="text-sm text-neutral-500">
+      <p className="text-sm text-slate-500">
         Record damaged, expired, returned, or missing units removed from a batch.
       </p>
       <form onSubmit={(event) => void submit(event)} className="grid gap-4 sm:grid-cols-2">
@@ -116,18 +116,18 @@ export default function StockOutPanel({ item }: { item: ItemProfile }): ReactEle
         </summary>
         <ul className="mt-3 max-h-80 space-y-3 overflow-y-auto text-sm">
           {records.map((record) => (
-            <li key={record.id} className="rounded-xl bg-neutral-50 p-3 break-words">
+            <li key={record.id} className="rounded-md bg-slate-50 p-3 break-words">
               <p className="font-medium">
                 {record.batchNumber} · {record.quantity} units removed
               </p>
               <p>{record.reason}</p>
-              <p className="text-xs text-neutral-500">
+              <p className="text-xs text-slate-500">
                 {record.createdAt} · {record.recordedByName}
               </p>
             </li>
           ))}
           {!records.length && (
-            <li className="text-neutral-500">No stock-out adjustments recorded.</li>
+            <li className="text-slate-500">No stock-out adjustments recorded.</li>
           )}
         </ul>
       </details>

@@ -49,29 +49,16 @@ export default function CustomerDirectory(): ReactElement {
   return (
     <DashboardShell pageTitle="Customer profiles">
       <div className="space-y-5 sm:space-y-6">
-        <section className="page-intro p-6 sm:p-7">
-          <div className="mesh-glow -top-28 -right-24 size-72 bg-indigo-300/30" />
-          <div className="mesh-glow -bottom-36 left-1/4 size-72 bg-mauve-300/25" />
+        <section className="page-intro">
           <div className="page-intro-content flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
             <div className="max-w-2xl">
-              <p className="eyebrow">Customer records</p>
-              <h2 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">
-                Customer profiles
-              </h2>
-              <p className="mt-3 max-w-xl text-sm leading-6 text-neutral-600 sm:text-base">
-                Keep customer details, discount eligibility, and purchase history organized in one
-                trusted workspace.
+              <p className="eyebrow">Daily work</p>
+              <h2 className="page-title mt-0.5">Customers ({directoryMetrics.total})</h2>
+              <p className="page-subtitle">
+                Customer details, Senior Citizen or PWD discount eligibility, and purchase history.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-3">
-              <div className="glass-surface rounded-2xl px-4 py-2.5">
-                <p className="text-[0.68rem] font-semibold tracking-[0.14em] text-neutral-500 uppercase">
-                  Records
-                </p>
-                <p className="mt-1 text-lg font-semibold text-neutral-900">
-                  {directoryMetrics.total}
-                </p>
-              </div>
               <Link
                 to="/customers/$customerId"
                 params={{ customerId: 'new' }}
@@ -85,14 +72,14 @@ export default function CustomerDirectory(): ReactElement {
 
         <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_18rem]">
           <section className="panel min-w-0 overflow-hidden">
-            <header className="flex flex-col gap-4 border-b border-white/65 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+            <header className="flex flex-col gap-4 border-b border-slate-200 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
               <div>
                 <h3 className="font-semibold">Directory</h3>
-                <p className="mt-1 text-sm text-neutral-500">
+                <p className="mt-1 text-sm text-slate-500">
                   Search and open a customer record to view its details.
                 </p>
               </div>
-              <span className="w-fit rounded-full border border-mauve-100 bg-mauve-50/80 px-3 py-1 text-xs font-semibold text-mauve-700">
+              <span className="border-brand-100 bg-brand-50/80 text-brand-700 w-fit rounded-full border px-3 py-1 text-xs font-semibold">
                 {filteredCustomers.length} shown
               </span>
             </header>
@@ -106,9 +93,9 @@ export default function CustomerDirectory(): ReactElement {
               </p>
             )}
 
-            <div className="border-b border-white/65 p-4 sm:px-6 sm:py-5">
+            <div className="border-b border-slate-200 p-4 sm:px-6 sm:py-5">
               <label className="relative block max-w-xl">
-                <FiSearch className="absolute top-1/2 left-3.5 -translate-y-1/2 text-neutral-400" />
+                <FiSearch className="absolute top-1/2 left-3.5 -translate-y-1/2 text-slate-400" />
                 <span className="sr-only">Search customers</span>
                 <input
                   value={query}
@@ -119,43 +106,41 @@ export default function CustomerDirectory(): ReactElement {
               </label>
             </div>
 
-            <div className="divide-y divide-white/65">
+            <div className="divide-y divide-slate-100">
               {filteredCustomers.map((customer) => (
                 <Link
                   key={customer.id}
                   to="/customers/$customerId"
                   params={{ customerId: String(customer.id) }}
-                  className="group flex items-center gap-4 px-5 py-4 transition duration-200 hover:bg-white/45 sm:px-6 sm:py-5"
+                  className="group flex items-center gap-4 px-5 py-4 transition duration-200 hover:bg-white sm:px-6 sm:py-5"
                 >
-                  <div className="grid size-11 shrink-0 place-items-center rounded-2xl border border-mauve-100 bg-mauve-50/80 text-mauve-700 shadow-sm shadow-mauve-100/60">
+                  <div className="border-brand-100 bg-brand-50/80 text-brand-700 shadow-brand-100/60 grid size-11 shrink-0 place-items-center rounded-lg border shadow-sm">
                     <FiUser />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate font-semibold text-neutral-900">{customer.fullName}</p>
-                    <p className="mt-1 truncate text-sm text-neutral-500">
+                    <p className="truncate font-semibold text-slate-900">{customer.fullName}</p>
+                    <p className="mt-1 truncate text-sm text-slate-500">
                       {customer.phone}
                       {customer.email ? ` · ${customer.email}` : ''}
                     </p>
                   </div>
                   <span
-                    className={`hidden rounded-full border px-2.5 py-1 text-xs font-semibold sm:inline-flex ${customer.discountType === 'none' ? 'border-neutral-200/80 bg-white/60 text-neutral-600' : 'border-emerald-100 bg-emerald-50/80 text-emerald-700'}`}
+                    className={`hidden rounded-full border px-2.5 py-1 text-xs font-semibold sm:inline-flex ${customer.discountType === 'none' ? 'border-slate-200/80 bg-white text-slate-600' : 'border-emerald-100 bg-emerald-50/80 text-emerald-700'}`}
                   >
                     {customer.discountType === 'none'
                       ? 'Regular'
                       : customer.discountType.toUpperCase()}
                   </span>
-                  <FiChevronRight className="shrink-0 text-neutral-400 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-mauve-700" />
+                  <FiChevronRight className="group-hover:text-brand-700 shrink-0 text-slate-400 transition-transform duration-200 group-hover:translate-x-0.5" />
                 </Link>
               ))}
               {filteredCustomers.length === 0 && (
                 <div className="px-5 py-14 text-center sm:px-6">
-                  <div className="mx-auto grid size-12 place-items-center rounded-2xl bg-neutral-100/80 text-neutral-400">
+                  <div className="mx-auto grid size-12 place-items-center rounded-lg bg-slate-100/80 text-slate-400">
                     <FiUsers />
                   </div>
-                  <p className="mt-4 font-medium text-neutral-700">
-                    No customers match this search.
-                  </p>
-                  <p className="mt-1 text-sm text-neutral-500">
+                  <p className="mt-4 font-medium text-slate-700">No customers match this search.</p>
+                  <p className="mt-1 text-sm text-slate-500">
                     Try another name, contact detail, or discount ID.
                   </p>
                 </div>
@@ -201,15 +186,14 @@ function DirectoryMetric({
   description: string
 }): ReactElement {
   return (
-    <section className="glass-surface relative overflow-hidden rounded-3xl p-5">
-      <div className="absolute -top-8 -right-8 size-24 rounded-full bg-mauve-200/35 blur-2xl" />
+    <section className="glass-surface relative overflow-hidden rounded-lg p-5">
       <div className="relative">
-        <div className="grid size-10 place-items-center rounded-2xl border border-white/80 bg-white/65 text-mauve-700 shadow-sm">
+        <div className="text-brand-700 grid size-10 place-items-center rounded-lg border border-slate-200 bg-white shadow-sm">
           {icon}
         </div>
-        <p className="mt-5 text-sm text-neutral-500">{label}</p>
-        <p className="mt-1 text-2xl font-semibold tracking-tight text-neutral-950">{value}</p>
-        <p className="mt-2 text-xs leading-5 text-neutral-500">{description}</p>
+        <p className="mt-5 text-sm text-slate-500">{label}</p>
+        <p className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">{value}</p>
+        <p className="mt-2 text-xs leading-5 text-slate-500">{description}</p>
       </div>
     </section>
   )
