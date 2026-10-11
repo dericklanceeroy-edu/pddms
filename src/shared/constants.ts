@@ -39,7 +39,7 @@ export const channels = {
     createMaster: 'setup.createMaster'
   },
   dashboard: {
-    getAdmin: 'dashboard.getAdmin'
+    get: 'dashboard.get'
   },
   account: {
     updateProfile: 'account.updateProfile',

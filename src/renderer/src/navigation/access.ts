@@ -1,6 +1,6 @@
 import type { Role } from '@shared/types'
 
-const cashierPaths = ['/sales', '/customers']
+const cashierPaths = ['/', '/sales', '/customers']
 const staffPaths = ['/', '/sales', '/customers', '/inventory', '/items', '/suppliers', '/wholesale']
 
 export function canAccessPath(role: Role, path: string): boolean {
@@ -10,6 +10,8 @@ export function canAccessPath(role: Role, path: string): boolean {
   return paths.some((allowedPath) => path === allowedPath || path.startsWith(`${allowedPath}/`))
 }
 
-export function getHomePath(role: Role): '/' | '/sales' {
-  return role === 'cashier' ? '/sales' : '/'
+/** Every role lands on its own dashboard at "/"; the main process scopes what it shows. */
+export function getHomePath(role: Role): '/' {
+  void role
+  return '/'
 }

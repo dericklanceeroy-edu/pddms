@@ -102,7 +102,7 @@ if (!process.versions.electron) {
       )
       await reload()
       await waitFor("document.body.innerText.includes('Daily sales')")
-      assert.equal((await invoke(channels.dashboard.getAdmin)).success, true)
+      assert.equal((await invoke(channels.dashboard.get)).success, true)
       assert.equal(
         (
           await invoke(channels.account.createOne, {
@@ -132,7 +132,9 @@ if (!process.versions.electron) {
         true
       )
       await reload()
-      await waitFor("document.body.innerText.includes('Daily sales')")
+      // Note: Staff get the operations dashboard, which has no store-wide sales totals.
+      await waitFor("document.body.innerText.includes('Orders awaiting delivery')")
+      assert.equal(await evaluate("document.body.innerText.includes('Daily sales')"), false)
       await evaluate("location.hash = '#/users'")
       await waitFor("location.hash === '#/'")
       assert.equal((await invoke(channels.account.getAll)).success, false)

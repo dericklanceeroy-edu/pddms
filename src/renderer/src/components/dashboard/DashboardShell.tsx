@@ -42,7 +42,7 @@ const navigation: Array<{ group: string; items: NavigationItem[] }> = [
   {
     group: 'Daily work',
     items: [
-      { label: 'Overview', to: '/', icon: FiGrid },
+      { label: 'Dashboard', to: '/', icon: FiGrid },
       { label: 'Sales & dispensing', to: '/sales', icon: FiShoppingBag },
       { label: 'Customers', to: '/customers', icon: FiUser }
     ]
@@ -71,6 +71,12 @@ const navigation: Array<{ group: string; items: NavigationItem[] }> = [
     ]
   }
 ]
+
+const roleLabels = {
+  master: 'Admin · Master account',
+  staff: 'Staff account',
+  cashier: 'Cashier account'
+} as const
 
 const dateFormatter = new Intl.DateTimeFormat('en-PH', {
   weekday: 'long',
@@ -197,9 +203,7 @@ function Sidebar({
                 {account?.username ?? 'Unknown account'}
               </p>
               <p className="text-xs text-amber-300">
-                {account?.role === 'master'
-                  ? 'Master account'
-                  : `${account?.role ?? 'User'} account`}
+                {account ? roleLabels[account.role] : 'Account'}
               </p>
             </div>
           </div>

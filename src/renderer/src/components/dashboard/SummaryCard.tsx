@@ -14,8 +14,11 @@ import {
   FiArrowUp,
   FiCalendar,
   FiChevronsRight,
+  FiCreditCard,
   FiDollarSign,
+  FiFileText,
   FiMinus,
+  FiPackage,
   FiShoppingBag
 } from 'react-icons/fi'
 
@@ -59,19 +62,46 @@ const presentation: Record<
     color: '#d97706',
     iconClassName: 'bg-amber-50 text-amber-600 ring-amber-100',
     positiveDirection: null
+  },
+  'my-transactions': {
+    icon: FiFileText,
+    color: '#0d9488',
+    iconClassName: 'bg-brand-50 text-brand-600 ring-brand-100',
+    positiveDirection: 'up'
+  },
+  'awaiting-delivery': {
+    icon: FiPackage,
+    color: '#0891b2',
+    iconClassName: 'bg-cyan-50 text-cyan-700 ring-cyan-100',
+    positiveDirection: null
+  },
+  'supplier-payments-due': {
+    icon: FiCreditCard,
+    color: '#d97706',
+    iconClassName: 'bg-amber-50 text-amber-600 ring-amber-100',
+    positiveDirection: 'down'
   }
 }
 
+interface MetricDestination {
+  to: '/reports' | '/inventory' | '/sales' | '/suppliers'
+  tab?: 'receiving' | 'invoices'
+  label: string
+}
+
 /** Where each metric's underlying records can be reviewed. */
-const destinations: Record<
-  DashboardSummaryMetricId,
-  { to: '/reports' | '/inventory'; label: string }
-> = {
+const destinations: Record<DashboardSummaryMetricId, MetricDestination> = {
   'daily-sales': { to: '/reports', label: 'View sales report' },
   'items-sold': { to: '/reports', label: 'View sales report' },
   'low-stock-items': { to: '/inventory', label: 'Review stock levels' },
-  'expiring-batches': { to: '/inventory', label: 'Review expiring batches' }
+  'expiring-batches': { to: '/inventory', label: 'Review expiring batches' },
+  'my-transactions': { to: '/sales', label: 'Open sales & history' },
+  'awaiting-delivery': { to: '/suppliers', tab: 'receiving', label: 'Receive products' },
+  'supplier-payments-due': { to: '/suppliers', tab: 'invoices', label: 'Review invoices' }
 }
+
+/** Cashiers cannot open Reports, so their own sales figures link to the sales screen instead. */
+const salesHistory: MetricDestination = { to: '/sales', label: 'Open sales & history' }
 
 function formatMetric(metric: DashboardSummaryMetric): string {
   return metric.format === 'currency'
@@ -116,7 +146,10 @@ function Sparkline({ values, color }: { values: number[]; color: string }): Reac
 export default function SummaryCard({ metric }: { metric: DashboardSummaryMetric }): ReactElement {
   const config = presentation[metric.id]
   const { account } = useAccount()
-  const destination = destinations[metric.id]
+  const destination =
+    account?.role === 'cashier' && (metric.id === 'daily-sales' || metric.id === 'items-sold')
+      ? salesHistory
+      : destinations[metric.id]
   const canOpen = account !== null && canAccessPath(account.role, destination.to)
   const TrendIcon =
     metric.trend.direction === 'up'
@@ -168,6 +201,7 @@ export default function SummaryCard({ metric }: { metric: DashboardSummaryMetric
       {canOpen && (
         <Link
           to={destination.to}
+          search={destination.to === '/suppliers' ? { tab: destination.tab } : undefined}
           className="hover:bg-brand-50 hover:text-brand-800 flex items-center justify-center gap-1.5 border-t border-slate-200 bg-slate-50 px-4 py-2 text-xs font-medium text-slate-700 transition-colors"
         >
           {destination.label} <FiChevronsRight aria-hidden="true" />

@@ -2,15 +2,13 @@ import { state } from '@main/api'
 import { ipcMain } from '@main/api/ipc'
 import { channels } from '@shared/constants'
 import { formatValidationError } from '@shared/validation'
-import { getAdminDashboard } from './repository'
+import { getDashboard } from './repository'
 
-ipcMain.handle(channels.dashboard.getAdmin, async () => {
+ipcMain.handle(channels.dashboard.get, async () => {
   try {
     if (!state.session) return { success: false, error: 'Authentication is required.' }
-    if (state.session.account.role === 'cashier') {
-      return { success: false, error: 'Dashboard access is restricted to staff and master users.' }
-    }
-    return { success: true, data: await getAdminDashboard() }
+    // Note: The data is scoped to the signed-in role in the repository, not in the renderer.
+    return { success: true, data: await getDashboard(state.session.account) }
   } catch (error) {
     return { success: false, error: formatValidationError(error) }
   }
