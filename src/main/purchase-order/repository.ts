@@ -1,12 +1,14 @@
 import { db } from '@main/db'
 import { purchaseOrderDeliverySchema } from '@shared/schemas'
 import type {
+  Database,
   NewPurchaseOrderItem,
   PurchaseOrder,
   PurchaseOrderStatus,
   PurchaseOrderWithDetails
 } from '@shared/types'
-import { sql } from 'kysely'
+import { piecesPerUnit, UnitError, type StockUnit } from '@shared/units'
+import { sql, type Transaction } from 'kysely'
 import { randomUUID } from 'node:crypto'
 
 interface CreateOrderInput {
@@ -14,7 +16,9 @@ interface CreateOrderInput {
   expectedAt: string | null
   notes: string | null
   createdBy: number
-  items: Array<Pick<NewPurchaseOrderItem, 'drugId' | 'quantity' | 'unitCost'>>
+  items: Array<
+    Pick<NewPurchaseOrderItem, 'drugId' | 'quantity' | 'unitCost'> & { unit?: StockUnit }
+  >
 }
 
 interface DeliveryInput {
@@ -22,6 +26,7 @@ interface DeliveryInput {
   receivedQuantity: number
   batchNumber: string
   sellPrice: number
+  boxSellPrice?: number | null
   expiresAt: string
 }
 
@@ -29,8 +34,48 @@ interface RecordDeliveryInput {
   requestId: string
   deliveredAt: string
   notes: string | null
+  deliveredByName: string
+  checkedByName: string
   recordedBy: number
   items: DeliveryInput[]
+}
+
+const PRICE_TOLERANCE = 0.000001
+
+/** Builds stored lines, snapshotting how many pieces each ordered unit holds. */
+async function orderLines(
+  transaction: Transaction<Database>,
+  purchaseOrderId: number,
+  items: CreateOrderInput['items']
+): Promise<NewPurchaseOrderItem[]> {
+  const drugIds = [...new Set(items.map((item) => item.drugId))]
+  const drugs = await transaction
+    .selectFrom('drugs')
+    .select(['id', 'brandName', 'piecesPerBox'])
+    .where('id', 'in', drugIds)
+    .where('isArchived', '=', 0)
+    .execute()
+  if (drugs.length !== drugIds.length) throw new Error('One or more products were not found.')
+  return items.map((item) => {
+    const drug = drugs.find((value) => value.id === item.drugId)!
+    const unit = item.unit ?? 'piece'
+    let pieces: number
+    try {
+      pieces = piecesPerUnit(unit, drug.piecesPerBox)
+    } catch (error) {
+      if (error instanceof UnitError) throw new Error(`${drug.brandName}: ${error.message}`)
+      throw error
+    }
+    return {
+      purchaseOrderId,
+      drugId: item.drugId,
+      quantity: item.quantity,
+      unitCost: item.unitCost,
+      unit,
+      piecesPerUnit: pieces,
+      receivedQuantity: 0
+    }
+  })
 }
 
 export async function findAll(): Promise<PurchaseOrderWithDetails[]> {
@@ -38,6 +83,8 @@ export async function findAll(): Promise<PurchaseOrderWithDetails[]> {
     .selectFrom('purchaseOrders')
     .innerJoin('suppliers', 'suppliers.id', 'purchaseOrders.supplierId')
     .innerJoin('accounts', 'accounts.id', 'purchaseOrders.createdBy')
+    .leftJoin('accounts as submitter', 'submitter.id', 'purchaseOrders.submittedBy')
+    .leftJoin('accounts as canceller', 'canceller.id', 'purchaseOrders.cancelledBy')
     .select([
       'purchaseOrders.id',
       'purchaseOrders.supplierId',
@@ -51,8 +98,14 @@ export async function findAll(): Promise<PurchaseOrderWithDetails[]> {
       'purchaseOrders.createdBy',
       'purchaseOrders.createdAt',
       'purchaseOrders.updatedAt',
+      'purchaseOrders.submittedBy',
+      'purchaseOrders.submittedAt',
+      'purchaseOrders.cancelledBy',
+      'purchaseOrders.cancelledAt',
       'suppliers.organization as supplierName',
-      'accounts.fullName as createdByName'
+      'accounts.fullName as createdByName',
+      'submitter.fullName as submittedByName',
+      'canceller.fullName as cancelledByName'
     ])
     .orderBy('purchaseOrders.createdAt', 'desc')
     .execute()
@@ -67,6 +120,8 @@ export async function findAll(): Promise<PurchaseOrderWithDetails[]> {
       'purchaseOrderItems.quantity',
       'purchaseOrderItems.unitCost',
       'purchaseOrderItems.receivedQuantity',
+      'purchaseOrderItems.unit',
+      'purchaseOrderItems.piecesPerUnit',
       'drugs.brandName',
       'drugs.genericName'
     ])
@@ -83,6 +138,8 @@ export async function findAll(): Promise<PurchaseOrderWithDetails[]> {
         quantity: item.quantity,
         unitCost: item.unitCost,
         receivedQuantity: item.receivedQuantity,
+        unit: item.unit,
+        piecesPerUnit: item.piecesPerUnit,
         productName: `${item.brandName} (${item.genericName})`
       }))
   }))
@@ -100,15 +157,8 @@ export async function insertOne(data: CreateOrderInput): Promise<PurchaseOrderWi
       .where('id', '=', data.supplierId)
       .executeTakeFirst()
     if (!supplier) throw new Error('Supplier not found.')
-
-    const drugIds = [...new Set(data.items.map((item) => item.drugId))]
-    const drugs = await transaction
-      .selectFrom('drugs')
-      .select('id')
-      .where('id', 'in', drugIds)
-      .where('isArchived', '=', 0)
-      .execute()
-    if (drugs.length !== drugIds.length) throw new Error('One or more products were not found.')
+    // Note: Validates products and box set-up before anything is written.
+    await orderLines(transaction, 0, data.items)
 
     const orderNumber = `PO-${new Date()
       .toISOString()
@@ -131,15 +181,7 @@ export async function insertOne(data: CreateOrderInput): Promise<PurchaseOrderWi
 
     await transaction
       .insertInto('purchaseOrderItems')
-      .values(
-        data.items.map((item) => ({
-          purchaseOrderId: order.id,
-          drugId: item.drugId,
-          quantity: item.quantity,
-          unitCost: item.unitCost,
-          receivedQuantity: 0
-        }))
-      )
+      .values(await orderLines(transaction, order.id, data.items))
       .execute()
 
     return order.id
@@ -173,29 +215,11 @@ export async function updateDraftById(
       .where('id', '=', data.supplierId)
       .executeTakeFirst()
     if (!supplier) throw new Error('Supplier not found.')
-    const drugIds = [...new Set(data.items.map((item) => item.drugId))]
-    const drugs = await transaction
-      .selectFrom('drugs')
-      .select('id')
-      .where('id', 'in', drugIds)
-      .where('isArchived', '=', 0)
-      .execute()
-    if (drugs.length !== drugIds.length) throw new Error('One or more products were not found.')
+    const lines = await orderLines(transaction, id, data.items)
 
     // Note: Draft lines have never been received, so replacing them loses no stock history.
     await transaction.deleteFrom('purchaseOrderItems').where('purchaseOrderId', '=', id).execute()
-    await transaction
-      .insertInto('purchaseOrderItems')
-      .values(
-        data.items.map((item) => ({
-          purchaseOrderId: id,
-          drugId: item.drugId,
-          quantity: item.quantity,
-          unitCost: item.unitCost,
-          receivedQuantity: 0
-        }))
-      )
-      .execute()
+    await transaction.insertInto('purchaseOrderItems').values(lines).execute()
     await transaction
       .updateTable('purchaseOrders')
       .set({
@@ -215,16 +239,27 @@ export async function updateDraftById(
 
 export async function updateStatusById(
   id: number,
-  status: PurchaseOrderStatus
+  status: PurchaseOrderStatus,
+  accountId: number
 ): Promise<PurchaseOrderWithDetails> {
+  const current = await db
+    .selectFrom('purchaseOrders')
+    .select('status')
+    .where('id', '=', id)
+    .executeTakeFirstOrThrow()
+  const changed = current.status !== status
+  const now = new Date().toISOString()
   await db
     .updateTable('purchaseOrders')
     .set({
       status,
       receivedAt: status === 'received' ? sql`CURRENT_TIMESTAMP` : null,
-      updatedAt: sql`CURRENT_TIMESTAMP`
+      updatedAt: sql`CURRENT_TIMESTAMP`,
+      ...(changed && status === 'submitted' ? { submittedBy: accountId, submittedAt: now } : {}),
+      ...(changed && status === 'cancelled' ? { cancelledBy: accountId, cancelledAt: now } : {})
     })
     .where('id', '=', id)
+    .where('status', '=', current.status)
     .executeTakeFirstOrThrow()
 
   return (await findOneById(id)) as PurchaseOrderWithDetails
@@ -254,9 +289,12 @@ export async function recordDelivery(
     }
     const order = await transaction
       .selectFrom('purchaseOrders')
-      .select(['supplierId', 'status'])
+      .select(['supplierId', 'status', 'orderedAt'])
       .where('id', '=', id)
       .executeTakeFirstOrThrow()
+    if (data.deliveredAt < String(order.orderedAt).slice(0, 10)) {
+      throw new Error('The delivery date cannot be before the purchase order date.')
+    }
     if (!['submitted', 'partially_received'].includes(order.status)) {
       throw new Error(
         order.status === 'draft'
@@ -280,6 +318,8 @@ export async function recordDelivery(
         supplierId: order.supplierId,
         deliveredAt: data.deliveredAt,
         notes: data.notes,
+        deliveredByName: data.deliveredByName,
+        checkedByName: data.checkedByName,
         recordedBy: data.recordedBy
       })
       .returning('id')
@@ -290,11 +330,36 @@ export async function recordDelivery(
       if (!item) throw new Error('The delivery line does not belong to this order.')
       if (item.receivedQuantity + deliveredItem.receivedQuantity > item.quantity) {
         throw new Error(
-          `Only ${item.quantity - item.receivedQuantity} unit(s) remain to be received for this line. Over-receiving is not allowed.`
+          `Only ${item.quantity - item.receivedQuantity} ${item.unit === 'box' ? 'box(es)' : 'piece(s)'} remain to be received for this line. Over-receiving is not allowed.`
         )
       }
+      const drug = await transaction
+        .selectFrom('drugs')
+        .select(['piecesPerBox'])
+        .where('id', '=', item.drugId)
+        .executeTakeFirstOrThrow()
+      const boxSellPrice = deliveredItem.boxSellPrice ?? null
+      if (boxSellPrice !== null && drug.piecesPerBox <= 1)
+        throw new Error(
+          'A box price needs a product with more than one piece per box. Set pieces per box on the product first.'
+        )
+      // Note: Stock and batch prices are per piece; a box line converts here.
+      const receivedPieces = deliveredItem.receivedQuantity * item.piecesPerUnit
+      const buyPrice = item.unitCost / item.piecesPerUnit
       if (deliveredItem.expiresAt <= data.deliveredAt) {
         throw new Error('Delivered stock must expire after the delivery date.')
+      }
+      // Note: Compare like with like: piece price to cost per piece, box price to cost per box.
+      if (deliveredItem.sellPrice < buyPrice - PRICE_TOLERANCE) {
+        throw new Error(
+          `Batch ${deliveredItem.batchNumber}: the selling price cannot be lower than the unit cost of ₱${buyPrice.toFixed(2)} per piece.`
+        )
+      }
+      const boxCost = buyPrice * drug.piecesPerBox
+      if (boxSellPrice !== null && boxSellPrice < boxCost - PRICE_TOLERANCE) {
+        throw new Error(
+          `Batch ${deliveredItem.batchNumber}: the box price cannot be lower than the cost of ₱${boxCost.toFixed(2)} per box.`
+        )
       }
 
       const existingBatch = await transaction
@@ -307,8 +372,9 @@ export async function recordDelivery(
         const differences = [
           existingBatch.drugId !== item.drugId && 'product',
           existingBatch.supplierId !== order.supplierId && 'supplier',
-          existingBatch.buyPrice !== item.unitCost && 'unit cost',
+          Math.abs(existingBatch.buyPrice - buyPrice) > PRICE_TOLERANCE && 'unit cost',
           existingBatch.sellPrice !== deliveredItem.sellPrice && 'selling price',
+          (existingBatch.boxSellPrice ?? null) !== boxSellPrice && 'box price',
           String(existingBatch.expiresAt) !== deliveredItem.expiresAt && 'expiry date'
         ].filter(Boolean)
         if (differences.length > 0)
@@ -318,8 +384,8 @@ export async function recordDelivery(
         await transaction
           .updateTable('batches')
           .set({
-            initialStock: existingBatch.initialStock + deliveredItem.receivedQuantity,
-            currentStock: existingBatch.currentStock + deliveredItem.receivedQuantity
+            initialStock: existingBatch.initialStock + receivedPieces,
+            currentStock: existingBatch.currentStock + receivedPieces
           })
           .where('id', '=', existingBatch.id)
           .executeTakeFirstOrThrow()
@@ -331,10 +397,11 @@ export async function recordDelivery(
             drugId: item.drugId,
             supplierId: order.supplierId,
             physicalTag: deliveredItem.batchNumber,
-            buyPrice: item.unitCost,
+            buyPrice,
             sellPrice: deliveredItem.sellPrice,
-            initialStock: deliveredItem.receivedQuantity,
-            currentStock: deliveredItem.receivedQuantity,
+            boxSellPrice,
+            initialStock: receivedPieces,
+            currentStock: receivedPieces,
             expiresAt: deliveredItem.expiresAt
           })
           .returning('id')

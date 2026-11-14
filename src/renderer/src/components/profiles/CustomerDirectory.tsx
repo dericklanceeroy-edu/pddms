@@ -18,25 +18,29 @@ export default function CustomerDirectory(): ReactElement {
   const loadError = useProfileStore((state) => state.error)
 
   const [query, setQuery] = useState('')
+  const [type, setType] = useState<'all' | 'retail' | 'pharmacy'>('all')
 
   const filteredCustomers = useMemo(() => {
     const search = query.trim().toLowerCase()
 
     return customers.filter(
       (customer) =>
-        !search ||
-        `${customer.fullName} ${customer.phone} ${customer.email} ${customer.discountId}`
-          .toLowerCase()
-          .includes(search)
+        (type === 'all' || customer.clientType === type) &&
+        (!search ||
+          `${customer.fullName} ${customer.contactPerson} ${customer.phone} ${customer.email} ${customer.discountId}`
+            .toLowerCase()
+            .includes(search))
     )
-  }, [customers, query])
+  }, [customers, query, type])
 
   const directoryMetrics = useMemo(() => {
     const discountEligible = customers.filter((customer) => customer.discountType !== 'none').length
+    const pharmacies = customers.filter((customer) => customer.clientType === 'pharmacy').length
     const emailContacts = customers.filter((customer) => Boolean(customer.email)).length
 
     return {
       total: customers.length,
+      pharmacies,
       discountEligible,
       emailContacts
     }
@@ -47,7 +51,7 @@ export default function CustomerDirectory(): ReactElement {
   }, [loadCustomers])
 
   return (
-    <DashboardShell pageTitle="Customer profiles">
+    <DashboardShell pageTitle="Customers">
       <div className="space-y-5 sm:space-y-6">
         <section className="page-intro">
           <div className="page-intro-content flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
@@ -55,16 +59,26 @@ export default function CustomerDirectory(): ReactElement {
               <p className="eyebrow">Daily work</p>
               <h2 className="page-title mt-0.5">Customers ({directoryMetrics.total})</h2>
               <p className="page-subtitle">
-                Customer details, Senior Citizen or PWD discount eligibility, and purchase history.
+                Retail customers with their Senior Citizen or PWD eligibility, and the pharmacy
+                clients that buy wholesale.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-3">
               <Link
                 to="/customers/$customerId"
                 params={{ customerId: 'new' }}
+                search={{ type: 'pharmacy' }}
+                className="secondary-button"
+              >
+                <FiPlus /> Add Pharmacy Client
+              </Link>
+              <Link
+                to="/customers/$customerId"
+                params={{ customerId: 'new' }}
+                search={{}}
                 className="primary-button"
               >
-                <FiPlus /> Add customer
+                <FiPlus /> Add Customer
               </Link>
             </div>
           </div>
@@ -74,9 +88,9 @@ export default function CustomerDirectory(): ReactElement {
           <section className="panel min-w-0 overflow-hidden">
             <header className="flex flex-col gap-4 border-b border-slate-200 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
               <div>
-                <h3 className="font-semibold">Directory</h3>
+                <h3 className="section-title">Directory</h3>
                 <p className="mt-1 text-sm text-slate-500">
-                  Search and open a customer record to view its details.
+                  Search, then open a record to view its details.
                 </p>
               </div>
               <span className="border-brand-100 bg-brand-50/80 text-brand-700 w-fit rounded-full border px-3 py-1 text-xs font-semibold">
@@ -93,8 +107,32 @@ export default function CustomerDirectory(): ReactElement {
               </p>
             )}
 
-            <div className="border-b border-slate-200 p-4 sm:px-6 sm:py-5">
-              <label className="relative block max-w-xl">
+            <div className="flex flex-col gap-3 border-b border-slate-200 p-4 sm:flex-row sm:items-center sm:px-6 sm:py-5">
+              <div
+                role="radiogroup"
+                aria-label="Show"
+                className="inline-flex shrink-0 rounded-md border border-slate-300 bg-white p-0.5"
+              >
+                {(
+                  [
+                    ['all', 'All'],
+                    ['retail', 'Retail Customers'],
+                    ['pharmacy', 'Pharmacy Clients']
+                  ] as const
+                ).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    role="radio"
+                    aria-checked={type === value}
+                    onClick={() => setType(value)}
+                    className={`rounded px-3 py-1.5 text-sm font-semibold transition-colors ${type === value ? 'bg-sidebar-900 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <label className="relative block min-w-0 flex-1 sm:max-w-xl">
                 <FiSearch className="absolute top-1/2 left-3.5 -translate-y-1/2 text-slate-400" />
                 <span className="sr-only">Search customers</span>
                 <input
@@ -112,6 +150,7 @@ export default function CustomerDirectory(): ReactElement {
                   key={customer.id}
                   to="/customers/$customerId"
                   params={{ customerId: String(customer.id) }}
+                  search={{}}
                   className="group flex items-center gap-4 px-5 py-4 transition duration-200 hover:bg-white sm:px-6 sm:py-5"
                 >
                   <div className="border-brand-100 bg-brand-50/80 text-brand-700 shadow-brand-100/60 grid size-11 shrink-0 place-items-center rounded-lg border shadow-sm">
@@ -120,16 +159,23 @@ export default function CustomerDirectory(): ReactElement {
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-semibold text-slate-900">{customer.fullName}</p>
                     <p className="mt-1 truncate text-sm text-slate-500">
+                      {customer.clientType === 'pharmacy' && customer.contactPerson
+                        ? `${customer.contactPerson} · `
+                        : ''}
                       {customer.phone}
                       {customer.email ? ` · ${customer.email}` : ''}
                     </p>
                   </div>
                   <span
-                    className={`hidden rounded-full border px-2.5 py-1 text-xs font-semibold sm:inline-flex ${customer.discountType === 'none' ? 'border-slate-200/80 bg-white text-slate-600' : 'border-emerald-100 bg-emerald-50/80 text-emerald-700'}`}
+                    className={`hidden rounded-full border px-2.5 py-1 text-xs font-semibold sm:inline-flex ${customer.clientType === 'pharmacy' ? 'border-indigo-200 bg-indigo-50 text-indigo-800' : customer.discountType === 'none' ? 'border-slate-200/80 bg-white text-slate-600' : 'border-emerald-100 bg-emerald-50/80 text-emerald-700'}`}
                   >
-                    {customer.discountType === 'none'
-                      ? 'Regular'
-                      : customer.discountType.toUpperCase()}
+                    {customer.clientType === 'pharmacy'
+                      ? 'Pharmacy Client'
+                      : customer.discountType === 'none'
+                        ? 'Regular'
+                        : customer.discountType === 'senior'
+                          ? 'Senior Citizen'
+                          : 'PWD'}
                   </span>
                   <FiChevronRight className="group-hover:text-brand-700 shrink-0 text-slate-400 transition-transform duration-200 group-hover:translate-x-0.5" />
                 </Link>
@@ -139,7 +185,9 @@ export default function CustomerDirectory(): ReactElement {
                   <div className="mx-auto grid size-12 place-items-center rounded-lg bg-slate-100/80 text-slate-400">
                     <FiUsers />
                   </div>
-                  <p className="mt-4 font-medium text-slate-700">No customers match this search.</p>
+                  <p className="mt-4 font-medium text-slate-700">
+                    {customers.length ? 'No records match this search.' : 'No customers yet.'}
+                  </p>
                   <p className="mt-1 text-sm text-slate-500">
                     Try another name, contact detail, or discount ID.
                   </p>
@@ -151,21 +199,21 @@ export default function CustomerDirectory(): ReactElement {
           <aside className="grid gap-5 sm:grid-cols-3 xl:grid-cols-1">
             <DirectoryMetric
               icon={<FiUsers />}
-              label="Customer base"
-              value={String(directoryMetrics.total)}
-              description="Customer profiles on record"
-            />
-            <DirectoryMetric
-              icon={<FiCreditCard />}
-              label="Discount eligible"
-              value={String(directoryMetrics.discountEligible)}
-              description="Senior Citizen and PWD profiles"
+              label="Retail Customers"
+              value={String(directoryMetrics.total - directoryMetrics.pharmacies)}
+              description="People who buy at the counter"
             />
             <DirectoryMetric
               icon={<FiMail />}
-              label="Email contacts"
-              value={String(directoryMetrics.emailContacts)}
-              description="Profiles with an email address"
+              label="Pharmacy Clients"
+              value={String(directoryMetrics.pharmacies)}
+              description="Pharmacies that order wholesale"
+            />
+            <DirectoryMetric
+              icon={<FiCreditCard />}
+              label="Discount Eligible"
+              value={String(directoryMetrics.discountEligible)}
+              description="Senior Citizen and PWD profiles"
             />
           </aside>
         </div>
@@ -191,8 +239,8 @@ function DirectoryMetric({
         <div className="text-brand-700 grid size-10 place-items-center rounded-lg border border-slate-200 bg-white shadow-sm">
           {icon}
         </div>
-        <p className="mt-5 text-sm text-slate-500">{label}</p>
-        <p className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">{value}</p>
+        <p className="mt-5 text-sm font-semibold text-slate-600">{label}</p>
+        <p className="mt-1 text-2xl font-bold tracking-tight text-slate-950">{value}</p>
         <p className="mt-2 text-xs leading-5 text-slate-500">{description}</p>
       </div>
     </section>

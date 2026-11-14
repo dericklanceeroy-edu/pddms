@@ -7,6 +7,7 @@ export interface ManagedUser {
   id: number
   fullName: string
   username: string
+  email: string
   role: UserRole
   status: UserStatus
   verified: boolean
@@ -18,6 +19,7 @@ export interface ManagedUser {
 export interface UserFormValues {
   fullName: string
   username: string
+  email: string
   role: UserRole
   password: string
 }
@@ -25,6 +27,7 @@ export interface UserFormValues {
 export interface UserUpdateValues {
   fullName: string
   username: string
+  email: string
   role: UserRole
   password: string
 }
@@ -41,6 +44,7 @@ export const mapAccount = (
   id: account.id,
   fullName: account.fullName,
   username: account.username,
+  email: account.email ?? '',
   role: account.role,
   status:
     account.isArchived === 1

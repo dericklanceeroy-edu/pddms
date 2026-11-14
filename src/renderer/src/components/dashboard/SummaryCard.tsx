@@ -91,17 +91,17 @@ interface MetricDestination {
 
 /** Where each metric's underlying records can be reviewed. */
 const destinations: Record<DashboardSummaryMetricId, MetricDestination> = {
-  'daily-sales': { to: '/reports', label: 'View sales report' },
-  'items-sold': { to: '/reports', label: 'View sales report' },
-  'low-stock-items': { to: '/inventory', label: 'Review stock levels' },
-  'expiring-batches': { to: '/inventory', label: 'Review expiring batches' },
-  'my-transactions': { to: '/sales', label: 'Open sales & history' },
-  'awaiting-delivery': { to: '/suppliers', tab: 'receiving', label: 'Receive products' },
-  'supplier-payments-due': { to: '/suppliers', tab: 'invoices', label: 'Review invoices' }
+  'daily-sales': { to: '/reports', label: 'View Sales Report' },
+  'items-sold': { to: '/reports', label: 'View Sales Report' },
+  'low-stock-items': { to: '/inventory', label: 'Review Stock Levels' },
+  'expiring-batches': { to: '/inventory', label: 'Review Expiring Batches' },
+  'my-transactions': { to: '/sales', label: 'Open Sales & History' },
+  'awaiting-delivery': { to: '/suppliers', tab: 'receiving', label: 'Receive Products' },
+  'supplier-payments-due': { to: '/suppliers', tab: 'invoices', label: 'Review Invoices' }
 }
 
 /** Cashiers cannot open Reports, so their own sales figures link to the sales screen instead. */
-const salesHistory: MetricDestination = { to: '/sales', label: 'Open sales & history' }
+const salesHistory: MetricDestination = { to: '/sales', label: 'Open Sales & History' }
 
 function formatMetric(metric: DashboardSummaryMetric): string {
   return metric.format === 'currency'

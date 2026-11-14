@@ -35,17 +35,31 @@ function RouteComponent(): ReactElement {
   return (
     <div>
       <CenteredPageHeader
-        title="Set up master account"
+        title="Set Up the Master Account"
         description="This first account controls system access and administration."
       />
       <Form<MasterSetup> noValidate onSubmit={submit} className="space-y-4">
-        <FormField label="Full name" required>
+        <FormField label="Full Name" required>
           <Form.Text
             name="fullName"
+            rule="personName"
             placeholder="e.g. Juan Dela Cruz"
             autoComplete="name"
             required
             minLength={2}
+            maxLength={120}
+            disabled={isSubmitting}
+          />
+        </FormField>
+        <FormField label="Email" required hint="Used to reach the account holder about the system.">
+          <Form.Text
+            name="email"
+            rule="email"
+            type="email"
+            placeholder="e.g. juan@example.com"
+            autoComplete="email"
+            required
+            maxLength={254}
             disabled={isSubmitting}
           />
         </FormField>
@@ -56,10 +70,12 @@ function RouteComponent(): ReactElement {
         >
           <Form.Text
             name="username"
+            rule="username"
             placeholder="e.g. juan.delacruz"
             autoComplete="username"
             required
             minLength={4}
+            maxLength={32}
             disabled={isSubmitting}
           />
         </FormField>
@@ -85,7 +101,7 @@ function RouteComponent(): ReactElement {
           </p>
         )}
         <button type="submit" disabled={isSubmitting} className="primary-button w-full">
-          {isSubmitting ? 'Creating account…' : 'Create master account'}
+          {isSubmitting ? 'Creating Account…' : 'Create Master Account'}
         </button>
       </Form>
     </div>

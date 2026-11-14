@@ -6,6 +6,11 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+const handoff = (orderId) => ({
+  orderId,
+  driverName: 'Delivery Driver',
+  receivedByName: 'Clinic Pharmacist'
+})
 
 if (!process.env.REPORT_TEST_PHASE) {
   const directory = await mkdtemp(join(tmpdir(), 'pddms-report-test-'))
@@ -179,6 +184,8 @@ if (!process.env.REPORT_TEST_PHASE) {
       await ok(channels.purchaseOrder.recordDeliveryById, po.id, {
         requestId: randomUUID(),
         deliveredAt: localDate(),
+        deliveredByName: 'Supplier Driver',
+        checkedByName: 'Receiving Clerk',
         items: po.items.map((item, index) => ({
           itemId: item.id,
           receivedQuantity: 20,
@@ -195,6 +202,7 @@ if (!process.env.REPORT_TEST_PHASE) {
             .insertInto('customers')
             .values({
               fullName: discountType === 'senior' ? 'Senior Client' : 'Wholesale Client',
+              clientType: discountType === 'senior' ? 'retail' : 'pharmacy',
               phone: '09171234567',
               email: null,
               address: 'Delivery address',
@@ -240,7 +248,8 @@ if (!process.env.REPORT_TEST_PHASE) {
       const draft = (items) => ({
         requestId: randomUUID(),
         customerId: regular.id,
-        dueDate: '2000-01-01',
+        dueDate: localDate(),
+        scheduledDate: localDate(),
         deliveryAddress: 'Address',
         notes: '',
         items
@@ -253,9 +262,15 @@ if (!process.env.REPORT_TEST_PHASE) {
         deliveryAddress: 'Address',
         deliveryNotes: ''
       })
-      await ok(channels.wholesale.deliver, deliveredId)
+      await ok(channels.wholesale.deliver, handoff(deliveredId))
       const pendingId = (await ok(channels.wholesale.create, draft([line(0, 1)]))).data
       const cancelledId = (await ok(channels.wholesale.create, draft([line(0, 1)]))).data
+      // Note: New orders cannot be due in the past; age them so the overdue report has rows.
+      await db
+        .updateTable('wholesaleOrders')
+        .set({ dueDate: '2000-01-01' })
+        .where('id', 'in', [deliveredId, pendingId, cancelledId])
+        .execute()
       await ok(channels.wholesale.cancel, cancelledId)
       const pay = (orderId, amountCents, reference) =>
         ok(channels.wholesale.pay, {
@@ -308,7 +323,7 @@ if (!process.env.REPORT_TEST_PHASE) {
       const sales = await report('sales')
       assert.equal(sales.totalRows, 2)
       assert.equal(metric(sales, 'Retail revenue'), 31200)
-      assert.equal(metric(sales, 'Units sold'), 4)
+      assert.equal(metric(sales, 'Pieces sold'), 4)
       assert.equal(metric(sales, 'Discounts'), 5000)
       assert.equal(metric(sales, 'VAT exemption'), 3000)
       assert.ok(sales.rows.some((row) => row.products.includes('Report Alpha')))
@@ -342,7 +357,7 @@ if (!process.env.REPORT_TEST_PHASE) {
       assert.equal(
         metric(
           await report('movement', { from: '2000-01-01', to: '2000-01-01' }),
-          'Units sold / delivered'
+          'Pieces sold / delivered'
         ),
         0
       )
@@ -401,7 +416,7 @@ if (!process.env.REPORT_TEST_PHASE) {
       assert.equal((await report('discounts')).rows[0].discountCents, 5000)
       const regulated = await report('regulated')
       assert.equal(regulated.totalRows, 5)
-      assert.equal(metric(regulated, 'Units'), 9)
+      assert.equal(metric(regulated, 'Pieces'), 9)
       assert.ok(regulated.rows.some((row) => row.isControlled === 1))
       assert.ok(regulated.rows.some((row) => row.isPrescribed === 1))
       assert.equal((await report('products', { search: 'Report Alpha' })).rows[0].stock, 19)

@@ -16,7 +16,7 @@ function Profile(): ReactElement {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   return (
-    <DashboardShell pageTitle="My profile">
+    <DashboardShell pageTitle="My Profile">
       <form
         className="panel mx-auto max-w-xl space-y-4 p-5"
         onSubmit={(event) => {
@@ -49,7 +49,7 @@ function Profile(): ReactElement {
             .finally(() => setBusy(false))
         }}
       >
-        <h2 className="page-title">My profile</h2>
+        <h2 className="page-title">My Profile</h2>
         <p className="text-sm text-slate-500">
           Role: {account?.role}. Your access level is set by the master account. Saving asks for
           your current password and signs you out so you can sign in with the new details.
@@ -60,7 +60,7 @@ function Profile(): ReactElement {
           </p>
         )}
         <fieldset className="space-y-4" disabled={busy}>
-          <FormField label="Full name" required>
+          <FormField label="Full Name" required>
             <input
               required
               className="field"
@@ -77,7 +77,7 @@ function Profile(): ReactElement {
               onChange={(event) => setUsername(event.target.value)}
             />
           </FormField>
-          <FormField label="Current password" required hint="Needed to confirm any change.">
+          <FormField label="Current Password" required hint="Needed to confirm any change.">
             <input
               required
               type="password"
@@ -88,7 +88,7 @@ function Profile(): ReactElement {
             />
           </FormField>
           <FormField
-            label="New password"
+            label="New Password"
             hint="Leave blank to keep your current password. At least 8 characters."
           >
             <input
@@ -99,7 +99,7 @@ function Profile(): ReactElement {
               onChange={(event) => setPassword(event.target.value)}
             />
           </FormField>
-          <button className="primary-button">{busy ? 'Saving…' : 'Save and sign out'}</button>
+          <button className="primary-button">{busy ? 'Saving…' : 'Save and Sign Out'}</button>
         </fieldset>
       </form>
     </DashboardShell>

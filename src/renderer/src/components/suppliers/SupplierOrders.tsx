@@ -2,6 +2,7 @@ import DashboardShell from '@renderer/components/dashboard/DashboardShell'
 import ProcurementRecords from '@renderer/components/suppliers/ProcurementRecords'
 import { useConfirm } from '@renderer/components/ui/ConfirmDialog'
 import { splitErrors, type FieldErrors } from '@renderer/components/ui/fieldErrors'
+import FilteredInput from '@renderer/components/ui/FilteredInput'
 import FormField, { FormError, RequiredNote } from '@renderer/components/ui/FormField'
 import Modal from '@renderer/components/ui/Modal'
 import PageHeader, { EmptyState } from '@renderer/components/ui/PageHeader'
@@ -20,9 +21,12 @@ import {
   type ProcurementTab,
   type PurchaseOrderRecord
 } from '@renderer/data/supplierOrders'
+import { useAccount } from '@renderer/hooks/useAccount'
 import { useSupplierOrders } from '@renderer/hooks/useSupplierOrders'
-import { localDate } from '@shared/inventory'
+import { filterInput, type InputRule } from '@shared/inputRules'
+import { EXPIRY_WARNING_DAYS, getExpiryStatus, localDate } from '@shared/inventory'
 import type { Supplier } from '@shared/types'
+import type { StockUnit } from '@shared/units'
 import { Link } from '@tanstack/react-router'
 import { useMemo, useRef, useState, type FormEvent, type ReactElement, type ReactNode } from 'react'
 import {
@@ -48,6 +52,15 @@ const toNumber = (value: string): number => (value.trim() === '' ? Number.NaN : 
 
 const remaining = (item: PurchaseOrderRecord['items'][number]): number =>
   Math.max(item.quantity - item.receivedQuantity, 0)
+
+/** "3 boxes" / "5 pcs" in the line's own order unit. */
+const units = (count: number, item: { unit: StockUnit }): string =>
+  item.unit === 'box'
+    ? `${count} box${count === 1 ? '' : 'es'}`
+    : `${count} pc${count === 1 ? '' : 's'}`
+
+const unitName = (item: { unit: StockUnit; piecesPerUnit: number }): string =>
+  item.unit === 'box' ? `box of ${item.piecesPerUnit}` : 'piece'
 
 const canReceive = (order: PurchaseOrderRecord): boolean =>
   ['submitted', 'partially_received'].includes(order.status) &&
@@ -79,10 +92,10 @@ const tabDescriptions: Record<ProcurementTab, string> = {
 }
 
 const workflow: Array<{ tab: ProcurementTab; label: string; hint: string }> = [
-  { tab: 'orders', label: 'Create purchase order', hint: 'Save as draft, then submit' },
-  { tab: 'receiving', label: 'Receive products', hint: 'Batch, expiry and quantity' },
-  { tab: 'invoices', label: 'Review invoice', hint: 'Attach the supplier invoice' },
-  { tab: 'invoices', label: 'Record payment', hint: 'When payment is made' }
+  { tab: 'orders', label: 'Create Purchase Order', hint: 'Save as draft, then submit' },
+  { tab: 'receiving', label: 'Receive Products', hint: 'Batch, expiry and quantity' },
+  { tab: 'invoices', label: 'Review Invoice', hint: 'Attach the supplier invoice' },
+  { tab: 'invoices', label: 'Record Payment', hint: 'When payment is made' }
 ]
 
 /**
@@ -218,7 +231,7 @@ export default function SupplierOrders({
           with purchase orders or stock batches are kept to protect their history.
         </>
       ),
-      confirmLabel: 'Remove supplier',
+      confirmLabel: 'Remove Supplier',
       tone: 'danger'
     })
     if (!accepted) return
@@ -235,7 +248,7 @@ export default function SupplierOrders({
       title: `Submit ${order.orderNumber}?`,
       message:
         'Submit this order once it has been sent to the supplier. Submitted orders can no longer be edited, but you can record deliveries against them.',
-      confirmLabel: 'Submit order'
+      confirmLabel: 'Submit Order'
     })
     if (!accepted) return
     try {
@@ -264,7 +277,7 @@ export default function SupplierOrders({
           </p>
         </>
       ),
-      confirmLabel: 'Cancel order',
+      confirmLabel: 'Cancel Order',
       cancelLabel: 'Keep order',
       tone: 'danger'
     })
@@ -281,7 +294,7 @@ export default function SupplierOrders({
     const accepted = await confirm({
       title: `Delete ${order.orderNumber}?`,
       message: 'The order and its lines will be permanently deleted.',
-      confirmLabel: 'Delete order',
+      confirmLabel: 'Delete Order',
       tone: 'danger'
     })
     if (!accepted) return
@@ -295,17 +308,17 @@ export default function SupplierOrders({
 
   const primaryAction =
     tab === 'suppliers'
-      ? { label: 'Add supplier', run: () => setSupplierDialog('new') }
+      ? { label: 'Add Supplier', run: () => setSupplierDialog('new') }
       : tab === 'orders' || tab === 'receiving'
-        ? { label: 'Create purchase order', run: () => setOrderDialog('new') }
+        ? { label: 'Create Purchase Order', run: () => setOrderDialog('new') }
         : null
 
   return (
-    <DashboardShell pageTitle="Suppliers & purchasing">
+    <DashboardShell pageTitle="Suppliers & Purchasing">
       <div className="space-y-5 lg:space-y-6">
         <PageHeader
-          section="Stock & purchasing"
-          title={procurementTabs.find((item) => item.id === tab)?.label ?? 'Suppliers & purchasing'}
+          section="Stock & Purchasing"
+          title={procurementTabs.find((item) => item.id === tab)?.label ?? 'Suppliers & Purchasing'}
           description={tabDescriptions[tab]}
           actions={
             primaryAction && (
@@ -330,7 +343,7 @@ export default function SupplierOrders({
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <Metric label="Suppliers" value={procurement.suppliers.length} icon={<FiTruck />} />
           <Metric
-            label="Open orders"
+            label="Open Orders"
             value={
               procurement.orders.filter((order) =>
                 ['draft', 'submitted', 'partially_received'].includes(order.status)
@@ -339,12 +352,12 @@ export default function SupplierOrders({
             icon={<FiFileText />}
           />
           <Metric
-            label="Awaiting delivery"
+            label="Awaiting Delivery"
             value={procurement.orders.filter(canReceive).length}
             icon={<FiCheck />}
           />
           <Metric
-            label="Open order value"
+            label="Open Order Value"
             value={currency.format(
               procurement.orders
                 .filter((order) => !['received', 'cancelled'].includes(order.status))
@@ -361,7 +374,7 @@ export default function SupplierOrders({
               className="secondary-button"
               onClick={() => void procurement.refresh()}
             >
-              Try again
+              Try Again
             </button>
           </Banner>
         )}
@@ -526,7 +539,7 @@ export default function SupplierOrders({
             setFeedbackState({
               message: `Delivery recorded for ${receiveDialog.orderNumber}: ${units} unit(s) added to inventory.`,
               tone: 'success',
-              link: { to: '/inventory', label: 'View inventory' }
+              link: { to: '/inventory', label: 'View Inventory' }
             })
           }}
         />
@@ -599,13 +612,13 @@ function SupplierTable({
                     onClick={() => edit(supplier)}
                     aria-label={`View or edit ${supplier.organization}`}
                   >
-                    <FiEdit2 aria-hidden="true" /> View / edit
+                    <FiEdit2 aria-hidden="true" /> View / Edit
                   </button>
                   <button
                     type="button"
                     className="icon-button text-rose-700"
                     aria-label={`Remove ${supplier.organization}`}
-                    title="Remove supplier"
+                    title="Remove Supplier"
                     onClick={() => remove(supplier)}
                   >
                     <FiTrash2 />
@@ -667,7 +680,7 @@ function OrderTable({
             <th className="px-4 py-3">Order</th>
             <th className="px-4 py-3">Supplier</th>
             <th className="px-4 py-3">Status</th>
-            <th className="px-4 py-3">Items: ordered · received · remaining</th>
+            <th className="px-4 py-3">Items: Ordered · Received · Remaining</th>
             <th className="px-4 py-3 text-right">Actions</th>
           </tr>
         </thead>
@@ -690,6 +703,28 @@ function OrderTable({
                     </p>
                   )}
                   <p className="mt-1 text-xs font-semibold">{currency.format(order.totalAmount)}</p>
+                  <dl className="mt-2 space-y-0.5 text-xs text-slate-500">
+                    <div>
+                      <dt className="inline">Created by </dt>
+                      <dd className="inline text-slate-700">{order.createdByName}</dd>
+                    </div>
+                    {order.status !== 'draft' && (
+                      <div>
+                        <dt className="inline">Submitted by </dt>
+                        <dd className="inline text-slate-700">
+                          {order.submittedByName ?? 'Not recorded'}
+                        </dd>
+                      </div>
+                    )}
+                    {order.status === 'cancelled' && (
+                      <div>
+                        <dt className="inline">Cancelled by </dt>
+                        <dd className="inline text-slate-700">
+                          {order.cancelledByName ?? 'Not recorded'}
+                        </dd>
+                      </div>
+                    )}
+                  </dl>
                 </td>
                 <td className="min-w-0 px-4 py-4">
                   <p className="truncate" title={order.supplierName}>
@@ -710,7 +745,9 @@ function OrderTable({
                           {item.productName}
                         </span>
                         <span className="block text-xs text-slate-500 tabular-nums">
-                          {item.quantity} ordered · {item.receivedQuantity} received ·{' '}
+                          {units(item.quantity, item)} ordered
+                          {item.unit === 'box' ? ` (×${item.piecesPerUnit} pcs)` : ''} ·{' '}
+                          {item.receivedQuantity} received ·{' '}
                           <span
                             className={
                               remaining(item) > 0 && order.status !== 'cancelled'
@@ -743,7 +780,7 @@ function OrderTable({
                         className="primary-button h-10 text-xs"
                         onClick={() => receive(order)}
                       >
-                        <FiTruck /> Receive products
+                        <FiTruck /> Receive Products
                       </button>
                     )}
                     {order.status === 'draft' && (
@@ -753,7 +790,7 @@ function OrderTable({
                           className="primary-button h-10 text-xs"
                           onClick={() => submit(order)}
                         >
-                          <FiSend /> Submit order
+                          <FiSend /> Submit Order
                         </button>
                         <button
                           type="button"
@@ -770,7 +807,7 @@ function OrderTable({
                         className="secondary-button text-xs text-rose-700"
                         onClick={() => cancel(order)}
                       >
-                        <FiSlash /> Cancel order
+                        <FiSlash /> Cancel Order
                       </button>
                     )}
                     {(order.status === 'draft' || (order.status === 'cancelled' && !received)) && (
@@ -818,8 +855,8 @@ function AwaitingDelivery({
 }): ReactElement {
   return (
     <section className="border-b border-slate-200 p-4 sm:p-5">
-      <h3 className="font-semibold text-slate-900">Orders waiting for delivery</h3>
-      <p className="text-sm text-slate-500">
+      <h3 className="section-title text-lg">Orders Waiting for Delivery</h3>
+      <p className="section-subtitle">
         Pick the submitted purchase order that matches the supplier’s delivery receipt, then enter
         what actually arrived. Draft orders must be submitted first under Purchase orders.
       </p>
@@ -833,8 +870,7 @@ function AwaitingDelivery({
               <p className="truncate font-semibold">{order.orderNumber}</p>
               <p className="truncate text-sm text-slate-600">{order.supplierName}</p>
               <p className="mt-1 text-xs text-slate-500">
-                {order.items.reduce((total, item) => total + remaining(item), 0)} unit(s) remaining
-                across {order.items.filter((item) => remaining(item) > 0).length} line(s)
+                {order.items.filter((item) => remaining(item) > 0).length} line(s) still to receive
                 {order.expectedAt ? ` · expected ${date.format(new Date(order.expectedAt))}` : ''}
               </p>
             </div>
@@ -845,7 +881,7 @@ function AwaitingDelivery({
                 className="primary-button h-9 text-xs"
                 onClick={() => receive(order)}
               >
-                <FiTruck /> Receive products
+                <FiTruck /> Receive Products
               </button>
             </div>
           </article>
@@ -907,21 +943,28 @@ function SupplierDialog({
   }
   const input = (
     key: keyof SupplierFormValues,
-    props: {
+    options: {
       placeholder?: string
       inputMode?: 'numeric' | 'tel'
       maxLength?: number
       type?: string
+      /** Blocks characters the field does not accept while typing. */
+      rule?: InputRule
     } = {}
-  ): ReactElement => (
-    <input
-      className="field"
-      autoComplete="off"
-      value={values[key] ?? ''}
-      onChange={(event) => set(key, event.target.value)}
-      {...props}
-    />
-  )
+  ): ReactElement => {
+    const { rule, ...rest } = options
+    return (
+      <input
+        className="field"
+        autoComplete="off"
+        value={values[key] ?? ''}
+        onChange={(event) =>
+          set(key, rule ? filterInput(rule, event.target.value).value : event.target.value)
+        }
+        {...rest}
+      />
+    )
+  }
   return (
     <Modal
       title={initial ? `Supplier: ${initial.organization}` : 'Add supplier'}
@@ -933,39 +976,67 @@ function SupplierDialog({
         <RequiredNote />
         <div className="grid gap-4 sm:grid-cols-2">
           <FormField label="Organization" required error={errors.organization}>
-            {input('organization', { placeholder: 'e.g. MedSupply Distribution' })}
+            {input('organization', {
+              placeholder: 'e.g. MedSupply Distribution',
+              maxLength: 120,
+              rule: 'catalogText'
+            })}
           </FormField>
-          <FormField label="Contact person" required error={errors.person}>
-            {input('person', { placeholder: 'e.g. Juan Dela Cruz' })}
+          <FormField label="Contact Person" required error={errors.person}>
+            {input('person', {
+              placeholder: 'e.g. Juan Dela Cruz',
+              maxLength: 120,
+              rule: 'personName'
+            })}
           </FormField>
           <FormField
-            label="Mobile phone"
+            label="Mobile Phone"
             required
-            hint="11 digits starting with 09."
+            hint="11 digits starting with 09. Numbers only."
             error={errors.phone}
           >
-            {input('phone', { placeholder: '09171234567', inputMode: 'numeric', maxLength: 11 })}
+            {input('phone', {
+              placeholder: '09171234567',
+              inputMode: 'numeric',
+              maxLength: 12,
+              rule: 'phone'
+            })}
           </FormField>
           <FormField label="Telephone" error={errors.telephone}>
-            {input('telephone', { placeholder: 'e.g. (082) 123 4567', inputMode: 'tel' })}
+            {input('telephone', {
+              placeholder: 'e.g. (082) 123 4567',
+              inputMode: 'tel',
+              maxLength: 20,
+              rule: 'telephone'
+            })}
           </FormField>
           <FormField label="Email" error={errors.email} className="sm:col-span-2">
-            {input('email', { type: 'email', placeholder: 'e.g. orders@supplier.ph' })}
+            {input('email', {
+              rule: 'email',
+              type: 'email',
+              placeholder: 'e.g. orders@supplier.ph',
+              maxLength: 254
+            })}
           </FormField>
           <FormField label="Street" required error={errors.street}>
-            {input('street', { placeholder: 'e.g. 123 Rizal Street' })}
+            {input('street', { placeholder: 'e.g. 123 Rizal Street', maxLength: 500 })}
           </FormField>
           <FormField label="City" required error={errors.city}>
-            {input('city', { placeholder: 'e.g. Davao City' })}
+            {input('city', { placeholder: 'e.g. Davao City', maxLength: 100 })}
           </FormField>
           <FormField label="Province" required error={errors.province}>
-            {input('province', { placeholder: 'e.g. Davao del Sur' })}
+            {input('province', { placeholder: 'e.g. Davao del Sur', maxLength: 100 })}
           </FormField>
-          <FormField label="Postal code" required hint="4 digits." error={errors.postalCode}>
-            {input('postalCode', { placeholder: '8000', inputMode: 'numeric', maxLength: 4 })}
+          <FormField label="Postal Code" required hint="4 digits." error={errors.postalCode}>
+            {input('postalCode', {
+              placeholder: '8000',
+              inputMode: 'numeric',
+              maxLength: 4,
+              rule: 'phone'
+            })}
           </FormField>
           <FormField label="Country" required error={errors.country}>
-            {input('country')}
+            {input('country', { maxLength: 100 })}
           </FormField>
         </div>
         <FormError message={error} />
@@ -985,6 +1056,7 @@ interface OrderLineDraft {
   drugId: string
   quantity: string
   unitCost: string
+  unit: StockUnit
 }
 
 function OrderDialog({
@@ -1003,16 +1075,43 @@ function OrderDialog({
   const [supplierId, setSupplierId] = useState(initial?.supplierId ?? 0)
   const [expectedAt, setExpectedAt] = useState(initial?.expectedAt?.slice(0, 10) ?? '')
   const [notes, setNotes] = useState(initial?.notes ?? '')
-  const [lines, setLines] = useState<OrderLineDraft[]>(() =>
-    initial
-      ? initial.items.map((item) => ({
-          key: nextLineKey++,
-          drugId: String(item.drugId),
-          quantity: String(item.quantity),
-          unitCost: String(item.unitCost)
-        }))
-      : [{ key: nextLineKey++, drugId: '', quantity: '', unitCost: '' }]
-  )
+  // Note: Orders are per box only. A draft saved earlier with piece lines is converted to boxes
+  // when the piece count fills whole boxes; otherwise its quantity is cleared to be re-entered.
+  const [converted, setConverted] = useState<string[]>([])
+  const [lines, setLines] = useState<OrderLineDraft[]>(() => {
+    const notes: string[] = []
+    const result: OrderLineDraft[] = initial
+      ? initial.items.map((item) => {
+          if (item.unit === 'box')
+            return {
+              key: nextLineKey++,
+              drugId: String(item.drugId),
+              quantity: String(item.quantity),
+              unitCost: String(item.unitCost),
+              unit: 'box'
+            }
+          const perBox = Math.max(
+            1,
+            products.find((product) => product.id === item.drugId)?.piecesPerBox ?? 1
+          )
+          const whole = item.quantity % perBox === 0
+          notes.push(
+            whole
+              ? `${item.productName}: ${item.quantity} pieces converted to ${item.quantity / perBox} box(es) of ${perBox}.`
+              : `${item.productName}: ${item.quantity} pieces do not fill whole boxes of ${perBox}. Enter the number of boxes.`
+          )
+          return {
+            key: nextLineKey++,
+            drugId: String(item.drugId),
+            quantity: whole ? String(item.quantity / perBox) : '',
+            unitCost: String(Number((item.unitCost * perBox).toFixed(2))),
+            unit: 'box'
+          }
+        })
+      : [{ key: nextLineKey++, drugId: '', quantity: '', unitCost: '', unit: 'box' }]
+    if (notes.length) queueMicrotask(() => setConverted(notes))
+    return result
+  })
   const [saving, setSaving] = useState(false)
   const [errors, setErrors] = useState<FieldErrors>({})
   const [error, setError] = useState('')
@@ -1048,7 +1147,8 @@ function OrderDialog({
         items: lines.map((line) => ({
           drugId: Number(line.drugId),
           quantity: toNumber(line.quantity),
-          unitCost: toNumber(line.unitCost)
+          unitCost: toNumber(line.unitCost),
+          unit: line.unit
         }))
       })
     } catch (cause) {
@@ -1107,14 +1207,14 @@ function OrderDialog({
             </select>
           </FormField>
           <FormField
-            label="Order date"
+            label="Order Date"
             showOptional={false}
             hint="Set automatically when the order is created."
           >
             <input type="date" className="field" value={minimumDate} readOnly />
           </FormField>
           <FormField
-            label="Expected delivery date"
+            label="Expected Delivery Date"
             hint="Cannot be before the order date."
             error={errors.expectedAt}
             className="sm:col-span-2 sm:max-w-[calc(50%-0.5rem)]"
@@ -1135,10 +1235,11 @@ function OrderDialog({
           <div className="mb-3 flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-slate-700">
-                Products ordered<span className="ml-0.5 text-rose-600">*</span>
+                Products Ordered<span className="required-mark">*</span>
               </p>
               <p className="text-xs text-slate-500">
-                Quantity in selling units, at least 1. Unit cost is the supplier price per unit.
+                Supplier orders are by the box only. Enter the number of boxes and the supplier’s
+                cost per box; stock is added in pieces when the boxes are received.
               </p>
             </div>
             <button
@@ -1147,19 +1248,35 @@ function OrderDialog({
               onClick={() =>
                 setLines((current) => [
                   ...current,
-                  { key: nextLineKey++, drugId: '', quantity: '', unitCost: '' }
+                  { key: nextLineKey++, drugId: '', quantity: '', unitCost: '', unit: 'box' }
                 ])
               }
               disabled={products.length === 0}
             >
-              <FiPlus /> Add product
+              <FiPlus /> Add Product
             </button>
           </div>
-          <div className="hidden grid-cols-[minmax(0,1fr)_7rem_8rem_7rem_2.5rem] gap-2 px-2 pb-1 text-xs font-medium text-slate-500 sm:grid">
+          {converted.length > 0 && (
+            <div
+              role="status"
+              className="mb-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900"
+            >
+              <p className="font-semibold">
+                This draft had lines ordered by the piece. Orders are now per box:
+              </p>
+              <ul className="mt-1 list-disc pl-5">
+                {converted.map((note) => (
+                  <li key={note}>{note}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          <div className="hidden grid-cols-[minmax(0,1fr)_6rem_7.5rem_8rem_7rem_2.5rem] gap-2 px-2 pb-1 text-xs font-semibold text-slate-600 sm:grid">
             <span>Product</span>
-            <span>Quantity</span>
-            <span>Unit cost (₱)</span>
-            <span className="text-right">Line total</span>
+            <span>Boxes</span>
+            <span>Box Size</span>
+            <span>Cost per Box (₱)</span>
+            <span className="text-right">Line Total</span>
             <span />
           </div>
           <div className="space-y-2">
@@ -1169,13 +1286,20 @@ function OrderDialog({
                 errors[`items.${index}.quantity`] ||
                 errors[`items.${index}.unitCost`]
               const lineTotal = Number(line.quantity) * Number(line.unitCost)
+              const piecesPerBox =
+                products.find((product) => String(product.id) === line.drugId)?.piecesPerBox ?? 1
               return (
                 <div key={line.key} className="rounded-md border border-slate-200 bg-white p-2">
-                  <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_7rem_8rem_7rem_2.5rem] sm:items-center">
+                  <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_6rem_7.5rem_8rem_7rem_2.5rem] sm:items-center">
                     <select
-                      className="field mt-0"
+                      className="field mt-0 truncate pr-8"
                       aria-label={`Product for line ${index + 1}`}
                       aria-invalid={errors[`items.${index}.drugId`] ? true : undefined}
+                      title={
+                        products.find((product) => String(product.id) === line.drugId)
+                          ? `${products.find((product) => String(product.id) === line.drugId)?.brandName}`
+                          : undefined
+                      }
                       value={line.drugId}
                       onChange={(event) => updateLine(index, 'drugId', event.target.value)}
                     >
@@ -1194,17 +1318,24 @@ function OrderDialog({
                       className="field mt-0"
                       aria-label={`Quantity for line ${index + 1}`}
                       aria-invalid={errors[`items.${index}.quantity`] ? true : undefined}
-                      placeholder="Qty"
+                      placeholder="Boxes"
                       value={line.quantity}
                       onChange={(event) => updateLine(index, 'quantity', event.target.value)}
                     />
+                    {/* Note: Plain text instead of a select, so the box size is never clipped. */}
+                    <span
+                      className="flex h-10 items-center rounded-md border border-slate-200 bg-slate-50 px-3 text-sm whitespace-nowrap text-slate-700"
+                      aria-label={`Box size for line ${index + 1}`}
+                    >
+                      {line.drugId ? `${Math.max(1, piecesPerBox)} pcs/box` : '—'}
+                    </span>
                     <input
                       min="0"
                       step="0.01"
                       type="number"
                       inputMode="decimal"
                       className="field mt-0"
-                      aria-label={`Unit cost for line ${index + 1}`}
+                      aria-label={`Cost per box for line ${index + 1}`}
                       aria-invalid={errors[`items.${index}.unitCost`] ? true : undefined}
                       placeholder="0.00"
                       value={line.unitCost}
@@ -1261,6 +1392,7 @@ interface ReceiveLine {
   receivedQuantity: string
   batchNumber: string
   sellPrice: string
+  boxSellPrice: string
   expiresAt: string
 }
 
@@ -1280,6 +1412,10 @@ function ReceiveDialog({
   const [requestId] = useState(() => crypto.randomUUID())
   const submitting = useRef(false)
   const [notes, setNotes] = useState('')
+  const { account } = useAccount()
+  const [deliveredByName, setDeliveredByName] = useState('')
+  // Note: Defaults to the person recording; change it when someone else checked the goods.
+  const [checkedByName, setCheckedByName] = useState(account?.fullName ?? '')
   const openItems = order.items.filter((item) => remaining(item) > 0)
   const [lines, setLines] = useState<Record<number, ReceiveLine>>(() =>
     Object.fromEntries(
@@ -1287,7 +1423,7 @@ function ReceiveDialog({
         // Note: Suggest the product's current selling price; staff confirm it per delivery.
         const latest = products
           .find((product) => product.id === item.drugId)
-          ?.batches.reduce<{ id: number; sellPrice: number } | null>(
+          ?.batches.reduce<{ id: number; sellPrice: number; boxSellPrice: number | null } | null>(
             (best, batch) => (!best || batch.id > best.id ? batch : best),
             null
           )
@@ -1297,6 +1433,7 @@ function ReceiveDialog({
             receivedQuantity: String(remaining(item)),
             batchNumber: '',
             sellPrice: latest ? String(latest.sellPrice) : '',
+            boxSellPrice: latest?.boxSellPrice != null ? String(latest.boxSellPrice) : '',
             expiresAt: ''
           }
         ]
@@ -1329,7 +1466,8 @@ function ReceiveDialog({
       [item.id]: {
         ...current[item.id],
         expiresAt: match.expiresAt.slice(0, 10),
-        sellPrice: String(match.sellPrice)
+        sellPrice: String(match.sellPrice),
+        boxSellPrice: match.boxSellPrice != null ? String(match.boxSellPrice) : ''
       }
     }))
     setErrors((current) => ({
@@ -1351,7 +1489,7 @@ function ReceiveDialog({
         nextErrors[`${item.id}.receivedQuantity`] = 'Enter a whole number of 0 or more.'
       else if (quantity > remaining(item))
         nextErrors[`${item.id}.receivedQuantity`] =
-          `Only ${remaining(item)} remaining. Over-receiving is not allowed.`
+          `Only ${units(remaining(item), item)} remaining. Over-receiving is not allowed.`
       if (quantity > 0) {
         // Note: Plain-language prompts for blanks; the shared schema still checks formats.
         const line = lines[item.id]
@@ -1360,9 +1498,18 @@ function ReceiveDialog({
         if (!line.expiresAt)
           nextErrors[`${item.id}.expiresAt`] = 'Enter the expiry date printed on the package.'
         if (!line.sellPrice.trim())
-          nextErrors[`${item.id}.sellPrice`] = 'Enter the selling price per unit.'
+          nextErrors[`${item.id}.sellPrice`] = 'Enter the selling price per piece.'
+        else if (Number(line.sellPrice) < item.unitCost / item.piecesPerUnit - 0.000001)
+          nextErrors[`${item.id}.sellPrice`] =
+            `The selling price cannot be lower than the unit cost of ${currency.format(item.unitCost / item.piecesPerUnit)} per piece.`
       }
     }
+    if (deliveredAt < order.orderedAt.slice(0, 10))
+      nextErrors.deliveredAt = 'The delivery date cannot be before the purchase order date.'
+    if (deliveredByName.trim().length < 2)
+      nextErrors.deliveredByName = "Enter the supplier's delivery person."
+    if (checkedByName.trim().length < 2)
+      nextErrors.checkedByName = 'Enter who checked the delivery.'
     const deliveredLines = delivered.filter((item) => Number(lines[item.id].receivedQuantity) > 0)
     if (Object.keys(nextErrors).length === 0 && deliveredLines.length === 0) {
       setError('Enter the delivered quantity for at least one product.')
@@ -1381,11 +1528,16 @@ function ReceiveDialog({
         requestId,
         deliveredAt,
         notes: notes.trim() || null,
+        deliveredByName: deliveredByName.trim(),
+        checkedByName: checkedByName.trim(),
         items: deliveredLines.map((item) => ({
           itemId: item.id,
           receivedQuantity: Number(lines[item.id].receivedQuantity),
           batchNumber: lines[item.id].batchNumber.trim(),
           sellPrice: toNumber(lines[item.id].sellPrice),
+          boxSellPrice: lines[item.id].boxSellPrice.trim()
+            ? toNumber(lines[item.id].boxSellPrice)
+            : null,
           expiresAt: lines[item.id].expiresAt
         }))
       })
@@ -1393,7 +1545,9 @@ function ReceiveDialog({
       const result = splitErrors(cause, 'Unable to record the delivery.', (path, field) => {
         const match = /^items\.(\d+)\.(\w+)$/.exec(path)
         if (match) return `${deliveredLines[Number(match[1])]?.id}.${match[2]}`
-        return field === 'deliveredAt' || field === 'notes' ? field : null
+        return ['deliveredAt', 'notes', 'deliveredByName', 'checkedByName'].includes(field)
+          ? field
+          : null
       })
       setErrors(result.fields)
       setError(result.form)
@@ -1402,11 +1556,21 @@ function ReceiveDialog({
     }
   }
 
-  const cell = (itemId: number, field: keyof ReceiveLine, control: ReactElement): ReactElement => (
+  const cell = (
+    itemId: number,
+    field: keyof ReceiveLine,
+    control: ReactElement,
+    warning?: string
+  ): ReactElement => (
     <td className="px-2 py-2 align-top">
       {control}
       {errors[`${itemId}.${field}`] && (
         <p className="mt-1 text-xs font-medium text-rose-700">{errors[`${itemId}.${field}`]}</p>
+      )}
+      {warning && (
+        <p role="status" className="mt-1 text-xs font-medium text-amber-700">
+          {warning}
+        </p>
       )}
     </td>
   )
@@ -1422,10 +1586,11 @@ function ReceiveDialog({
       <form noValidate onSubmit={(event) => void submit(event)} className="space-y-4">
         <RequiredNote />
         <div className="grid gap-4 sm:grid-cols-2">
-          <FormField label="Delivery date" required error={errors.deliveredAt}>
+          <FormField label="Delivery Date" required error={errors.deliveredAt}>
             <input
               type="date"
               className="field"
+              min={order.orderedAt.slice(0, 10)}
               max={localDate()}
               value={deliveredAt}
               onChange={(event) => {
@@ -1435,7 +1600,7 @@ function ReceiveDialog({
             />
           </FormField>
           <FormField
-            label="Delivery receipt no. / notes"
+            label="Delivery Receipt No. / Notes"
             hint="The supplier's DR number helps match the invoice later."
             error={errors.notes}
           >
@@ -1447,15 +1612,49 @@ function ReceiveDialog({
               onChange={(event) => setNotes(event.target.value)}
             />
           </FormField>
+          <FormField
+            label="Delivered By (Supplier)"
+            required
+            hint="The supplier's driver or delivery person who handed over the goods. Letters only, e.g. Juan Dela Cruz."
+            error={errors.deliveredByName}
+          >
+            <FilteredInput
+              rule="personName"
+              maxLength={120}
+              value={deliveredByName}
+              aria-invalid={errors.deliveredByName ? true : undefined}
+              onValueChange={(value) => {
+                setDeliveredByName(value)
+                setErrors((current) => ({ ...current, deliveredByName: '' }))
+              }}
+            />
+          </FormField>
+          <FormField
+            label="Checked By"
+            required
+            hint={`Who counted and inspected the goods. You (${account?.fullName ?? 'signed-in user'}) are recorded as the person entering this delivery.`}
+            error={errors.checkedByName}
+          >
+            <FilteredInput
+              rule="personName"
+              maxLength={120}
+              value={checkedByName}
+              aria-invalid={errors.checkedByName ? true : undefined}
+              onValueChange={(value) => {
+                setCheckedByName(value)
+                setErrors((current) => ({ ...current, checkedByName: '' }))
+              }}
+            />
+          </FormField>
         </div>
         <div className="overflow-x-auto rounded-md border border-slate-200">
-          <table className="w-full min-w-[880px] text-sm">
+          <table className="w-full min-w-[1000px] text-sm">
             <thead className="bg-slate-50 text-left text-xs text-slate-500">
               <tr>
                 <th className="px-3 py-2">Product</th>
                 <th className="px-2 py-2 text-right">Ordered</th>
-                <th className="px-2 py-2 text-right">Already received</th>
-                <th className="px-2 py-2 text-right">Still to receive</th>
+                <th className="px-2 py-2 text-right">Already Received</th>
+                <th className="px-2 py-2 text-right">Still to Receive</th>
                 <th className="bg-brand-50 text-brand-800 w-28 px-2 py-2">
                   Received now<span className="text-rose-600">*</span>
                 </th>
@@ -1466,28 +1665,40 @@ function ReceiveDialog({
                   Expiry date<span className="text-rose-600">*</span>
                 </th>
                 <th className="w-32 px-2 py-2">
-                  Selling price (₱)<span className="text-rose-600">*</span>
+                  Price per piece (₱)<span className="text-rose-600">*</span>
                 </th>
+                <th className="w-32 px-2 py-2">Price per Box (₱)</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {openItems.map((item) => {
                 const line = lines[item.id]
                 const active = Number(line.receivedQuantity) > 0
+                const piecesPerBox =
+                  products.find((product) => product.id === item.drugId)?.piecesPerBox ?? 1
                 return (
                   <tr key={item.id} className={active ? '' : 'bg-slate-50/70 text-slate-500'}>
                     <td className="px-3 py-2 align-top">
                       <p className="font-medium text-slate-800">{item.productName}</p>
                       <p className="text-xs text-slate-500">
-                        Unit cost {currency.format(item.unitCost)}
+                        Cost {currency.format(item.unitCost)} per {unitName(item)}
+                        {item.unit === 'box' &&
+                          ` (${currency.format(item.unitCost / item.piecesPerUnit)} per piece)`}
                       </p>
                     </td>
-                    <td className="px-2 py-2 text-right align-top tabular-nums">{item.quantity}</td>
                     <td className="px-2 py-2 text-right align-top tabular-nums">
-                      {item.receivedQuantity}
+                      {units(item.quantity, item)}
+                    </td>
+                    <td className="px-2 py-2 text-right align-top tabular-nums">
+                      {units(item.receivedQuantity, item)}
                     </td>
                     <td className="px-2 py-2 text-right align-top font-semibold tabular-nums">
-                      {remaining(item)}
+                      {units(remaining(item), item)}
+                      {item.unit === 'box' && (
+                        <p className="text-xs font-normal text-slate-500">
+                          = {remaining(item) * item.piecesPerUnit} pcs
+                        </p>
+                      )}
                     </td>
                     {cell(
                       item.id,
@@ -1520,7 +1731,9 @@ function ReceiveDialog({
                           aria-label={`Batch number for ${item.productName}`}
                           aria-invalid={errors[`${item.id}.batchNumber`] ? true : undefined}
                           value={line.batchNumber}
-                          onChange={(event) => chooseBatch(item, event.target.value)}
+                          onChange={(event) =>
+                            chooseBatch(item, filterInput('reference', event.target.value).value)
+                          }
                         />
                         <datalist id={`batches-${item.id}`}>
                           {existingBatches(item).map((batch) => (
@@ -1542,14 +1755,19 @@ function ReceiveDialog({
                         aria-invalid={errors[`${item.id}.expiresAt`] ? true : undefined}
                         value={line.expiresAt}
                         onChange={(event) => updateLine(item.id, 'expiresAt', event.target.value)}
-                      />
+                      />,
+                      line.expiresAt &&
+                        !errors[`${item.id}.expiresAt`] &&
+                        getExpiryStatus(line.expiresAt) === 'near-expiry'
+                        ? `Near expiry: within ${EXPIRY_WARNING_DAYS} days. Check before accepting.`
+                        : undefined
                     )}
                     {cell(
                       item.id,
                       'sellPrice',
                       <input
                         type="number"
-                        min="0"
+                        min={item.unitCost / item.piecesPerUnit}
                         step="0.01"
                         inputMode="decimal"
                         className="field mt-0"
@@ -1557,6 +1775,31 @@ function ReceiveDialog({
                         aria-invalid={errors[`${item.id}.sellPrice`] ? true : undefined}
                         value={line.sellPrice}
                         onChange={(event) => updateLine(item.id, 'sellPrice', event.target.value)}
+                      />
+                    )}
+                    {cell(
+                      item.id,
+                      'boxSellPrice',
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        inputMode="decimal"
+                        className="field mt-0"
+                        disabled={piecesPerBox <= 1}
+                        placeholder={
+                          piecesPerBox <= 1
+                            ? 'Piece only'
+                            : line.sellPrice
+                              ? (Number(line.sellPrice) * piecesPerBox).toFixed(2)
+                              : 'Optional'
+                        }
+                        aria-label={`Box selling price for ${item.productName}`}
+                        aria-invalid={errors[`${item.id}.boxSellPrice`] ? true : undefined}
+                        value={line.boxSellPrice}
+                        onChange={(event) =>
+                          updateLine(item.id, 'boxSellPrice', event.target.value)
+                        }
                       />
                     )}
                   </tr>
@@ -1567,12 +1810,14 @@ function ReceiveDialog({
         </div>
         <p className="text-xs text-slate-500">
           Set “Received now” to 0 for products that did not arrive; they stay open for a later
-          delivery. Batch number, expiry date and selling price are required for every product you
-          receive. Picking an existing batch of this product fills in its expiry date and price;
-          stock is added to that batch only when product, supplier, cost, price and expiry match.
+          delivery. Batch number, expiry date and price per piece are required for every product you
+          receive. Boxes received are added to stock as pieces. Leave the box price empty to sell a
+          box at the piece price × pieces per box. Picking an existing batch of this product fills
+          in its expiry date and price; stock is added to that batch only when product, supplier,
+          cost, price and expiry match.
         </p>
         <FormError message={error} />
-        <DialogActions close={close} saving={saving} label="Receive products" />
+        <DialogActions close={close} saving={saving} label="Receive Products" />
       </form>
     </Modal>
   )

@@ -108,27 +108,36 @@ if (!process.env.ADMIN_TEST_PHASE) {
       )
     } else {
       assert.equal((await ok(channels.setup.getStatus)).requiresSetup, true)
-      const admin = (
-        await ok(channels.setup.createMaster, {
-          fullName: 'Audit Admin',
-          username: 'audit-admin',
-          password: 'SecurePass123'
-        })
-      ).account
+      const master = {
+        fullName: 'Audit Admin',
+        email: 'audit.admin@example.com',
+        username: 'audit-admin',
+        password: 'SecurePass123'
+      }
+      // The master account needs an email so the account holder can be reached.
+      await bad(channels.setup.createMaster, { ...master, email: '' })
+      await bad(channels.setup.createMaster, { ...master, email: 'not-an-email' })
+      const admin = (await ok(channels.setup.createMaster, master)).account
       safe(admin)
+      assert.equal(admin.email, master.email)
       await bad(channels.setup.createMaster, {
         fullName: 'Second Admin',
+        email: 'second.admin@example.com',
         username: 'other-admin',
         password: 'SecurePass123'
       })
       const input = {
         fullName: 'Audit Staff',
+        email: 'audit.staff@example.com',
         username: 'audit-staff',
         password: 'SecurePass123',
         role: 'staff'
       }
+      await bad(channels.account.createOne, { ...input, email: undefined })
+      await bad(channels.account.createOne, { ...input, email: 'audit staff@example' })
       const staff = (await ok(channels.account.createOne, input)).account
       safe(staff)
+      assert.equal(staff.email, input.email)
       assert.ok(await verify((await account(input.username)).password, input.password))
       await bad(channels.account.createOne, input)
       await bad(channels.account.createOne, { ...input, username: 'different', role: 'superuser' })
@@ -381,8 +390,12 @@ if (!process.env.ADMIN_TEST_PHASE) {
       dialog.showMessageBox = async () => ({ response: 0 })
       assert.equal((await ok(channels.administration.restore)).cancelled, true)
       dialog.showMessageBox = async () => ({ response: 1 })
+      const { renderer } = await import('./inventory-test-electron.mjs')
+      const focusBefore = renderer.focusCount
       const restored = await ok(channels.administration.restore)
       assert.equal(restored.reloadRequired, true)
+      // Keyboard focus goes back to the page so the sign-in fields accept typing after restore.
+      assert.equal(renderer.focusCount, focusBefore + 1)
       assert.equal(state.session, undefined)
       await bad(channels.account.getAll)
       assert.equal((await account('audit-admin')).fullName, 'Audit Admin')
@@ -416,6 +429,56 @@ if (!process.env.ADMIN_TEST_PHASE) {
       await login()
       await ok(channels.procurement.openInvoice, invoice.id)
       await ok(channels.account.createOne, { ...input, username: 'post-restore' })
+      // A backup made before account emails and pharmacy clients existed is upgraded on restore,
+      // keeping its records; the backup folder itself is left unchanged.
+      const older = join(root, 'older-version-backup')
+      await cp(backup.directory, older, { recursive: true })
+      const olderDatabase = new SQLite(join(older, 'database.sqlite'))
+      olderDatabase.exec(
+        'ALTER TABLE accounts DROP COLUMN email; ALTER TABLE customers DROP COLUMN contact_person; ALTER TABLE customers DROP COLUMN client_type'
+      )
+      olderDatabase.close()
+      const olderManifest = JSON.parse(await readFile(join(older, 'manifest.json'), 'utf8'))
+      olderManifest.database = createHash('sha256')
+        .update(await readFile(join(older, 'database.sqlite')))
+        .digest('hex')
+      await writeFile(join(older, 'manifest.json'), JSON.stringify(olderManifest))
+      await assert.rejects(validateBackup(older))
+      assert.equal((await validateBackup(older, { allowUpgrade: true })).upgradeNeeded, true)
+      dialog.showOpenDialog = async () => ({
+        canceled: false,
+        filePaths: [join(older, 'manifest.json')]
+      })
+      await ok(channels.administration.restore)
+      assert.equal((await account('audit-admin')).fullName, 'Audit Admin')
+      assert.equal((await account('audit-admin')).email, null)
+      await assert.rejects(account('post-restore'))
+      const olderAfter = new SQLite(join(older, 'database.sqlite'), { readonly: true })
+      assert.equal(
+        olderAfter
+          .prepare(
+            "SELECT COUNT(*) AS count FROM pragma_table_info('accounts') WHERE name = 'email'"
+          )
+          .get().count,
+        0
+      )
+      olderAfter.close()
+      await login()
+      // Activity log filters: date range, result and area.
+      const { localDate } = await import('../src/shared/inventory.ts')
+      const today = localDate()
+      const filtered = async (filter) =>
+        (await ok(channels.administration.logs, { search: '', ...filter })).records
+      assert.ok((await filtered({ from: today, to: today })).length > 0)
+      assert.equal((await filtered({ from: '2000-01-01', to: '2000-01-02' })).length, 0)
+      const failures = await filtered({ result: 'failed' })
+      assert.ok(failures.length > 0)
+      assert.ok(failures.every((row) => row.result === 'failed'))
+      const firstPage = await ok(channels.administration.logs, { search: '' })
+      assert.ok(firstPage.resources.length > 0)
+      const area = firstPage.resources[0]
+      assert.ok((await filtered({ resource: area })).every((row) => row.resource === area))
+      await bad(channels.administration.logs, { search: '', from: today, to: '2000-01-01' })
       const audit = JSON.stringify(await db.selectFrom('auditLogs').selectAll().execute())
       for (const secret of ['SecurePass123', 'ChangedPass123', 'WrongPassword', '$argon2'])
         assert.equal(audit.includes(secret), false)

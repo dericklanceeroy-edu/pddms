@@ -26,6 +26,8 @@ pharmacy account.
 | Staff                  | `demo.staff`   | `DemoStaff#2026`   | Pharmacy operations: stock, expiry, receiving, suppliers  |
 | Cashier                | `demo.cashier` | `DemoCashier#2026` | Checkout: own sales today, low stock, start a sale        |
 
+Each demo account has a fictional `@example.com` email address.
+
 `demo.blocked` is a blocked Staff account with a random password. It shows the blocked state in
 User management and cannot sign in.
 
@@ -42,10 +44,10 @@ password hashing, stock, discount and payment rules apply.
   expired batch, a low-stock product and an out-of-stock product.
 - 2 supplier invoices with an attached sample PDF: one paid in full, one partly paid with the
   balance due in 5 days.
-- 4 customers: a walk-in customer, a Senior Citizen, a PWD customer and a clinic used for
-  wholesale.
+- 3 retail customers (a walk-in customer, a Senior Citizen and a PWD customer) and 1 pharmacy
+  client used for wholesale.
 - 4 retail sales by the cashier (with Senior Citizen and PWD discounts), 1 delivered wholesale
-  order with a partial payment and 1 pending wholesale order.
+  order with a partial payment and 1 wholesale order scheduled for delivery in 3 days.
 
 Dashboard figures are calculated live from these records; none are stored as fixed numbers.
 

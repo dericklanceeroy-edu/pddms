@@ -1,4 +1,5 @@
 import DashboardShell from '@renderer/components/dashboard/DashboardShell'
+import FilteredInput from '@renderer/components/ui/FilteredInput'
 import {
   getItemStock,
   getSellableStock,
@@ -8,6 +9,8 @@ import {
 import { useAccount } from '@renderer/hooks/useAccount'
 import { useProfileStore } from '@renderer/stores/useProfileStore'
 import { expiryLabels, getExpiryStatus } from '@shared/inventory'
+import { MAX_REORDER_LEVEL } from '@shared/schemas'
+import { piecesLabel, unitSellPrice } from '@shared/units'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { useState, type FormEvent, type ReactElement } from 'react'
 import { FiArrowLeft, FiEdit2, FiPackage, FiTrash2, FiX } from 'react-icons/fi'
@@ -25,6 +28,7 @@ const emptyItem: ItemProfile = {
   prescriptionRequired: false,
   controlled: false,
   reorderLevel: 0,
+  piecesPerBox: 1,
   genericEquivalentIds: [],
   batches: []
 }
@@ -50,7 +54,7 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
   if (isNew) {
     if (!canEdit)
       return (
-        <DashboardShell pageTitle="New product">
+        <DashboardShell pageTitle="New Product">
           You do not have permission to add products.
         </DashboardShell>
       )
@@ -82,7 +86,8 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
           formulation,
           prescriptionRequired: draft.prescriptionRequired,
           controlled: draft.controlled,
-          reorderLevel: draft.reorderLevel
+          reorderLevel: draft.reorderLevel,
+          piecesPerBox: draft.piecesPerBox
         })
         await navigate({ to: '/items/$itemId', params: { itemId: String(saved.id) } })
       } catch (cause) {
@@ -92,18 +97,18 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
     }
 
     return (
-      <DashboardShell pageTitle="New product">
+      <DashboardShell pageTitle="New Product">
         <div className="space-y-5 sm:space-y-6">
           <Link
             to="/inventory"
             className="hover:text-brand-700 inline-flex items-center gap-2 rounded-lg px-1 text-sm font-medium text-slate-500 transition"
           >
-            <FiArrowLeft /> Back to inventory
+            <FiArrowLeft /> Back to Inventory
           </Link>
           <form noValidate onSubmit={save} className="panel mx-auto max-w-3xl space-y-6 p-6 sm:p-7">
             <div>
               <p className="eyebrow">Inventory</p>
-              <h2 className="page-title mt-0.5">Add new product</h2>
+              <h2 className="page-title mt-0.5">Add New Product</h2>
               <p className="page-subtitle">
                 Create the product record first. Stock, batch numbers and expiry dates are added
                 when you receive products against a purchase order.
@@ -129,7 +134,7 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
                 disabled={isSaving}
                 className="primary-button disabled:cursor-wait disabled:opacity-60"
               >
-                {isSaving ? 'Adding product…' : 'Add product'}
+                {isSaving ? 'Adding Product…' : 'Add Product'}
               </button>
             </div>
           </form>
@@ -180,7 +185,8 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
         formulation,
         prescriptionRequired: draft.prescriptionRequired,
         controlled: draft.controlled,
-        reorderLevel: draft.reorderLevel
+        reorderLevel: draft.reorderLevel,
+        piecesPerBox: draft.piecesPerBox
       })
       setDraft({ ...saved, batches: item.batches })
       setIsEditing(false)
@@ -192,13 +198,13 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
   }
 
   return (
-    <DashboardShell pageTitle="Item profile">
+    <DashboardShell pageTitle="Item Profile">
       <div className="space-y-5 sm:space-y-6">
         <Link
           to="/inventory"
           className="hover:text-brand-700 inline-flex items-center gap-2 rounded-lg px-1 text-sm font-medium text-slate-500 transition"
         >
-          <FiArrowLeft /> Back to inventory
+          <FiArrowLeft /> Back to Inventory
         </Link>
         <section className="panel relative overflow-hidden p-6 sm:p-7">
           <div className="relative flex flex-col justify-between gap-5 md:flex-row">
@@ -241,7 +247,7 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
                   }}
                   className="secondary-button whitespace-nowrap"
                 >
-                  <FiEdit2 /> Edit product
+                  <FiEdit2 /> Edit Product
                 </button>
               )}
               {account?.role === 'master' && (
@@ -250,7 +256,7 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
                   onClick={() => setConfirmRemove(true)}
                   className="danger-button whitespace-nowrap"
                 >
-                  <FiTrash2 /> Remove product
+                  <FiTrash2 /> Remove Product
                 </button>
               )}
             </div>
@@ -266,7 +272,7 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
               <div>
                 <p className="eyebrow">Item details</p>
                 <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">
-                  Edit product
+                  Edit Product
                 </h2>
                 <p className="mt-3 text-sm leading-6 text-slate-500">
                   Update catalog information without changing stock batch history.
@@ -302,26 +308,29 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
                 disabled={isSaving}
                 className="primary-button disabled:cursor-wait disabled:opacity-60"
               >
-                {isSaving ? 'Saving…' : 'Save changes'}
+                {isSaving ? 'Saving…' : 'Save Changes'}
               </button>
             </div>
           </form>
         )}
         <section className="grid gap-5 md:grid-cols-3">
           <Metric
-            label="Stock on hand / sellable"
-            value={`${stock} / ${getSellableStock(item)} units`}
+            label="Stock on Hand / Sellable"
+            value={`${piecesLabel(stock, item.piecesPerBox)} / ${getSellableStock(item)} sellable`}
           />
-          <Metric label="Reorder level" value={`${item.reorderLevel} units`} />
           <Metric
-            label="Current price"
+            label="Reorder Level"
+            value={`${item.reorderLevel} pieces${item.piecesPerBox > 1 ? ` · ${item.piecesPerBox} pieces per box` : ' · sold by the piece'}`}
+          />
+          <Metric
+            label="Current Price"
             value={item.batches[0] ? currency.format(item.batches[0].sellPrice) : 'Unavailable'}
           />
         </section>
         <section className="grid gap-5 xl:grid-cols-[minmax(0,1.6fr)_minmax(18rem,1fr)]">
           <div className="panel min-w-0 overflow-hidden">
             <Header
-              title="Stock batches"
+              title="Stock Batches"
               description="Stock received through supplier deliveries. Expired batches are not sellable."
             />
             <div className="overflow-x-auto">
@@ -343,15 +352,30 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
                         {batch.receipts.map((receipt, index) => (
                           <p key={index} className="mt-1 text-xs font-normal text-slate-500">
                             {receipt.deliveredAt} · {receipt.orderNumber} · {receipt.quantity}{' '}
-                            received
+                            pieces received
                           </p>
                         ))}
                       </td>
                       <td className="max-w-48 px-5 py-4 break-words text-slate-500">
                         {batch.supplier}
                       </td>
-                      <td className="px-5 py-4">{batch.stock}</td>
-                      <td className="px-5 py-4">{currency.format(batch.sellPrice)}</td>
+                      <td className="px-5 py-4">{piecesLabel(batch.stock, item.piecesPerBox)}</td>
+                      <td className="px-5 py-4">
+                        {currency.format(batch.sellPrice)} / piece
+                        {item.piecesPerBox > 1 && (
+                          <p className="text-xs text-slate-500">
+                            {currency.format(
+                              unitSellPrice(
+                                'box',
+                                batch.sellPrice,
+                                batch.boxSellPrice,
+                                item.piecesPerBox
+                              )
+                            )}{' '}
+                            / box
+                          </p>
+                        )}
+                      </td>
                       <td className="px-5 py-4">
                         {getExpiryStatus(batch.expiresAt) === 'unknown'
                           ? batch.expiresAt
@@ -373,7 +397,7 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
           </div>
           <div className="panel min-w-0 overflow-hidden">
             <Header
-              title="Generic equivalents"
+              title="Generic Equivalents"
               description="Products sharing the same generic formulation."
             />
             <div className="divide-y divide-slate-100">
@@ -401,7 +425,7 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
         </section>
         {canEdit && (
           <Link to="/suppliers" search={{ tab: 'receiving' }} className="secondary-button w-fit">
-            Receive stock for this product
+            Receive Stock for This Product
           </Link>
         )}
         {account?.role === 'master' && <StockOutPanel item={item} />}
@@ -410,7 +434,7 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
         <ConfirmationDialog
           title="Remove product?"
           description={`${item.brandName} will be removed from the active product catalog.`}
-          confirmLabel={isRemoving ? 'Removing…' : 'Remove product'}
+          confirmLabel={isRemoving ? 'Removing…' : 'Remove Product'}
           disabled={isRemoving}
           close={() => setConfirmRemove(false)}
           confirm={() => void remove()}
@@ -431,9 +455,9 @@ function Field({
   children: ReactElement
 }): ReactElement {
   return (
-    <label className="block text-sm font-medium text-slate-700">
+    <label className="field-label">
       {label}
-      <span className="ml-0.5 text-rose-600" aria-hidden="true">
+      <span className="required-mark" aria-hidden="true">
         *
       </span>
       <span className="mt-1.5 block font-normal">{children}</span>
@@ -448,6 +472,7 @@ type EditableProductField =
   | 'category'
   | 'formulation'
   | 'reorderLevel'
+  | 'piecesPerBox'
   | 'prescriptionRequired'
   | 'controlled'
 
@@ -460,47 +485,52 @@ function ProductFields({
 }): ReactElement {
   return (
     <div className="grid gap-5 sm:grid-cols-2">
-      <Field label="Brand name">
-        <input
+      <Field label="Brand Name">
+        <FilteredInput
+          rule="catalogText"
+          maxLength={120}
           required
-          className="field"
           placeholder={'e.g. Biogesic'}
           value={draft.brandName}
-          onChange={(event) => update('brandName', event.target.value)}
+          onValueChange={(value) => update('brandName', value)}
         />
       </Field>
-      <Field label="Generic name">
-        <input
+      <Field label="Generic Name">
+        <FilteredInput
+          rule="catalogText"
+          maxLength={120}
           required
-          className="field"
           placeholder={'e.g. Paracetamol'}
           value={draft.genericName}
-          onChange={(event) => update('genericName', event.target.value)}
+          onValueChange={(value) => update('genericName', value)}
         />
       </Field>
       <Field label="Category">
-        <input
+        <FilteredInput
+          rule="catalogText"
+          maxLength={120}
           required
-          className="field"
           placeholder={'e.g. Analgesics'}
           value={draft.category}
-          onChange={(event) => update('category', event.target.value)}
+          onValueChange={(value) => update('category', value)}
         />
       </Field>
       <Field label="Formulation">
-        <input
+        <FilteredInput
+          rule="catalogText"
+          maxLength={120}
           required
-          className="field"
           placeholder="e.g. 500 mg tablet"
           value={draft.formulation}
-          onChange={(event) => update('formulation', event.target.value)}
+          onValueChange={(value) => update('formulation', value)}
         />
       </Field>
-      <Field label="Reorder level" hint="A low-stock alert appears when stock falls to this level.">
+      <Field label="Reorder Level" hint="A low-stock alert appears when stock falls to this level.">
         <input
           required
           type="number"
           min="0"
+          max={MAX_REORDER_LEVEL}
           step="1"
           className="field"
           placeholder={'e.g. 10'}
@@ -513,9 +543,30 @@ function ProductFields({
           }
         />
       </Field>
+      <Field
+        label="Pieces Per Box"
+        hint="Purchase and wholesale orders are by the box. Use 1 if one box (or bottle) holds one piece. Stock is always counted in pieces."
+      >
+        <input
+          required
+          type="number"
+          min="1"
+          max="10000"
+          step="1"
+          className="field"
+          placeholder={'e.g. 100'}
+          value={draft.piecesPerBox}
+          onChange={(event) =>
+            update(
+              'piecesPerBox',
+              event.target.value === '' ? Number.NaN : Number(event.target.value)
+            )
+          }
+        />
+      </Field>
       <section className="rounded-md border border-slate-200 bg-slate-50 p-4 sm:col-span-2">
         <p className="text-sm font-medium text-slate-700">
-          Dispensing controls <span className="text-xs font-normal text-slate-400">(optional)</span>
+          Dispensing Controls <span className="text-xs font-normal text-slate-400">(optional)</span>
         </p>
         <div className="mt-3 flex flex-wrap gap-x-6 gap-y-3">
           <label className="flex items-center gap-3 text-sm text-slate-700">
@@ -525,7 +576,7 @@ function ProductFields({
               onChange={(event) => update('prescriptionRequired', event.target.checked)}
               className="text-brand-700 size-4 rounded border-slate-300"
             />
-            Prescription required
+            Prescription Required
           </label>
           <label className="flex items-center gap-3 text-sm text-slate-700">
             <input
@@ -534,7 +585,7 @@ function ProductFields({
               onChange={(event) => update('controlled', event.target.checked)}
               className="text-brand-700 size-4 rounded border-slate-300"
             />
-            Controlled medicine
+            Controlled Medicine
           </label>
         </div>
       </section>
@@ -602,7 +653,7 @@ function Metric({ label, value }: { label: string; value: string }): ReactElemen
 function Header({ title, description }: { title: string; description: string }): ReactElement {
   return (
     <header className="border-b border-slate-200 px-5 py-5 sm:px-6">
-      <h3 className="font-semibold">{title}</h3>
+      <h3 className="section-title text-lg">{title}</h3>
       <p className="mt-1 text-sm text-slate-500">{description}</p>
     </header>
   )

@@ -20,7 +20,9 @@ export async function findAll(cashierId?: number): Promise<
       'sales.createdAt',
       'sales.totalCents'
     ])
-    .select(({ fn }) => fn.sum<number>('saleItems.quantity').as('itemCount'))
+    .select(({ fn }) =>
+      fn.sum<number>(sql<number>`sale_items.quantity * sale_items.pieces_per_unit`).as('itemCount')
+    )
     .where('sales.customerId', 'is not', null)
     .groupBy('sales.id')
     .orderBy('sales.id', 'desc')

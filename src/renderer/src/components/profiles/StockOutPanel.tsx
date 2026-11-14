@@ -1,3 +1,5 @@
+import FormField from '@renderer/components/ui/FormField'
+import { splitErrors, type FieldErrors } from '@renderer/components/ui/fieldErrors'
 import type { ItemProfile } from '@renderer/data/profiles'
 import { getStockOuts, recordStockOut } from '@renderer/services/inventory'
 import { useProfileStore } from '@renderer/stores/useProfileStore'
@@ -11,6 +13,7 @@ export default function StockOutPanel({ item }: { item: ItemProfile }): ReactEle
   const [records, setRecords] = useState<StockOutRecord[]>([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
   const [message, setMessage] = useState('')
   const loadItems = useProfileStore((state) => state.loadItems)
   useEffect(() => {
@@ -31,7 +34,14 @@ export default function StockOutPanel({ item }: { item: ItemProfile }): ReactEle
     event.preventDefault()
     setSaving(true)
     setError('')
+    setFieldErrors({})
     setMessage('')
+    const stock = item.batches.find((batch) => batch.id === Number(batchId))?.stock
+    if (stock !== undefined && Number(quantity) > stock) {
+      setFieldErrors({ quantity: `Only ${stock} unit(s) are on hand in this batch.` })
+      setSaving(false)
+      return
+    }
     try {
       await recordStockOut({ batchId: Number(batchId), quantity: Number(quantity), reason })
       setBatchId('')
@@ -41,7 +51,9 @@ export default function StockOutPanel({ item }: { item: ItemProfile }): ReactEle
       await loadItems(true)
       setRecords(await getStockOuts(item.id))
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Unable to record stock-out.')
+      const { fields, form } = splitErrors(cause, 'Unable to record stock-out.')
+      setFieldErrors(fields)
+      setError(form)
     } finally {
       setSaving(false)
     }
@@ -49,13 +61,16 @@ export default function StockOutPanel({ item }: { item: ItemProfile }): ReactEle
 
   return (
     <section className="panel min-w-0 space-y-4 p-5">
-      <h3 className="font-semibold">Stock-out adjustments</h3>
+      <h3 className="section-title text-lg">Stock-Out Adjustments</h3>
       <p className="text-sm text-slate-500">
         Record damaged, expired, returned, or missing units removed from a batch.
       </p>
-      <form onSubmit={(event) => void submit(event)} className="grid gap-4 sm:grid-cols-2">
-        <label className="min-w-0 text-sm font-medium">
-          Batch
+      <form
+        noValidate
+        onSubmit={(event) => void submit(event)}
+        className="grid gap-4 sm:grid-cols-2"
+      >
+        <FormField label="Batch" required error={fieldErrors.batchId}>
           <select
             className="field w-full"
             required
@@ -71,9 +86,8 @@ export default function StockOutPanel({ item }: { item: ItemProfile }): ReactEle
                 </option>
               ))}
           </select>
-        </label>
-        <label className="text-sm font-medium">
-          Units to remove
+        </FormField>
+        <FormField label="Units to Remove" required error={fieldErrors.quantity}>
           <input
             className="field"
             required
@@ -84,9 +98,8 @@ export default function StockOutPanel({ item }: { item: ItemProfile }): ReactEle
             value={quantity}
             onChange={(event) => setQuantity(event.target.value)}
           />
-        </label>
-        <label className="text-sm font-medium sm:col-span-2">
-          Reason
+        </FormField>
+        <FormField label="Reason" required error={fieldErrors.reason} className="sm:col-span-2">
           <textarea
             className="field"
             required
@@ -95,9 +108,9 @@ export default function StockOutPanel({ item }: { item: ItemProfile }): ReactEle
             value={reason}
             onChange={(event) => setReason(event.target.value)}
           />
-        </label>
+        </FormField>
         <button className="primary-button w-fit" disabled={saving || !batchId}>
-          {saving ? 'Saving…' : 'Record stock-out'}
+          {saving ? 'Saving…' : 'Record Stock-Out'}
         </button>
       </form>
       {error && (

@@ -28,26 +28,26 @@ interface QuickAction {
 const actions: Record<DashboardView, QuickAction[]> = {
   admin: [
     {
-      label: 'Manage users',
+      label: 'Manage Users',
       description: 'Create, block or unblock',
       to: '/users',
       icon: FiUsers
     },
     {
-      label: 'Open reports',
+      label: 'Open Reports',
       description: 'Sales, stock and receiving',
       to: '/reports',
       icon: FiBarChart2
     },
     {
-      label: 'Create purchase order',
+      label: 'Create Purchase Order',
       description: 'Order stock from a supplier',
       to: '/suppliers',
       tab: 'orders',
       icon: FiClipboard
     },
     {
-      label: 'Receive products',
+      label: 'Receive Products',
       description: 'Record batches and expiry dates',
       to: '/suppliers',
       tab: 'receiving',
@@ -56,27 +56,27 @@ const actions: Record<DashboardView, QuickAction[]> = {
   ],
   staff: [
     {
-      label: 'Look up a product',
+      label: 'Look Up a Product',
       description: 'Stock, batches and expiry dates',
       to: '/inventory',
       icon: FiSearch
     },
     {
-      label: 'Receive products',
+      label: 'Receive Products',
       description: 'Record batches and expiry dates',
       to: '/suppliers',
       tab: 'receiving',
       icon: FiPackage
     },
     {
-      label: 'Create purchase order',
+      label: 'Create Purchase Order',
       description: 'Order stock from a supplier',
       to: '/suppliers',
       tab: 'orders',
       icon: FiClipboard
     },
     {
-      label: 'Record supplier payment',
+      label: 'Record Supplier Payment',
       description: 'Invoices, balances and payments',
       to: '/suppliers',
       tab: 'invoices',
@@ -85,13 +85,13 @@ const actions: Record<DashboardView, QuickAction[]> = {
   ],
   cashier: [
     {
-      label: 'Start a sale',
+      label: 'Start a Sale',
       description: 'Search products, check stock, take payment',
       to: '/sales',
       icon: FiShoppingCart
     },
     {
-      label: 'Find or add a customer',
+      label: 'Find or Add a Customer',
       description: 'Senior Citizen and PWD records',
       to: '/customers',
       icon: FiUserPlus

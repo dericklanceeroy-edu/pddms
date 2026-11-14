@@ -7,6 +7,7 @@ import type {
   SupplierInvoiceWithDetails,
   SupplierPaymentWithDetails
 } from '@shared/types'
+import type { StockUnit } from '@shared/units'
 
 export type SupplierFormValues = Omit<Supplier, 'id'>
 
@@ -14,6 +15,8 @@ export interface PurchaseOrderLineDraft {
   drugId: number
   quantity: number
   unitCost: number
+  /** Quantity and unit cost are per box for box lines. */
+  unit: StockUnit
 }
 
 export interface PurchaseOrderFormValues {
@@ -27,11 +30,14 @@ export interface DeliveryFormValues {
   requestId: string
   deliveredAt: string
   notes: string | null
+  deliveredByName: string
+  checkedByName: string
   items: Array<{
     itemId: number
     receivedQuantity: number
     batchNumber: string
     sellPrice: number
+    boxSellPrice: number | null
     expiresAt: string
   }>
 }
@@ -116,8 +122,8 @@ export type ProcurementTab = 'suppliers' | 'orders' | 'receiving' | 'invoices' |
 
 export const procurementTabs: Array<{ id: ProcurementTab; label: string }> = [
   { id: 'suppliers', label: 'Suppliers' },
-  { id: 'orders', label: 'Purchase orders' },
+  { id: 'orders', label: 'Purchase Orders' },
   { id: 'receiving', label: 'Receiving' },
-  { id: 'invoices', label: 'Invoices & payments' },
+  { id: 'invoices', label: 'Invoices & Payments' },
   { id: 'history', label: 'History' }
 ]

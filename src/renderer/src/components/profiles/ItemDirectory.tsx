@@ -24,18 +24,20 @@ import InventoryReport from './InventoryReport'
 
 const expiryDate = new Intl.DateTimeFormat('en-PH', { dateStyle: 'medium' })
 
-type StockFilter = 'all' | 'low-stock' | 'out-of-stock' | 'near-expiry' | 'expired'
+type StockFilter = 'all' | 'attention' | 'low-stock' | 'out-of-stock' | 'near-expiry' | 'expired'
 
 const stockFilters: Array<{ id: StockFilter; label: string }> = [
-  { id: 'all', label: 'All products' },
-  { id: 'low-stock', label: 'Low stock' },
-  { id: 'out-of-stock', label: 'Out of stock' },
-  { id: 'near-expiry', label: 'Expiring soon' },
-  { id: 'expired', label: 'Expired stock on hand' }
+  { id: 'all', label: 'All Products' },
+  { id: 'attention', label: 'Needs Attention' },
+  { id: 'low-stock', label: 'Low Stock' },
+  { id: 'out-of-stock', label: 'Out of Stock' },
+  { id: 'near-expiry', label: 'Expiring Soon' },
+  { id: 'expired', label: 'Expired Stock on Hand' }
 ]
 
 function matchesFilter(item: ItemProfile, filter: StockFilter): boolean {
   if (filter === 'all') return true
+  if (filter === 'attention') return getStockStatus(item) !== 'in-stock'
   if (filter === 'low-stock' || filter === 'out-of-stock') return getStockStatus(item) === filter
   return item.batches.some(
     (batch) => batch.stock > 0 && getExpiryStatus(batch.expiresAt) === filter
@@ -43,9 +45,9 @@ function matchesFilter(item: ItemProfile, filter: StockFilter): boolean {
 }
 
 const statusLabels = {
-  'in-stock': 'In stock',
-  'low-stock': 'Low stock',
-  'out-of-stock': 'Out of stock'
+  'in-stock': 'In Stock',
+  'low-stock': 'Low Stock',
+  'out-of-stock': 'Out of Stock'
 }
 
 export default function ItemDirectory(): ReactElement {
@@ -116,7 +118,7 @@ export default function ItemDirectory(): ReactElement {
             <div className="max-w-2xl min-w-0">
               <p className="eyebrow">Stock & purchasing</p>
               <h2 className="page-title mt-0.5">
-                Inventory & expiry ({inventoryMetrics.products})
+                Inventory &amp; Expiry ({inventoryMetrics.products})
               </h2>
               <p className="page-subtitle">
                 Every medicine with its stock on hand and nearest expiry. Open a product to see its
@@ -128,7 +130,7 @@ export default function ItemDirectory(): ReactElement {
                 type="button"
                 className="icon-button"
                 aria-label="Refresh inventory"
-                title="Refresh inventory"
+                title="Refresh Inventory"
                 disabled={isLoading}
                 onClick={() => void loadItems(true)}
               >
@@ -142,7 +144,7 @@ export default function ItemDirectory(): ReactElement {
                   void loadItems(true)
                 }}
               >
-                {report ? 'Hide report' : 'Inventory report'}
+                {report ? 'Hide Report' : 'Inventory Report'}
               </button>
               {account?.role === 'master' && (
                 <button
@@ -167,7 +169,7 @@ export default function ItemDirectory(): ReactElement {
               )}
               {(account?.role === 'master' || account?.role === 'staff') && (
                 <Link to="/items/$itemId" params={{ itemId: 'new' }} className="primary-button">
-                  <FiPlus /> Add product
+                  <FiPlus /> Add Product
                 </Link>
               )}
             </div>
@@ -188,7 +190,7 @@ export default function ItemDirectory(): ReactElement {
           <section className="panel min-w-0 overflow-hidden">
             <header className="flex flex-col gap-4 border-b border-slate-200 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
               <div>
-                <h3 className="font-semibold">List of medicines</h3>
+                <h3 className="section-title">List of Medicines</h3>
                 <p className="mt-1 text-sm text-slate-500">
                   Search or filter, then open a product to see its batches and expiry dates.
                 </p>
@@ -253,9 +255,11 @@ export default function ItemDirectory(): ReactElement {
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="truncate font-semibold text-slate-900">{item.brandName}</h3>
+                        <h4 className="truncate text-base font-semibold text-slate-900">
+                          {item.brandName}
+                        </h4>
                         <span
-                          className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${status === 'in-stock' ? 'border-emerald-100 bg-emerald-50/80 text-emerald-700' : status === 'low-stock' ? 'border-amber-100 bg-amber-50/80 text-amber-700' : 'border-rose-100 bg-rose-50/80 text-rose-700'}`}
+                          className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${status === 'in-stock' ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : status === 'low-stock' ? 'border-amber-300 bg-amber-50 text-amber-800' : 'border-rose-300 bg-rose-50 text-rose-800'}`}
                         >
                           {statusLabels[status]}
                         </span>
@@ -286,7 +290,11 @@ export default function ItemDirectory(): ReactElement {
                       </p>
                     </div>
                     <div className="hidden text-right sm:block">
-                      <p className="font-semibold text-slate-900">{stock} on hand</p>
+                      <p
+                        className={`font-semibold ${status === 'in-stock' ? 'text-slate-900' : status === 'low-stock' ? 'text-amber-800' : 'text-rose-700'}`}
+                      >
+                        {stock} on hand
+                      </p>
                       <p className="text-xs text-slate-500">{getSellableStock(item)} sellable</p>
                       <p className="mt-1 text-xs text-slate-500">
                         {item.batches.length} recorded batch
@@ -322,22 +330,36 @@ export default function ItemDirectory(): ReactElement {
 
           <aside className="grid gap-5 sm:grid-cols-3 xl:grid-cols-1">
             <InventoryMetric
+              icon={<FiAlertTriangle />}
+              label="Needs Attention"
+              value={String(inventoryMetrics.lowStock + inventoryMetrics.outOfStock)}
+              description={`${inventoryMetrics.lowStock} low stock · ${inventoryMetrics.outOfStock} out of stock`}
+              tone={
+                inventoryMetrics.lowStock + inventoryMetrics.outOfStock > 0 ? 'danger' : 'default'
+              }
+              action={
+                inventoryMetrics.lowStock + inventoryMetrics.outOfStock > 0 ? (
+                  <button
+                    type="button"
+                    className="text-sm font-semibold text-rose-800 underline underline-offset-2"
+                    onClick={() => setFilter('attention')}
+                  >
+                    Show These Products
+                  </button>
+                ) : undefined
+              }
+            />
+            <InventoryMetric
               icon={<FiArchive />}
-              label="Catalog products"
+              label="Catalog Products"
               value={String(inventoryMetrics.products)}
               description="Active medicine profiles"
             />
             <InventoryMetric
               icon={<FiLayers />}
-              label="Units on hand"
+              label="Units on Hand"
               value={String(inventoryMetrics.availableUnits)}
               description="Includes expired stock awaiting removal"
-            />
-            <InventoryMetric
-              icon={<FiAlertTriangle />}
-              label="Needs attention"
-              value={String(inventoryMetrics.lowStock + inventoryMetrics.outOfStock)}
-              description={`${inventoryMetrics.lowStock} low stock · ${inventoryMetrics.outOfStock} out of stock`}
             />
           </aside>
         </div>
@@ -350,22 +372,41 @@ function InventoryMetric({
   icon,
   label,
   value,
-  description
+  description,
+  tone = 'default',
+  action
 }: {
   icon: ReactElement
   label: string
   value: string
   description: string
+  /** `danger` marks a count that needs action: red border, icon and number. */
+  tone?: 'default' | 'danger'
+  action?: ReactElement
 }): ReactElement {
+  const danger = tone === 'danger'
   return (
-    <section className="panel p-5">
+    <section
+      className={`panel p-5 ${danger ? 'border-rose-300 bg-rose-50/60 ring-1 ring-rose-200' : ''}`}
+    >
       <div className="relative">
-        <div className="text-brand-700 grid size-10 place-items-center rounded-lg border border-slate-200 bg-white shadow-sm">
+        <div
+          className={`grid size-10 place-items-center rounded-lg border shadow-sm ${danger ? 'border-rose-200 bg-rose-100 text-rose-700' : 'text-brand-700 border-slate-200 bg-white'}`}
+        >
           {icon}
         </div>
-        <p className="mt-5 text-sm text-slate-500">{label}</p>
-        <p className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">{value}</p>
-        <p className="mt-2 text-xs leading-5 text-slate-500">{description}</p>
+        <p className={`mt-5 text-sm font-semibold ${danger ? 'text-rose-800' : 'text-slate-600'}`}>
+          {label}
+        </p>
+        <p
+          className={`mt-1 text-3xl font-bold tracking-tight ${danger ? 'text-rose-700' : 'text-slate-950'}`}
+        >
+          {value}
+        </p>
+        <p className={`mt-2 text-xs leading-5 ${danger ? 'text-rose-800' : 'text-slate-500'}`}>
+          {description}
+        </p>
+        {action && <div className="mt-2">{action}</div>}
       </div>
     </section>
   )

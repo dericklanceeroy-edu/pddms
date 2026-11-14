@@ -80,9 +80,11 @@ export function useUserManagement(): UserManagementState {
   }
 
   const updateUser = async (user: ManagedUser, values: UserUpdateValues): Promise<void> => {
-    const { password, ...accountValues } = values
+    const { password, email, ...accountValues } = values
+    // Note: Accounts created before emails were collected may stay without one.
     await updateAccount(user.id, {
       ...accountValues,
+      ...(email.trim() ? { email } : {}),
       ...(password ? { password } : {})
     })
     await load()

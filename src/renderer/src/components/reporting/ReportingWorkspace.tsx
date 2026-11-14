@@ -3,6 +3,7 @@ import { exportReport, exportReportPdf, getReport } from '@renderer/services/rep
 import { localDate } from '@shared/inventory'
 import {
   reportTitles,
+  titleCase,
   type BusinessReport,
   type ReportColumn,
   type ReportFilter,
@@ -108,46 +109,72 @@ export default function ReportingWorkspace(): ReactElement {
     }
   }
   const currentOnly = filter.kind === 'inventory' || filter.kind === 'overdue'
+  const apply = (): void => {
+    if (!currentOnly && filter.from > filter.to) {
+      setError('The “From” date must be on or before the “Through” date.')
+      return
+    }
+    void run(async () => setReport(await getReport({ ...filter, page: 1 })))
+  }
+  const cleared = initialFilter()
+  const isCleared =
+    filter.kind === cleared.kind &&
+    filter.from === cleared.from &&
+    filter.to === cleared.to &&
+    !filter.search
   return (
-    <DashboardShell pageTitle="Business reports">
+    <DashboardShell pageTitle="Business Reports">
       <div className="space-y-5">
         <header className="page-intro">
           <p className="eyebrow">Business</p>
           <h2 className="page-title mt-0.5">Reports</h2>
           <p className="page-subtitle">
-            Live database reports. Choose the same start/end date for a daily report. Amounts are in
-            Philippine pesos.
+            Live database reports. Choose the same start and end date for a daily report. Amounts
+            are in Philippine pesos.
           </p>
         </header>
-        <section className="panel flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-start gap-3">
-            <span className="bg-brand-50 text-brand-700 grid size-10 shrink-0 place-items-center rounded-lg">
-              <FiPackage aria-hidden="true" />
-            </span>
-            <div>
-              <h3 className="font-semibold">Receiving reports</h3>
-              <p className="text-sm text-slate-500">
-                Deliveries received against purchase orders, with batch numbers and expiry dates.
-                They open in Suppliers & purchasing, where stock is received.
-              </p>
-            </div>
-          </div>
-          <Link to="/suppliers" search={{ tab: 'receiving' }} className="secondary-button shrink-0">
-            Open receiving reports
-          </Link>
-        </section>
         <form
-          className="panel space-y-4 p-5"
+          className="panel space-y-4 p-5 sm:p-6"
           onSubmit={(event) => {
             event.preventDefault()
-            void run(async () => setReport(await getReport({ ...filter, page: 1 })))
+            apply()
           }}
         >
-          <fieldset disabled={busy} className="grid items-end gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <label>
-              Report
+          {/* Note: The section's actions sit above its fields, in the section header. */}
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h3 className="section-title">Report Filters</h3>
+              <p className="section-subtitle">
+                Pick a report and period, then apply. Changing the report type loads it at once.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="secondary-button"
+                disabled={busy || isCleared}
+                onClick={() => {
+                  const next = initialFilter()
+                  setFilter(next)
+                  setError('')
+                  void run(async () => setReport(await getReport(next)))
+                }}
+              >
+                Clear All Fields
+              </button>
+              <button type="submit" className="primary-button" disabled={busy}>
+                {busy ? 'Generating…' : 'Apply Filters'}
+              </button>
+            </div>
+          </div>
+          <fieldset
+            disabled={busy}
+            className="grid items-start gap-4 md:grid-cols-2 xl:grid-cols-4"
+          >
+            <label className="field-label">
+              Report<span className="required-mark">*</span>
               <select
-                className="field"
+                className="field mt-1.5 font-normal"
                 value={filter.kind}
                 onChange={(event) => {
                   // Note: Switching report type loads it immediately so the table never shows
@@ -165,21 +192,22 @@ export default function ReportingWorkspace(): ReactElement {
                 ))}
               </select>
             </label>
-            <label>
-              From
+            <label className="field-label">
+              From{!currentOnly && <span className="required-mark">*</span>}
               <input
-                className="field"
+                className="field mt-1.5 font-normal"
                 type="date"
                 required
                 disabled={currentOnly}
+                max={filter.to}
                 value={filter.from}
                 onChange={(event) => setFilter({ ...filter, from: event.target.value })}
               />
             </label>
-            <label>
-              Through
+            <label className="field-label">
+              Through{!currentOnly && <span className="required-mark">*</span>}
               <input
-                className="field"
+                className="field mt-1.5 font-normal"
                 type="date"
                 required
                 disabled={currentOnly}
@@ -188,10 +216,10 @@ export default function ReportingWorkspace(): ReactElement {
                 onChange={(event) => setFilter({ ...filter, to: event.target.value })}
               />
             </label>
-            <label>
-              Client, supplier, product or reference
+            <label className="field-label">
+              Client, Supplier, Product or Reference
               <input
-                className="field"
+                className="field mt-1.5 font-normal"
                 maxLength={120}
                 disabled={filter.kind === 'financial'}
                 value={filter.search}
@@ -199,12 +227,9 @@ export default function ReportingWorkspace(): ReactElement {
                 placeholder="Search relevant report fields"
               />
             </label>
-            <button type="submit" className="primary-button">
-              {busy ? 'Generating…' : 'Apply filters'}
-            </button>
           </fieldset>
           {currentOnly && (
-            <p className="text-sm text-slate-500">
+            <p className="text-sm text-slate-600">
               This report shows current data across all dates.
             </p>
           )}
@@ -225,25 +250,26 @@ export default function ReportingWorkspace(): ReactElement {
         {busy && <p role="status">Loading report data…</p>}
         {report && (
           <>
-            <section className="panel space-y-3 p-5">
+            {/* Note: Most important first: the report's key figures, then its rows, then notes. */}
+            <section className="panel space-y-4 p-5 sm:p-6">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <h3 className="text-lg font-semibold">{report.title}</h3>
-                  <p className="text-sm text-slate-500">
-                    Generated {new Date(report.generatedAt).toLocaleString()} ·{' '}
+                  <h3 className="section-title">{report.title}</h3>
+                  <p className="text-sm text-slate-600">
                     {['inventory', 'overdue'].includes(report.filter.kind)
                       ? 'Current snapshot'
                       : `${report.filter.from} through ${report.filter.to}`}{' '}
                     ·{' '}
                     {report.filter.search
                       ? `Search: ${report.filter.search}`
-                      : 'All matching records'}
+                      : 'All matching records'}{' '}
+                    · Generated {new Date(report.generatedAt).toLocaleString()}
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
-                    className="primary-button h-10"
+                    className="primary-button"
                     disabled={busy}
                     onClick={() =>
                       void run(async () => {
@@ -269,28 +295,31 @@ export default function ReportingWorkspace(): ReactElement {
                   </button>
                 </div>
               </div>
-              {report.notes.map((note) => (
-                <p className="text-sm text-slate-600" key={note}>
-                  {note}
-                </p>
-              ))}
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                {report.metrics.map((metric, index) => (
+                  <article
+                    className={`rounded-lg border p-4 ${index === 0 ? 'border-brand-200 bg-brand-50/60' : 'border-slate-200 bg-white'}`}
+                    key={metric.label}
+                  >
+                    <p className="text-sm font-semibold text-slate-600">
+                      {titleCase(metric.label)}
+                    </p>
+                    <p className="mt-1 text-2xl font-bold break-words text-slate-950 tabular-nums">
+                      {metric.format === 'money'
+                        ? money(metric.value)
+                        : metric.value.toLocaleString()}
+                    </p>
+                  </article>
+                ))}
+              </div>
             </section>
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {report.metrics.map((metric) => (
-                <article className="panel p-4" key={metric.label}>
-                  <p className="text-sm text-slate-500">{metric.label}</p>
-                  <p className="mt-2 text-xl font-semibold break-words">
-                    {metric.format === 'money'
-                      ? money(metric.value)
-                      : metric.value.toLocaleString()}
-                  </p>
-                </article>
-              ))}
-            </div>
             <section className="panel min-w-0 overflow-hidden">
+              <div className="border-b border-slate-200 px-5 py-4 sm:px-6">
+                <h3 className="section-title text-lg">Report Details</h3>
+              </div>
               <ReportTable report={report} />
               <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 p-4">
-                <p className="text-sm text-slate-500">
+                <p className="text-sm text-slate-600">
                   {report.totalRows} matching rows · Page {report.filter.page} of{' '}
                   {Math.max(1, Math.ceil(report.totalRows / report.pageSize))} · Totals cover all
                   matching rows.
@@ -325,8 +354,35 @@ export default function ReportingWorkspace(): ReactElement {
                 </div>
               </div>
             </section>
+            {report.notes.length > 0 && (
+              <section className="panel space-y-1.5 p-5 sm:p-6">
+                <h3 className="card-title">About This Report</h3>
+                {report.notes.map((note) => (
+                  <p className="text-sm text-slate-600" key={note}>
+                    {note}
+                  </p>
+                ))}
+              </section>
+            )}
           </>
         )}
+        <section className="panel flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <span className="bg-brand-50 text-brand-700 grid size-10 shrink-0 place-items-center rounded-lg">
+              <FiPackage aria-hidden="true" />
+            </span>
+            <div>
+              <h3 className="card-title">Receiving Reports</h3>
+              <p className="text-sm text-slate-600">
+                Deliveries received against purchase orders, with batch numbers and expiry dates.
+                They open in Suppliers &amp; Purchasing, where stock is received.
+              </p>
+            </div>
+          </div>
+          <Link to="/suppliers" search={{ tab: 'receiving' }} className="secondary-button shrink-0">
+            Open Receiving Reports
+          </Link>
+        </section>
       </div>
     </DashboardShell>
   )

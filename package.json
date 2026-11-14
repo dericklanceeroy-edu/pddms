@@ -24,6 +24,8 @@
     "test:administration": "node scripts/verify-administration.mjs",
     "test:system": "node scripts/verify-system.mjs",
     "test:roles": "node scripts/verify-roles.mjs",
+    "test:validation": "node scripts/verify-validation.mjs",
+    "test:units": "node scripts/verify-units-handoffs.mjs",
     "test:desktop": "node scripts/verify-desktop.mjs",
     "start": "node scripts/run-electron-vite.mjs preview",
     "dev": "node scripts/run-electron-vite.mjs dev",

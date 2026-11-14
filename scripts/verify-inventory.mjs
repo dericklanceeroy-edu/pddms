@@ -325,6 +325,12 @@ if (!process.env.INVENTORY_TEST_DATABASE) {
       assert.equal(draftEdit.order.totalAmount, 200)
       order.items = draftEdit.order.items
       await success(channels.purchaseOrder.updateStatusById, order.id, { status: 'submitted' })
+      // Note: Deliveries cannot predate their order; date this order before the test deliveries.
+      await db
+        .updateTable('purchaseOrders')
+        .set({ orderedAt: `${offsetDate(-15)} 09:00:00` })
+        .where('id', '=', order.id)
+        .execute()
       assert.match(
         (
           await denied(channels.purchaseOrder.updateOneById, order.id, {
@@ -339,6 +345,8 @@ if (!process.env.INVENTORY_TEST_DATABASE) {
       const delivery = (quantity, expiresAt = offsetDate(30), batchNumber = 'TEST-NEAR') => ({
         requestId: randomUUID(),
         deliveredAt: offsetDate(-10),
+        deliveredByName: 'Supplier Driver',
+        checkedByName: 'Receiving Clerk',
         notes: null,
         items: [
           {
@@ -353,6 +361,29 @@ if (!process.env.INVENTORY_TEST_DATABASE) {
       assert.match(
         (await denied(channels.purchaseOrder.recordDeliveryById, order.id, delivery(21))).error,
         /remain to be received/
+      )
+      assert.match(
+        (
+          await denied(channels.purchaseOrder.recordDeliveryById, order.id, {
+            ...delivery(1),
+            deliveredAt: offsetDate(-30)
+          })
+        ).error,
+        /before the purchase order date/
+      )
+      for (const sellPrice of [9.99, 0])
+        await denied(channels.purchaseOrder.recordDeliveryById, order.id, {
+          ...delivery(1),
+          items: [{ ...delivery(1).items[0], sellPrice }]
+        })
+      assert.match(
+        (
+          await denied(channels.purchaseOrder.recordDeliveryById, order.id, {
+            ...delivery(1),
+            items: [{ ...delivery(1).items[0], sellPrice: 9.99 }]
+          })
+        ).error,
+        /lower than the unit cost/
       )
       assert.match(
         (
@@ -391,6 +422,20 @@ if (!process.env.INVENTORY_TEST_DATABASE) {
         ]
       })
       assert.equal((await success(channels.purchaseOrder.getAll)).orders[0].status, 'received')
+      assert.match(
+        (
+          await denied(channels.procurement.recordPayment, {
+            purchaseOrderId: order.id,
+            invoiceId: null,
+            amount: 1,
+            paidAt: offsetDate(-30),
+            method: 'Bank transfer',
+            referenceNumber: null,
+            notes: null
+          })
+        ).error,
+        /before the purchase order date/
+      )
       await success(channels.procurement.recordPayment, {
         purchaseOrderId: order.id,
         invoiceId: null,
@@ -595,6 +640,8 @@ if (!process.env.INVENTORY_TEST_DATABASE) {
       await success(channels.purchaseOrder.recordDeliveryById, next.id, {
         requestId: randomUUID(),
         deliveredAt: localDate(),
+        deliveredByName: 'Supplier Driver',
+        checkedByName: 'Receiving Clerk',
         items: [
           {
             itemId: next.items[0].id,

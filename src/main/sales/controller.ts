@@ -1,10 +1,13 @@
 import { accessControl, authorize } from '@main/access-control'
 import { findOneById } from '@main/account/repository'
 import { state } from '@main/api'
-import { channels, resources } from '@shared/constants'
-import { checkoutSchema, receiptText, saleDraftSchema, SalesError } from '@shared/sales'
 import { windowDialog } from '@main/api/dialogs'
 import { ipcMain } from '@main/api/ipc'
+import { channels, resources } from '@shared/constants'
+import { receiptHtml, receiptNumber, receiptPlainText } from '@shared/receipt'
+import { checkoutSchema, saleDraftSchema, SalesError } from '@shared/sales'
+import { describeIssue } from '@shared/validation'
+import { BrowserWindow } from 'electron'
 import { writeFile } from 'node:fs/promises'
 import z from 'zod'
 import { checkout, getSale, history, quote } from './repository'
@@ -35,9 +38,7 @@ const failure = (error: unknown): { success: false; error: string } => ({
     error instanceof SalesError
       ? error.message
       : error instanceof z.ZodError
-        ? error.issues
-            .map((issue) => `${issue.path.join('.') || 'Cart'}: ${issue.message}`)
-            .join(' ')
+        ? [...new Set(error.issues.map(describeIssue))].join(' ')
         : 'Unable to complete the sales operation. Refresh or retry; check transaction history before starting another payment.'
 })
 ipcMain.handle(channels.sales.quote, async (_, payload: unknown) => {
@@ -81,6 +82,24 @@ ipcMain.handle(channels.sales.getOne, async (_, id: unknown) => {
     return failure(error)
   }
 })
+/** Renders the 80 mm receipt to PDF in a hidden window with scripts disabled. */
+async function receiptPdf(html: string): Promise<Buffer> {
+  const renderer = new BrowserWindow({
+    show: false,
+    webPreferences: { javascript: false, sandbox: true, contextIsolation: true }
+  })
+  try {
+    await renderer.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`)
+    // Note: 80 mm paper; the page is tall enough for long carts and the printer trims the rest.
+    return await renderer.webContents.printToPDF({
+      pageSize: { width: 3.15, height: 11.69 },
+      margins: { marginType: 'none' },
+      printBackground: true
+    })
+  } finally {
+    renderer.destroy()
+  }
+}
 ipcMain.handle(channels.sales.exportReceipt, async (event, id: unknown) => {
   try {
     const account = await session(true)
@@ -88,15 +107,20 @@ ipcMain.handle(channels.sales.exportReceipt, async (event, id: unknown) => {
     const sale = await getSale(saleId, account.all ? undefined : account.id)
     const selection = await windowDialog(event).showSaveDialog({
       title: 'Save sales receipt',
-      defaultPath: `${sale.reference}.txt`,
-      filters: [{ name: 'Text receipt', extensions: ['txt'] }]
+      defaultPath: `${receiptNumber(sale)}.pdf`,
+      filters: [
+        { name: 'PDF receipt (80 mm)', extensions: ['pdf'] },
+        { name: 'Text receipt', extensions: ['txt'] }
+      ]
     })
     if (selection.canceled || !selection.filePath) return { success: true, cancelled: true }
     const current = await session(true)
     if (current.id !== account.id)
       throw new SalesError('The signed-in account changed. Reopen the receipt.')
     const persisted = await getSale(saleId, current.all ? undefined : current.id)
-    await writeFile(selection.filePath, receiptText(persisted), 'utf8')
+    if (selection.filePath.toLowerCase().endsWith('.txt'))
+      await writeFile(selection.filePath, receiptPlainText(persisted), 'utf8')
+    else await writeFile(selection.filePath, await receiptPdf(receiptHtml(persisted)))
     return { success: true }
   } catch (error) {
     return failure(error)

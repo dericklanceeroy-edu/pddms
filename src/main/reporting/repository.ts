@@ -33,9 +33,9 @@ export async function stockValuation(database: Kysely<Database> = db): Promise<n
   return Number(result.rows[0].value)
 }
 function movements(start: string, end: string): RawBuilder<unknown> {
-  return sql`SELECT i.drug_id, SUM(i.quantity) AS quantity FROM sale_items i JOIN sales s ON s.id = i.sale_id
+  return sql`SELECT i.drug_id, SUM(i.quantity * i.pieces_per_unit) AS quantity FROM sale_items i JOIN sales s ON s.id = i.sale_id
     WHERE s.created_at >= ${start} AND s.created_at < ${end} GROUP BY i.drug_id
-    UNION ALL SELECT i.drug_id, SUM(i.quantity) FROM wholesale_order_items i JOIN wholesale_orders w ON w.id = i.order_id
+    UNION ALL SELECT i.drug_id, SUM(i.quantity * i.pieces_per_unit) FROM wholesale_order_items i JOIN wholesale_orders w ON w.id = i.order_id
     WHERE w.status = 'delivered' AND w.delivered_at >= ${start} AND w.delivered_at < ${end} GROUP BY i.drug_id`
 }
 interface Definition {
@@ -50,8 +50,8 @@ function definition(filter: ReportFilter): Definition {
   const period = sql`s.created_at >= ${start} AND s.created_at < ${end}`
   const retail = sql`SELECT s.id, s.reference, s.created_at, s.customer_name, s.cashier_name,
     s.subtotal_cents, s.vat_exemption_cents, s.discount_cents, s.discount_type, s.total_cents, s.cash_cents, s.change_cents,
-    COALESCE((SELECT SUM(quantity) FROM sale_items WHERE sale_id = s.id), 0) AS quantity,
-    (SELECT GROUP_CONCAT(product_name || ' [batch ' || batch_number || '] × ' || quantity || ' @ PHP ' || printf('%.2f', unit_price_cents / 100.0), '; ') FROM sale_items WHERE sale_id = s.id) AS products,
+    COALESCE((SELECT SUM(quantity * pieces_per_unit) FROM sale_items WHERE sale_id = s.id), 0) AS quantity,
+    (SELECT GROUP_CONCAT(product_name || ' [batch ' || batch_number || '] × ' || quantity || CASE WHEN unit = 'box' THEN ' box(es) of ' || pieces_per_unit ELSE ' pc(s)' END || ' @ PHP ' || printf('%.2f', unit_price_cents / 100.0), '; ') FROM sale_items WHERE sale_id = s.id) AS products,
     s.reference || ' ' || s.customer_name || ' ' || s.cashier_name AS search_text
     FROM sales s WHERE ${period}`
   if (filter.kind === 'sales' || filter.kind === 'discounts')
@@ -66,7 +66,7 @@ function definition(filter: ReportFilter): Definition {
         c('customerName', 'Customer'),
         c('cashierName', 'Cashier'),
         c('products', 'Products / quantities / prices'),
-        c('quantity', 'Units'),
+        c('quantity', 'Pieces'),
         c('subtotalCents', 'Subtotal', 'money'),
         c('discountType', 'Discount type'),
         c('vatExemptionCents', 'VAT exemption', 'money'),
@@ -80,7 +80,7 @@ function definition(filter: ReportFilter): Definition {
       ],
       sums: [
         { key: 'totalCents', label: 'Retail revenue', format: 'money' },
-        { key: 'quantity', label: 'Units sold' },
+        { key: 'quantity', label: 'Pieces sold' },
         { key: 'discountCents', label: 'Discounts', format: 'money' },
         { key: 'vatExemptionCents', label: 'VAT exemption', format: 'money' }
       ],
@@ -196,11 +196,11 @@ function definition(filter: ReportFilter): Definition {
   if (filter.kind === 'regulated')
     return {
       base: sql`SELECT s.id, s.reference, s.created_at AS occurred_at, s.customer_name, 'Retail' AS channel,
-      i.drug_id AS product_id, i.product_name AS product, i.batch_number, i.quantity,
+      i.drug_id AS product_id, i.product_name AS product, i.batch_number, i.quantity * i.pieces_per_unit AS quantity,
       d.is_prescribed, d.is_controlled, i.quantity * i.unit_price_cents AS gross_cents,
       s.reference || ' ' || s.customer_name || ' ' || i.product_name AS search_text
       FROM sale_items i JOIN sales s ON s.id = i.sale_id JOIN drugs d ON d.id = i.drug_id WHERE ${period} AND (d.is_prescribed = 1 OR d.is_controlled = 1)
-      UNION ALL SELECT w.id, w.reference, w.delivered_at, w.customer_name, 'Wholesale', i.drug_id, i.product_name, i.batch_number, i.quantity,
+      UNION ALL SELECT w.id, w.reference, w.delivered_at, w.customer_name, 'Wholesale', i.drug_id, i.product_name, i.batch_number, i.quantity * i.pieces_per_unit,
       d.is_prescribed, d.is_controlled, i.quantity * i.unit_price_cents, w.reference || ' ' || w.customer_name || ' ' || i.product_name
       FROM wholesale_order_items i JOIN wholesale_orders w ON w.id = i.order_id JOIN drugs d ON d.id = i.drug_id WHERE w.status = 'delivered' AND w.delivered_at >= ${start} AND w.delivered_at < ${end} AND (d.is_prescribed = 1 OR d.is_controlled = 1)`,
       columns: [
@@ -210,7 +210,7 @@ function definition(filter: ReportFilter): Definition {
         c('customerName', 'Client'),
         product,
         c('batchNumber', 'Batch'),
-        c('quantity', 'Units'),
+        c('quantity', 'Pieces'),
         c('isPrescribed', 'Prescription flag (current)'),
         c('isControlled', 'Controlled flag (current)'),
         c('grossCents', 'Before-discount line value', 'money')
@@ -218,7 +218,7 @@ function definition(filter: ReportFilter): Definition {
       notes: [
         'Uses current persisted prescription/controlled flags. Historical classification snapshots and prescription documents are not stored; this is not a regulatory compliance certification. Line amounts are before sale-level discounts.'
       ],
-      sums: [{ key: 'quantity', label: 'Units' }],
+      sums: [{ key: 'quantity', label: 'Pieces' }],
       sort: sql`occurred_at DESC, channel, id DESC, product_id, batch_number`
     }
   const volume = movements(start, end)
@@ -237,7 +237,7 @@ function definition(filter: ReportFilter): Definition {
       c('category', 'Category'),
       c('isArchived', 'Archived'),
       c('stock', 'Current on hand'),
-      c('quantity', 'Units sold / delivered'),
+      c('quantity', 'Pieces sold / delivered'),
       c('movementRank', 'Volume rank'),
       c('movement', 'Movement'),
       c('isPrescribed', 'Prescription flag'),
@@ -247,7 +247,7 @@ function definition(filter: ReportFilter): Definition {
       'Period volume = completed retail units + delivered wholesale units. Highest volume is fastest; lowest positive volume is slowest selling; zero is no movement. Ties share classification (highest takes precedence). No arbitrary thresholds.',
       'Product links open existing product/batch details. Archived products remain visible for historical accuracy.'
     ],
-    sums: [{ key: 'quantity', label: 'Units sold / delivered' }],
+    sums: [{ key: 'quantity', label: 'Pieces sold / delivered' }],
     sort: sql`quantity DESC, product, id`
   }
 }
@@ -333,7 +333,7 @@ async function inventory(
       c('reorderLevel', 'Threshold'),
       c('stockStatus', 'Stock status'),
       c('batch', 'Batch'),
-      c('quantity', 'Batch quantity'),
+      c('quantity', 'Batch quantity (pieces)'),
       c('expiresAt', 'Expiry'),
       c('expiryStatus', 'Expiry status'),
       c('costCents', 'Unit cost', 'money'),
@@ -344,7 +344,10 @@ async function inventory(
     totalRows: mapped.length,
     pageSize: 100,
     metrics: [
-      { label: 'On-hand units', value: mapped.reduce((sum, row) => sum + Number(row.quantity), 0) },
+      {
+        label: 'On-hand pieces',
+        value: mapped.reduce((sum, row) => sum + Number(row.quantity), 0)
+      },
       {
         label: 'Inventory at cost',
         value: mapped.reduce((sum, row) => sum + Number(row.valueCents), 0),

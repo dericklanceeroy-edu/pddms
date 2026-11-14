@@ -55,6 +55,11 @@ function createWindow(): void {
     if (url.split('#')[0] !== new URL(entryUrl).href.split('#')[0]) event.preventDefault()
   })
   mainWindow.webContents.on('will-attach-webview', (event) => event.preventDefault())
+  // Note: A page reload (for example after restoring a backup) must leave the sign-in fields
+  // ready for typing. Windows can keep keyboard focus on the window frame instead of the page.
+  mainWindow.webContents.on('did-finish-load', () => {
+    if (mainWindow.isFocused()) mainWindow.webContents.focus()
+  })
 
   // HMR for renderer base on electron-vite cli.
   // Load the remote URL for development or the local html file for production.

@@ -4,10 +4,16 @@ import { useProfileStore } from '@renderer/stores/useProfileStore'
 import { createFileRoute, Navigate } from '@tanstack/react-router'
 import { useEffect, type ReactElement } from 'react'
 
-export const Route = createFileRoute('/customers/$customerId')({ component: RouteComponent })
+export const Route = createFileRoute('/customers/$customerId')({
+  validateSearch: (search: Record<string, unknown>): { type?: 'pharmacy' } => ({
+    type: search.type === 'pharmacy' ? 'pharmacy' : undefined
+  }),
+  component: RouteComponent
+})
 
 function RouteComponent(): ReactElement {
   const { customerId } = Route.useParams()
+  const { type } = Route.useSearch()
   const isLoaded = useProfileStore((state) => state.areCustomersLoaded)
   const error = useProfileStore((state) => state.error)
   const loadCustomers = useProfileStore((state) => state.loadCustomers)
@@ -17,10 +23,11 @@ function RouteComponent(): ReactElement {
   useEffect(() => {
     void loadCustomers()
   }, [loadCustomers])
-  if (error) return <DashboardShell pageTitle="Customer profile">{error}</DashboardShell>
+  if (error) return <DashboardShell pageTitle="Customer Profile">{error}</DashboardShell>
   if (!isLoaded)
-    return <DashboardShell pageTitle="Customer profile">Loading customer…</DashboardShell>
-  if (customerId === 'new') return <CustomerProfileView customer={null} />
+    return <DashboardShell pageTitle="Customer Profile">Loading customer…</DashboardShell>
+  if (customerId === 'new')
+    return <CustomerProfileView customer={null} initialType={type ?? 'retail'} key={type} />
   return customer ? (
     <CustomerProfileView customer={customer} key={customer.id} />
   ) : (

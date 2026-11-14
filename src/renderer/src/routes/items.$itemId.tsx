@@ -15,8 +15,8 @@ function RouteComponent(): ReactElement {
   useEffect(() => {
     void loadItems(true)
   }, [loadItems, itemId])
-  if (error) return <DashboardShell pageTitle="Item profile">{error}</DashboardShell>
-  if (!isLoaded) return <DashboardShell pageTitle="Item profile">Loading product…</DashboardShell>
+  if (error) return <DashboardShell pageTitle="Item Profile">{error}</DashboardShell>
+  if (!isLoaded) return <DashboardShell pageTitle="Item Profile">Loading product…</DashboardShell>
   if (itemId === 'new') return <ItemProfileView item={null} />
   return item ? <ItemProfileView item={item} key={item.id} /> : <Navigate to="/inventory" />
 }

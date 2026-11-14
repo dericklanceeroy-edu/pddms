@@ -1,8 +1,18 @@
 import DashboardShell from '@renderer/components/dashboard/DashboardShell'
-import { type CustomerDiscount, type CustomerProfile } from '@renderer/data/profiles'
+import FilteredInput from '@renderer/components/ui/FilteredInput'
+import FormField, { RequiredNote } from '@renderer/components/ui/FormField'
+import { splitErrors, type FieldErrors } from '@renderer/components/ui/fieldErrors'
+import {
+  type ClientType,
+  type CustomerDiscount,
+  type CustomerProfile
+} from '@renderer/data/profiles'
 import { useProfileStore } from '@renderer/stores/useProfileStore'
+import { localDate } from '@shared/inventory'
+import { newCustomerSchema } from '@shared/schemas'
+import { validationIssues } from '@shared/validation'
 import { Link, useNavigate } from '@tanstack/react-router'
-import { useState, type FormEvent, type ReactElement } from 'react'
+import { useMemo, useState, type FormEvent, type ReactElement } from 'react'
 import {
   FiArrowLeft,
   FiCheckCircle,
@@ -20,7 +30,9 @@ const date = new Intl.DateTimeFormat('en-PH', { dateStyle: 'medium' })
 
 const emptyCustomer: CustomerProfile = {
   id: 0,
+  clientType: 'retail',
   fullName: '',
+  contactPerson: '',
   phone: '',
   email: '',
   address: '',
@@ -32,25 +44,64 @@ const emptyCustomer: CustomerProfile = {
 }
 
 export default function CustomerProfileView({
-  customer
+  customer,
+  initialType = 'retail'
 }: {
   customer: CustomerProfile | null
+  /** Client type for a new profile, e.g. when opened from the wholesale order form. */
+  initialType?: ClientType
 }): ReactElement {
   const saveCustomer = useProfileStore((state) => state.saveCustomer)
   const removeCustomer = useProfileStore((state) => state.removeCustomer)
   const navigate = useNavigate()
   const isNew = customer === null
 
-  const [draft, setDraft] = useState(customer ?? emptyCustomer)
+  const [draft, setDraft] = useState(customer ?? { ...emptyCustomer, clientType: initialType })
   const [editing, setEditing] = useState(isNew)
   const [error, setError] = useState('')
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
   const [success, setSuccess] = useState('')
   const [isSaving, setIsSaving] = useState(false)
   const [confirmRemove, setConfirmRemove] = useState(false)
   const [isRemoving, setIsRemoving] = useState(false)
+  const [touched, setTouched] = useState<Record<string, boolean>>({})
+  const pharmacy = draft.clientType === 'pharmacy'
+  // Note: Problems show as soon as a field is left (or changed after that), not only on Save.
+  const liveErrors = useMemo(() => {
+    const result = newCustomerSchema.safeParse({
+      clientType: draft.clientType,
+      fullName: draft.fullName,
+      contactPerson: draft.contactPerson.trim() || null,
+      phone: draft.phone,
+      email: draft.email.trim() || null,
+      address: draft.address.trim() || null,
+      discountType: draft.discountType,
+      discountId: draft.discountType === 'none' ? null : draft.discountId || null,
+      discountExpiresAt: draft.discountType === 'none' ? null : draft.discountExpiresAt
+    })
+    const errors: Record<string, string> = {}
+    if (!result.success)
+      for (const issue of validationIssues(result.error)) errors[issue.field] ??= issue.message
+    return errors
+  }, [draft])
+  const touch = (field: string): void => setTouched((current) => ({ ...current, [field]: true }))
+  const shown = (field: string): string | undefined =>
+    fieldErrors[field] || (touched[field] ? liveErrors[field] : undefined)
+  const change = (values: Partial<CustomerProfile>): void => {
+    setDraft((current) => ({ ...current, ...values }))
+    setFieldErrors((current) => {
+      const next = { ...current }
+      for (const key of Object.keys(values)) delete next[key]
+      return next
+    })
+  }
 
   const discountLabel =
-    draft.discountType === 'none' ? 'Regular customer' : draft.discountType.toUpperCase()
+    draft.discountType === 'none'
+      ? 'Regular Customer'
+      : draft.discountType === 'senior'
+        ? 'Senior Citizen'
+        : 'PWD'
   const discountDetail =
     draft.discountType === 'none'
       ? 'No discount ID registered'
@@ -66,9 +117,12 @@ export default function CustomerProfileView({
 
     setIsSaving(true)
     setError('')
+    setFieldErrors({})
     try {
       const saved = await saveCustomer(
         {
+          clientType: draft.clientType,
+          contactPerson: pharmacy ? draft.contactPerson.trim() : '',
           fullName,
           phone,
           email,
@@ -82,7 +136,16 @@ export default function CustomerProfileView({
 
       setDraft(saved)
       setEditing(false)
-      setSuccess(isNew ? 'Customer profile added.' : 'Customer information updated.')
+      setTouched({})
+      setSuccess(
+        pharmacy
+          ? isNew
+            ? 'Pharmacy client added.'
+            : 'Pharmacy client updated.'
+          : isNew
+            ? 'Customer profile added.'
+            : 'Customer information updated.'
+      )
       if (isNew) {
         await navigate({
           to: '/customers/$customerId',
@@ -90,7 +153,9 @@ export default function CustomerProfileView({
         })
       }
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Unable to save the customer.')
+      const { fields, form } = splitErrors(cause, 'Unable to save the customer.')
+      setFieldErrors(fields)
+      setError(form)
     } finally {
       setIsSaving(false)
     }
@@ -109,13 +174,23 @@ export default function CustomerProfileView({
   }
 
   return (
-    <DashboardShell pageTitle={isNew ? 'New customer' : 'Customer profile'}>
+    <DashboardShell
+      pageTitle={
+        pharmacy
+          ? isNew
+            ? 'New Pharmacy Client'
+            : 'Pharmacy Client'
+          : isNew
+            ? 'New Customer'
+            : 'Customer Profile'
+      }
+    >
       <div className="space-y-5 sm:space-y-6">
         <Link
           to="/customers"
           className="hover:text-brand-700 inline-flex items-center gap-2 rounded-lg px-1 text-sm font-medium text-slate-500 transition"
         >
-          <FiArrowLeft /> Back to customers
+          <FiArrowLeft /> Back to Customers
         </Link>
 
         {success && (
@@ -132,96 +207,181 @@ export default function CustomerProfileView({
           <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_20rem]">
             <form noValidate onSubmit={save} className="panel space-y-6 p-6 sm:p-7">
               <div>
-                <p className="eyebrow">Customer details</p>
-                <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">
-                  {isNew ? 'Add customer profile' : 'Edit customer profile'}
+                <p className="eyebrow">{pharmacy ? 'Pharmacy Client' : 'Customer Details'}</p>
+                <h2 className="section-title mt-2 text-2xl">
+                  {isNew
+                    ? pharmacy
+                      ? 'Add Pharmacy Client'
+                      : 'Add Customer Profile'
+                    : pharmacy
+                      ? 'Edit Pharmacy Client'
+                      : 'Edit Customer Profile'}
                 </h2>
-                <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-500">
-                  Keep contact and eligibility information accurate for a smoother dispensing
-                  workflow.
+                <p className="section-subtitle">
+                  {pharmacy
+                    ? 'Pharmacies that buy from Med Prix by the box. They appear as clients in Wholesale & Deliveries.'
+                    : 'Keep contact and eligibility information accurate for a smoother dispensing workflow.'}
                 </p>
               </div>
+              <RequiredNote />
 
               <div className="grid gap-5 sm:grid-cols-2">
-                <Field label="Full name">
-                  <input
-                    required
-                    className="field"
-                    placeholder={'e.g. Juan Dela Cruz'}
-                    value={draft.fullName}
-                    onChange={(event) => setDraft({ ...draft, fullName: event.target.value })}
-                  />
-                </Field>
-                <Field label="Phone">
-                  <input
-                    required
-                    className="field"
-                    inputMode={'numeric'}
-                    maxLength={11}
-                    placeholder={'e.g. 09171234567'}
-                    value={draft.phone}
-                    onChange={(event) => setDraft({ ...draft, phone: event.target.value })}
-                  />
-                </Field>
-                <Field label="Email">
-                  <input
-                    type="email"
-                    className="field"
-                    placeholder={'e.g. juan@example.com'}
-                    value={draft.email}
-                    onChange={(event) => setDraft({ ...draft, email: event.target.value })}
-                  />
-                </Field>
-                <Field label="Discount eligibility">
+                <FormField
+                  label="Client Type"
+                  required
+                  hint={
+                    pharmacy
+                      ? 'Another pharmacy that places wholesale orders.'
+                      : 'A person who buys at the counter.'
+                  }
+                >
                   <select
                     className="field"
-                    value={draft.discountType}
-                    onChange={(event) =>
-                      setDraft({
-                        ...draft,
-                        discountType: event.target.value as CustomerDiscount
+                    value={draft.clientType}
+                    onChange={(event) => {
+                      const clientType = event.target.value as ClientType
+                      change({
+                        clientType,
+                        ...(clientType === 'pharmacy'
+                          ? { discountType: 'none', discountId: '', discountExpiresAt: null }
+                          : { contactPerson: '' })
                       })
-                    }
+                    }}
                   >
-                    <option value="none">Regular customer</option>
-                    <option value="senior">Senior Citizen</option>
-                    <option value="pwd">PWD</option>
+                    <option value="retail">Retail Customer</option>
+                    <option value="pharmacy">Pharmacy Client (Wholesale)</option>
                   </select>
-                </Field>
-                <div className="sm:col-span-2">
-                  <Field label="Address">
-                    <input
-                      className="field"
-                      placeholder={'e.g. Davao City'}
-                      value={draft.address}
-                      onChange={(event) => setDraft({ ...draft, address: event.target.value })}
+                </FormField>
+                <FormField
+                  label={pharmacy ? 'Pharmacy Name' : 'Full Name'}
+                  required
+                  error={shown('fullName')}
+                  hint={
+                    pharmacy
+                      ? "Letters, numbers, spaces and . , & ( ) / ' % + : -"
+                      : 'Letters, spaces, periods, commas, apostrophes and hyphens.'
+                  }
+                >
+                  <FilteredInput
+                    key={draft.clientType}
+                    rule={pharmacy ? 'catalogText' : 'personName'}
+                    required
+                    maxLength={120}
+                    placeholder={pharmacy ? 'e.g. St. Luke’s Pharmacy' : 'e.g. Juan Dela Cruz'}
+                    value={draft.fullName}
+                    onBlur={() => touch('fullName')}
+                    onValueChange={(fullName) => change({ fullName })}
+                  />
+                </FormField>
+                {pharmacy && (
+                  <FormField label="Contact Person" error={shown('contactPerson')}>
+                    <FilteredInput
+                      rule="personName"
+                      maxLength={120}
+                      placeholder="e.g. Maria Santos"
+                      value={draft.contactPerson}
+                      onBlur={() => touch('contactPerson')}
+                      onValueChange={(contactPerson) => change({ contactPerson })}
                     />
-                  </Field>
-                </div>
-                {draft.discountType !== 'none' && (
+                  </FormField>
+                )}
+                <FormField
+                  label="Mobile Phone"
+                  required
+                  error={shown('phone')}
+                  hint="11 digits starting with 09. Numbers only."
+                >
+                  <FilteredInput
+                    rule="phone"
+                    required
+                    inputMode="numeric"
+                    maxLength={12}
+                    placeholder="e.g. 09171234567"
+                    value={draft.phone}
+                    onBlur={() => touch('phone')}
+                    onValueChange={(phone) => change({ phone })}
+                  />
+                </FormField>
+                <FormField label="Email" error={shown('email')}>
+                  <FilteredInput
+                    rule="email"
+                    type="email"
+                    maxLength={254}
+                    placeholder={pharmacy ? 'e.g. orders@pharmacy.ph' : 'e.g. juan@example.com'}
+                    value={draft.email}
+                    onBlur={() => touch('email')}
+                    onValueChange={(email) => change({ email })}
+                  />
+                </FormField>
+                {!pharmacy && (
+                  <FormField label="Discount Eligibility" required>
+                    <select
+                      className="field"
+                      value={draft.discountType}
+                      onChange={(event) =>
+                        change({ discountType: event.target.value as CustomerDiscount })
+                      }
+                    >
+                      <option value="none">Regular Customer</option>
+                      <option value="senior">Senior Citizen</option>
+                      <option value="pwd">PWD</option>
+                    </select>
+                  </FormField>
+                )}
+                <FormField
+                  label={pharmacy ? 'Delivery Address' : 'Address'}
+                  error={shown('address')}
+                  hint={pharmacy ? 'Filled in automatically on new wholesale orders.' : undefined}
+                  className="sm:col-span-2"
+                >
+                  <input
+                    className="field"
+                    maxLength={500}
+                    placeholder={'e.g. Pioneer Ave, General Santos City'}
+                    value={draft.address}
+                    onBlur={() => touch('address')}
+                    onChange={(event) => change({ address: event.target.value })}
+                  />
+                </FormField>
+                {!pharmacy && draft.discountType !== 'none' && (
                   <>
-                    <Field label="Discount ID">
-                      <input
+                    <FormField
+                      label="Discount ID"
+                      required
+                      error={shown('discountId')}
+                      hint="Letters and numbers only, at least 4 characters."
+                    >
+                      <FilteredInput
+                        rule="discountId"
                         required
-                        className="field"
-                        placeholder={'e.g. SC-123456'}
+                        maxLength={40}
+                        placeholder={'e.g. SC123456'}
                         value={draft.discountId}
-                        onChange={(event) => setDraft({ ...draft, discountId: event.target.value })}
+                        onBlur={() => touch('discountId')}
+                        onValueChange={(discountId) => change({ discountId })}
                       />
-                    </Field>
-                    <Field label="ID expiry (if applicable)">
+                    </FormField>
+                    <FormField
+                      label={
+                        draft.discountType === 'pwd'
+                          ? 'ID Expiry Date'
+                          : 'ID Expiry Date (If Printed)'
+                      }
+                      required={draft.discountType === 'pwd'}
+                      showOptional={false}
+                      error={shown('discountExpiresAt')}
+                    >
                       <input
                         type="date"
                         className="field"
+                        min={localDate()}
                         value={draft.discountExpiresAt ?? ''}
+                        onBlur={() => touch('discountExpiresAt')}
                         onChange={(event) =>
-                          setDraft({
-                            ...draft,
-                            discountExpiresAt: event.target.value || null
-                          })
+                          change({ discountExpiresAt: event.target.value || null })
                         }
                       />
-                    </Field>
+                    </FormField>
                   </>
                 )}
               </div>
@@ -242,6 +402,8 @@ export default function CustomerProfileView({
                     onClick={() => {
                       setDraft(customer ?? emptyCustomer)
                       setError('')
+                      setFieldErrors({})
+                      setTouched({})
                       setEditing(false)
                     }}
                     className="secondary-button"
@@ -250,7 +412,7 @@ export default function CustomerProfileView({
                   </button>
                 )}
                 <button disabled={isSaving} className="primary-button disabled:cursor-wait">
-                  {isSaving ? 'Saving…' : 'Save profile'}
+                  {isSaving ? 'Saving…' : pharmacy ? 'Save Pharmacy Client' : 'Save Profile'}
                 </button>
               </div>
             </form>
@@ -261,7 +423,7 @@ export default function CustomerProfileView({
                   <div className="text-brand-700 grid size-11 place-items-center rounded-lg border border-slate-200 bg-white shadow-sm">
                     <FiUser />
                   </div>
-                  <p className="mt-5 text-sm font-semibold text-slate-900">Profile setup</p>
+                  <p className="card-title mt-5">Profile Setup</p>
                   <p className="mt-2 text-sm leading-6 text-slate-500">
                     Capture the customer’s preferred contact details first, then record discount
                     eligibility when applicable.
@@ -272,7 +434,7 @@ export default function CustomerProfileView({
                 <div className="bg-brand-50/80 text-brand-700 grid size-11 place-items-center rounded-lg">
                   <FiShield />
                 </div>
-                <p className="mt-5 text-sm font-semibold text-slate-900">Eligibility details</p>
+                <p className="card-title mt-5">Eligibility Details</p>
                 <p className="mt-2 text-sm leading-6 text-slate-500">
                   Senior Citizen and PWD profiles require a valid discount ID before checkout
                   discounts can be applied.
@@ -288,10 +450,16 @@ export default function CustomerProfileView({
                   <FiUser />
                 </div>
                 <div className="min-w-0">
-                  <p className="eyebrow">Customer since {date.format(new Date(draft.createdAt))}</p>
-                  <h2 className="mt-2 truncate text-2xl font-semibold tracking-tight text-slate-900">
-                    {draft.fullName}
-                  </h2>
+                  <p className="eyebrow">
+                    {pharmacy ? 'Pharmacy client' : 'Customer'} since{' '}
+                    {date.format(new Date(draft.createdAt))}
+                  </p>
+                  <h2 className="page-title mt-2 truncate text-2xl">{draft.fullName}</h2>
+                  {pharmacy && draft.contactPerson && (
+                    <p className="mt-1 text-sm font-medium text-slate-700">
+                      Contact: {draft.contactPerson}
+                    </p>
+                  )}
                   <p className="mt-3 text-sm text-slate-600 sm:text-base">
                     {draft.phone}
                     {draft.email ? ` · ${draft.email}` : ''}
@@ -302,9 +470,9 @@ export default function CustomerProfileView({
 
             <section className="glass-surface relative overflow-hidden rounded-lg p-5 sm:p-6 xl:col-span-4">
               <div className="relative">
-                <p className="eyebrow">Profile actions</p>
+                <p className="card-title">Profile Actions</p>
                 <p className="mt-2 text-sm leading-6 text-slate-500">
-                  Make changes to this customer record or remove it from the active list.
+                  Make changes to this record or remove it from the active list.
                 </p>
                 <div className="mt-5 grid gap-2">
                   <button
@@ -314,40 +482,55 @@ export default function CustomerProfileView({
                     }}
                     className="secondary-button w-full"
                   >
-                    <FiEdit2 /> Edit profile
+                    <FiEdit2 /> Edit Profile
                   </button>
                   <button onClick={() => setConfirmRemove(true)} className="danger-button w-full">
-                    <FiTrash2 /> Remove customer
+                    <FiTrash2 /> {pharmacy ? 'Remove Client' : 'Remove Customer'}
                   </button>
                 </div>
               </div>
             </section>
 
-            <ProfileDetail
-              icon={<FiCreditCard />}
-              label="Discount eligibility"
-              value={discountLabel}
-              description={discountDetail}
-            />
+            {pharmacy ? (
+              <ProfileDetail
+                icon={<FiCreditCard />}
+                label="Client Type"
+                value="Pharmacy (Wholesale)"
+                description="Orders are placed in Wholesale & Deliveries, by the box."
+              />
+            ) : (
+              <ProfileDetail
+                icon={<FiCreditCard />}
+                label="Discount Eligibility"
+                value={discountLabel}
+                description={discountDetail}
+              />
+            )}
             <ProfileDetail
               icon={<FiPhone />}
-              label="Primary contact"
+              label="Primary Contact"
               value={draft.phone || 'No phone recorded'}
               description={draft.email || 'No email address recorded'}
             />
             <ProfileDetail
               icon={<FiMapPin />}
-              label="Address"
+              label={pharmacy ? 'Delivery Address' : 'Address'}
               value={draft.address || 'No address recorded'}
-              description="Used for the customer profile record"
+              description={
+                pharmacy
+                  ? 'Default address for wholesale deliveries'
+                  : 'Used for the customer record'
+              }
             />
 
             <section className="panel min-w-0 overflow-hidden xl:col-span-12">
               <header className="flex flex-col gap-3 border-b border-slate-200 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
                 <div>
-                  <h3 className="font-semibold">Transaction history</h3>
+                  <h3 className="section-title">Transaction History</h3>
                   <p className="mt-1 text-sm text-slate-500">
-                    Recorded purchases associated with this customer.
+                    {pharmacy
+                      ? 'Counter purchases recorded for this client. Wholesale orders are listed in Wholesale & Deliveries.'
+                      : 'Recorded purchases associated with this customer.'}
                   </p>
                 </div>
                 <span className="w-fit rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600">
@@ -404,7 +587,7 @@ export default function CustomerProfileView({
             className="glass-surface relative z-10 w-full max-w-md rounded-lg p-6"
           >
             <h2 id="remove-customer-title" className="text-xl font-semibold">
-              Remove customer?
+              {pharmacy ? 'Remove Pharmacy Client?' : 'Remove Customer?'}
             </h2>
             <p className="mt-2 text-sm leading-6 text-slate-500">
               {draft.fullName} will be removed from the customer list. This action cannot be undone
@@ -423,22 +606,13 @@ export default function CustomerProfileView({
                 onClick={() => void remove()}
                 className="danger-button disabled:cursor-wait disabled:opacity-60"
               >
-                {isRemoving ? 'Removing…' : 'Remove customer'}
+                {isRemoving ? 'Removing…' : pharmacy ? 'Remove Client' : 'Remove Customer'}
               </button>
             </div>
           </section>
         </div>
       )}
     </DashboardShell>
-  )
-}
-
-function Field({ label, children }: { label: string; children: ReactElement }): ReactElement {
-  return (
-    <label className="block text-[0.72rem] font-semibold tracking-[0.08em] text-slate-600 uppercase">
-      {label}
-      <span className="mt-2 block">{children}</span>
-    </label>
   )
 }
 

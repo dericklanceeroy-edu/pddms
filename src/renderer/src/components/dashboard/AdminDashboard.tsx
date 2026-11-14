@@ -47,7 +47,7 @@ function DashboardError({
         <div className="mx-auto grid size-12 place-items-center rounded-lg bg-rose-50/90 text-rose-600 ring-1 ring-rose-100">
           <FiAlertCircle className="size-5" aria-hidden="true" />
         </div>
-        <h2 className="mt-4 text-lg font-semibold text-slate-950">Dashboard unavailable</h2>
+        <h2 className="mt-4 text-lg font-semibold text-slate-950">Dashboard Unavailable</h2>
         <p className="mt-2 text-sm leading-6 text-slate-500">{message}</p>
         <button
           type="button"
@@ -55,7 +55,7 @@ function DashboardError({
           className="bg-brand-600 hover:bg-brand-700 focus-visible:ring-brand-500 mt-5 inline-flex h-10 items-center gap-2 rounded-md px-4 text-sm font-semibold text-white shadow-sm transition focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
         >
           <FiRefreshCw aria-hidden="true" />
-          Try again
+          Try Again
         </button>
       </div>
     </div>
@@ -64,12 +64,12 @@ function DashboardError({
 
 const views: Record<DashboardView, { title: string; subtitle: string }> = {
   admin: {
-    title: 'Admin dashboard',
+    title: 'Admin Dashboard',
     subtitle:
       'Today’s sales, stock that needs attention and purchasing status, taken live from the pharmacy database.'
   },
   staff: {
-    title: 'Pharmacy operations',
+    title: 'Pharmacy Operations',
     subtitle:
       'Stock that needs attention, deliveries to receive and supplier invoices due, taken live from the database.'
   },
@@ -132,7 +132,7 @@ export default function AdminDashboard(): ReactElement {
               <section id="sales-activity" className="scroll-mt-28">
                 <RecentTransactions
                   transactions={data.recentTransactions}
-                  title="My recent sales"
+                  title="My Recent Sales"
                   description="Your latest completed sales. Open Sales & dispensing for receipts."
                   showCashier={false}
                 />

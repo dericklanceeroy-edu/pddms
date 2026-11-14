@@ -43,31 +43,31 @@ const navigation: Array<{ group: string; items: NavigationItem[] }> = [
     group: 'Daily work',
     items: [
       { label: 'Dashboard', to: '/', icon: FiGrid },
-      { label: 'Sales & dispensing', to: '/sales', icon: FiShoppingBag },
+      { label: 'Sales & Dispensing', to: '/sales', icon: FiShoppingBag },
       { label: 'Customers', to: '/customers', icon: FiUser }
     ]
   },
   {
     group: 'Stock & purchasing',
     items: [
-      { label: 'Inventory & expiry', to: '/inventory', icon: FiArchive },
+      { label: 'Inventory & Expiry', to: '/inventory', icon: FiArchive },
       { label: 'Receiving', to: '/suppliers', icon: FiPackage, tab: 'receiving' },
-      { label: 'Suppliers & orders', to: '/suppliers', icon: FiTruck },
-      { label: 'Invoices & payments', to: '/suppliers', icon: FiCreditCard, tab: 'invoices' }
+      { label: 'Suppliers & Orders', to: '/suppliers', icon: FiTruck },
+      { label: 'Invoices & Payments', to: '/suppliers', icon: FiCreditCard, tab: 'invoices' }
     ]
   },
   {
     group: 'Business',
     items: [
-      { label: 'Wholesale & deliveries', to: '/wholesale', icon: FiTruck },
+      { label: 'Wholesale & Deliveries', to: '/wholesale', icon: FiTruck },
       { label: 'Reports', to: '/reports', icon: FiBarChart2 }
     ]
   },
   {
     group: 'Account & admin',
     items: [
-      { label: 'User management', to: '/users', icon: FiUsers },
-      { label: 'My profile', to: '/profile', icon: FiUser }
+      { label: 'User Management', to: '/users', icon: FiUsers },
+      { label: 'My Profile', to: '/profile', icon: FiUser }
     ]
   }
 ]
@@ -134,7 +134,7 @@ function Sidebar({
           </div>
           <div className="min-w-0">
             <p className="truncate font-semibold tracking-tight text-white">Med Prix</p>
-            <p className="truncate text-xs text-slate-400">Pharmacy management</p>
+            <p className="truncate text-xs text-slate-300">Distributor and Pharmacy</p>
           </div>
         </div>
         {onClose && (
@@ -213,7 +213,7 @@ function Sidebar({
             disabled={isSigningOut}
             className="mt-3 flex w-full items-center justify-center gap-2 rounded-md border border-white/15 px-3 py-2 text-xs font-medium text-slate-200 transition hover:bg-white/10 hover:text-white disabled:cursor-wait disabled:opacity-60"
           >
-            <FiLogOut /> {isSigningOut ? 'Signing out…' : 'Sign out'}
+            <FiLogOut /> {isSigningOut ? 'Signing Out…' : 'Sign Out'}
           </button>
           {signOutError && (
             <p role="alert" className="mt-2 text-xs leading-5 text-rose-300">

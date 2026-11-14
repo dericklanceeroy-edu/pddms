@@ -25,10 +25,10 @@ export default function FormField({
   const describedBy = [hint && `${id}-hint`, error && `${id}-error`].filter(Boolean).join(' ')
   return (
     <div className={`min-w-0 text-sm ${className}`}>
-      <label htmlFor={id} className="block font-medium text-slate-700">
+      <label htmlFor={id} className="field-label">
         {label}
         {required ? (
-          <span className="ml-0.5 text-rose-600" aria-hidden="true">
+          <span className="required-mark" aria-hidden="true">
             *
           </span>
         ) : (
@@ -46,7 +46,7 @@ export default function FormField({
         })}
       </div>
       {hint && !error && (
-        <p id={`${id}-hint`} className="mt-1 text-xs text-slate-500">
+        <p id={`${id}-hint`} className="mt-1 text-xs leading-5 text-slate-500">
           {hint}
         </p>
       )}
@@ -77,7 +77,7 @@ export function FormError({ message }: { message: string }): ReactElement | null
 export function RequiredNote(): ReactElement {
   return (
     <p className="text-xs text-slate-500">
-      Fields marked <span className="text-rose-600">*</span> are required.
+      Fields marked <span className="required-mark">*</span> are required.
     </p>
   )
 }

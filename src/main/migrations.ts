@@ -1,4 +1,6 @@
 import { db } from '@main/db'
+import type { Database } from '@shared/types'
+import type { Kysely } from 'kysely'
 import { up as createAccounts } from '../../migrations/1785501403133_create_accounts_table'
 import { up as createDrugs } from '../../migrations/1786732875171_create_drugs_table'
 import { up as createSuppliers } from '../../migrations/1786732898928_create_suppliers_table'
@@ -14,8 +16,20 @@ import { up as createSales } from '../../migrations/1789000600000_create_sales'
 import { up as createWholesale } from '../../migrations/1789000700000_create_wholesale'
 import { up as accountSecurityAudit } from '../../migrations/1789000800000_account_security_audit'
 import { up as deliveryRequests } from '../../migrations/1789000900000_delivery_requests'
+import { up as boxPieceUnits } from '../../migrations/1789001000000_box_piece_units'
+import { up as handlerTracking } from '../../migrations/1789001100000_handler_tracking'
+import { up as walkInDiscount } from '../../migrations/1789001200000_walk_in_discount'
+import { up as pharmacyClientsAccountEmail } from '../../migrations/1789001300000_pharmacy_clients_account_email'
 
 export async function initializeDatabase(): Promise<void> {
+  await migrate(db)
+}
+
+/**
+ * Brings a database up to the current schema. Every step only adds what is missing, so it is safe
+ * on the live database and on a copy of an older backup being restored.
+ */
+export async function migrate(db: Kysely<Database>): Promise<void> {
   const existingTables = new Set((await db.introspection.getTables()).map((table) => table.name))
 
   if (!existingTables.has('accounts')) await createAccounts(db)
@@ -33,4 +47,8 @@ export async function initializeDatabase(): Promise<void> {
   await createWholesale(db)
   await accountSecurityAudit(db)
   await deliveryRequests(db)
+  await boxPieceUnits(db)
+  await handlerTracking(db)
+  await walkInDiscount(db)
+  await pharmacyClientsAccountEmail(db)
 }

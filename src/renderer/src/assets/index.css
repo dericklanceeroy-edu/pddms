@@ -32,7 +32,7 @@
   }
 
   body {
-    @apply bg-canvas m-0 min-h-screen text-[15px] text-slate-900 antialiased;
+    @apply bg-canvas m-0 min-h-screen text-[15px] leading-normal text-slate-900 antialiased;
   }
 
   ::selection {
@@ -112,7 +112,7 @@
   }
 
   .eyebrow {
-    @apply text-brand-700 text-xs font-semibold tracking-wide uppercase;
+    @apply text-brand-700 text-xs font-bold tracking-wider uppercase;
   }
 
   /* Page header: title, one-line description and the page's main action. */
@@ -120,12 +120,45 @@
     @apply flex flex-wrap items-end justify-between gap-4;
   }
 
+  /*
+   * Type scale: page title 32px bold, section title 20px bold, card title 16px semibold, body
+   * 14-16px with 1.5 line height. Titles, labels and buttons use title case.
+   */
   .page-title {
-    @apply text-2xl font-semibold tracking-tight text-slate-900;
+    @apply text-[2rem] leading-tight font-bold tracking-tight text-slate-950;
   }
 
   .page-subtitle {
-    @apply mt-1 text-sm text-slate-500;
+    @apply mt-1.5 text-sm leading-6 text-slate-600;
+  }
+
+  .section-title {
+    @apply text-xl leading-snug font-bold tracking-tight text-slate-900;
+  }
+
+  .section-subtitle {
+    @apply mt-1 max-w-3xl text-sm leading-6 text-slate-600;
+  }
+
+  .card-title {
+    @apply text-base font-semibold text-slate-900;
+  }
+
+  .field-label {
+    @apply block text-sm font-semibold text-slate-800;
+  }
+
+  /* Red asterisk on every required field label. */
+  .required-mark {
+    @apply ml-0.5 font-bold text-rose-600;
+  }
+
+  .field-error {
+    @apply mt-1 block text-xs font-medium text-rose-700;
+  }
+
+  .field-warning {
+    @apply mt-1 block text-xs font-medium text-amber-700;
   }
 
   /* Forms */

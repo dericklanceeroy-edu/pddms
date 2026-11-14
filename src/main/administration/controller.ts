@@ -2,7 +2,7 @@ import { accessControl, authorize } from '@main/access-control'
 import { state } from '@main/api'
 import { windowDialog } from '@main/api/dialogs'
 import { ipcMain } from '@main/api/ipc'
-import { listAudit } from '@main/audit/repository'
+import { auditResources, listAudit } from '@main/audit/repository'
 import {
   backupDirectory,
   createBackup,
@@ -11,6 +11,7 @@ import {
   validateBackup
 } from '@main/backup/local'
 import { channels, resources, roles } from '@shared/constants'
+import { BrowserWindow } from 'electron'
 import { dirname } from 'node:path'
 import z from 'zod'
 
@@ -19,13 +20,28 @@ const admin = (): void => {
 }
 ipcMain.handle(channels.administration.logs, async (_, payload: unknown) => {
   admin()
+  const date = z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional()
   const data = z
     .strictObject({
       search: z.string().trim().max(100),
-      beforeId: z.number().int().positive().optional()
+      beforeId: z.number().int().positive().optional(),
+      from: date,
+      to: date,
+      result: z.enum(['success', 'failed', 'denied', 'started', 'cancelled']).optional(),
+      resource: z.string().trim().max(60).optional()
+    })
+    .refine((value) => !value.from || !value.to || value.from <= value.to, {
+      message: 'The start date must be on or before the end date.'
     })
     .parse(payload)
-  return { success: true, records: await listAudit(data.search, data.beforeId) }
+  return {
+    success: true,
+    records: await listAudit(data),
+    resources: data.beforeId ? undefined : await auditResources()
+  }
 })
 ipcMain.handle(channels.administration.permissions, () => {
   admin()
@@ -68,13 +84,12 @@ ipcMain.handle(channels.administration.restore, async (event) => {
   if (choice.canceled || !choice.filePaths[0]) return { success: true, cancelled: true }
   const directory = dirname(choice.filePaths[0])
   try {
-    const info = await validateBackup(directory)
+    const info = await validateBackup(directory, { allowUpgrade: true })
     const confirm = await windowDialog(event).showMessageBox({
       type: 'warning',
       title: 'Restore application data?',
-      message: `Replace current data with the backup from ${info.createdAt}?`,
-      detail:
-        'A safety backup will be created first. All users will be signed out. Current audit history will be retained. Database and supplier invoice files will be restored.',
+      message: `Replace current data with the backup from ${new Date(info.createdAt).toLocaleString('en-PH')}?`,
+      detail: `A safety backup will be created first. All users will be signed out. Current audit history will be retained. Database and supplier invoice files will be restored.${info.upgradeNeeded ? ' This backup was made by an earlier version of Med Prix; a copy of it is upgraded to the current version before it is restored. The backup folder itself is not changed.' : ''}`,
       buttons: ['Cancel', 'Restore backup'],
       defaultId: 0,
       cancelId: 0,
@@ -84,12 +99,21 @@ ipcMain.handle(channels.administration.restore, async (event) => {
     const result = await restoreBackup(directory)
     state.session = undefined
     state.database.stale = true
+    // Note: After a native dialog closes, Windows can leave the page without keyboard focus, so
+    // the sign-in fields shown next would not accept typing. Give focus back to the page.
+    // Focus is best effort: the restore has already succeeded and must be reported as such.
+    try {
+      BrowserWindow.fromWebContents(event.sender)?.focus()
+      event.sender.focus()
+    } catch {
+      // Ignored: the sign-in page also requests focus when it loads.
+    }
     return { success: true, safety: result.safety, reloadRequired: true }
   } catch {
     return {
       success: false,
       error:
-        'Restore rejected or failed. The backup must match this schema, pass integrity checks, and include every invoice. Current data is retained if restoration cannot complete.'
+        'Restore rejected or failed. The backup must come from this or an earlier version of Med Prix, pass integrity checks, and include every invoice. Current data is retained if restoration cannot complete.'
     }
   }
 })

@@ -95,7 +95,9 @@ ipcMain.handle(
             'That status change is not allowed. Received quantities control receiving statuses.'
         }
       }
-      const order = await updateStatusById(id, nextStatus)
+      const accountId = state.session?.account.id
+      if (!accountId) return { success: false, error: 'Session not found.' }
+      const order = await updateStatusById(id, nextStatus, accountId)
       state.database.stale = true
       return { success: true, order }
     } catch (error) {
@@ -121,6 +123,8 @@ ipcMain.handle(
         requestId: data.requestId,
         deliveredAt: data.deliveredAt,
         notes: data.notes ?? null,
+        deliveredByName: data.deliveredByName,
+        checkedByName: data.checkedByName,
         recordedBy: accountId,
         items: data.items
       })

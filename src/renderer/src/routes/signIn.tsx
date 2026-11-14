@@ -1,6 +1,7 @@
 import Form from '@renderer/components/Form/Form'
 import { CenteredPage, CenteredPageHeader } from '@renderer/components/layout/CenteredPage'
 import FormField from '@renderer/components/ui/FormField'
+import { RESTORE_NOTICE_KEY } from '@renderer/data/restoreNotice'
 import { useAccount } from '@renderer/hooks/useAccount'
 import type { Credentials } from '@shared/types'
 import { createFileRoute } from '@tanstack/react-router'
@@ -15,6 +16,16 @@ function RouteComponent(): ReactElement {
   const { signIn } = useAccount()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
+  // Note: Shown once after a backup restore reloads the app; read during the first render.
+  const [notice] = useState(() => {
+    try {
+      const value = window.sessionStorage.getItem(RESTORE_NOTICE_KEY) ?? ''
+      window.sessionStorage.removeItem(RESTORE_NOTICE_KEY)
+      return value
+    } catch {
+      return ''
+    }
+  })
 
   const submit = async (credentials: Credentials): Promise<void> => {
     setIsSubmitting(true)
@@ -32,16 +43,22 @@ function RouteComponent(): ReactElement {
   return (
     <CenteredPage>
       <CenteredPageHeader
-        title="Sign in to your account"
-        description="Use your assigned pharmacy account."
+        title="Sign In to Your Account"
+        description="Use the account assigned to you by the pharmacy."
       />
-      <p className="mb-5 text-center text-sm text-slate-500">
-        If you encounter any issues, contact the master account holder.
-      </p>
+      {notice && (
+        <p
+          role="status"
+          className="status-message mb-5 border-emerald-200 bg-emerald-50 break-words text-emerald-800"
+        >
+          {notice}
+        </p>
+      )}
       <Form<Credentials> noValidate onSubmit={submit} className="space-y-4">
         <FormField label="Username" required>
           <Form.Text
             name="username"
+            rule="username"
             placeholder="e.g. juan.delacruz"
             autoComplete="username"
             required
@@ -67,9 +84,12 @@ function RouteComponent(): ReactElement {
           </p>
         )}
         <button type="submit" disabled={isSubmitting} className="primary-button w-full">
-          {isSubmitting ? 'Signing in…' : 'Sign in'}
+          {isSubmitting ? 'Signing In…' : 'Sign In'}
         </button>
       </Form>
+      <p className="mt-6 text-center text-xs leading-5 text-slate-500">
+        Having trouble signing in? Contact the master account holder.
+      </p>
     </CenteredPage>
   )
 }

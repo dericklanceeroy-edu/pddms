@@ -1,7 +1,13 @@
 import { existsSync } from 'node:fs'
 
 export const handlers = new Map()
-export const renderer = { mainFrame: { url: 'file:///pddms-test/index.html' } }
+export const renderer = {
+  mainFrame: { url: 'file:///pddms-test/index.html' },
+  focusCount: 0,
+  focus: () => {
+    renderer.focusCount++
+  }
+}
 export const ipcMain = {
   handle: (channel, handler) =>
     handlers.set(channel, async (event, ...args) => {

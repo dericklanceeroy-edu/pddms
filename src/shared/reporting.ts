@@ -2,20 +2,46 @@ import z from 'zod'
 import { isoDateSchema } from './schemas'
 
 export const reportTitles = {
-  sales: 'Daily / period retail sales',
-  inventory: 'Current inventory & stock valuation',
-  movement: 'Fast / slow-moving products',
-  financial: 'Revenue, expenses & financial summary',
-  income: 'Retail & wholesale income',
-  cash: 'Recorded cash inconsistencies',
-  overdue: 'Overdue accounts receivable',
-  arPayments: 'Accounts receivable payments',
-  apPayments: 'Accounts payable payments',
-  discounts: 'Discount monitoring',
-  regulated: 'Regulated product sales',
-  products: 'Product information & summaries'
+  sales: 'Daily / Period Retail Sales',
+  inventory: 'Current Inventory & Stock Valuation',
+  movement: 'Fast / Slow-Moving Products',
+  financial: 'Revenue, Expenses & Financial Summary',
+  income: 'Retail & Wholesale Income',
+  cash: 'Recorded Cash Inconsistencies',
+  overdue: 'Overdue Accounts Receivable',
+  arPayments: 'Accounts Receivable Payments',
+  apPayments: 'Accounts Payable Payments',
+  discounts: 'Discount Monitoring',
+  regulated: 'Regulated Product Sales',
+  products: 'Product Information & Summaries'
 } as const
 export type ReportKind = keyof typeof reportTitles
+
+const minorWords = new Set([
+  'a',
+  'an',
+  'and',
+  'as',
+  'at',
+  'by',
+  'for',
+  'in',
+  'of',
+  'on',
+  'or',
+  'per',
+  'the',
+  'to',
+  'vs',
+  'with'
+])
+/** Title case for headings and labels; acronyms such as AR and AP keep their capitals. */
+export const titleCase = (text: string): string =>
+  text.replace(/[A-Za-z][A-Za-z']*/g, (word, offset: number) =>
+    offset > 0 && minorWords.has(word) && !/[(/-]\s*$/.test(text.slice(0, offset))
+      ? word
+      : word[0].toUpperCase() + word.slice(1)
+  )
 export const reportSchema = z
   .strictObject({
     kind: z.enum(Object.keys(reportTitles) as [ReportKind, ...ReportKind[]]),

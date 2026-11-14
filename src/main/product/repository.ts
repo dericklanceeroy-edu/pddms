@@ -9,6 +9,7 @@ export interface ProductWithInventory extends Product {
     supplier: string
     stock: number
     sellPrice: number
+    boxSellPrice: number | null
     expiresAt: Date
     receipts: Array<{ orderNumber: string; deliveredAt: string; quantity: number }>
   }>
@@ -30,6 +31,7 @@ export async function findAll(): Promise<ProductWithInventory[]> {
       'batches.physicalTag',
       'batches.currentStock',
       'batches.sellPrice',
+      'batches.boxSellPrice',
       'batches.expiresAt',
       'suppliers.organization'
     ])
@@ -39,9 +41,17 @@ export async function findAll(): Promise<ProductWithInventory[]> {
     .selectFrom('supplierDeliveryItems')
     .innerJoin('supplierDeliveries', 'supplierDeliveries.id', 'supplierDeliveryItems.deliveryId')
     .innerJoin('purchaseOrders', 'purchaseOrders.id', 'supplierDeliveries.purchaseOrderId')
+    .innerJoin(
+      'purchaseOrderItems',
+      'purchaseOrderItems.id',
+      'supplierDeliveryItems.purchaseOrderItemId'
+    )
     .select([
       'supplierDeliveryItems.batchId',
-      'supplierDeliveryItems.quantity',
+      // Note: Receipts are listed in pieces, the same unit as batch stock.
+      sql<number>`supplier_delivery_items.quantity * purchase_order_items.pieces_per_unit`.as(
+        'quantity'
+      ),
       'purchaseOrders.orderNumber',
       'supplierDeliveries.deliveredAt'
     ])
@@ -63,15 +73,17 @@ export async function findAll(): Promise<ProductWithInventory[]> {
   return products.map((product) => ({
     ...toProduct(product),
     batches: (batchesByProduct.get(product.id) ?? []).map((batch) => ({
-        id: batch.id,
-        batchNumber: batch.physicalTag ?? `Batch ${batch.id}`,
-        supplier: batch.organization,
-        stock: batch.currentStock,
-        sellPrice: batch.sellPrice,
-        expiresAt: batch.expiresAt,
-        receipts: (receiptsByBatch.get(batch.id) ?? [])
-          .map(({ orderNumber, deliveredAt, quantity }) => ({ orderNumber, deliveredAt, quantity }))
-      }))
+      id: batch.id,
+      batchNumber: batch.physicalTag ?? `Batch ${batch.id}`,
+      supplier: batch.organization,
+      stock: batch.currentStock,
+      sellPrice: batch.sellPrice,
+      boxSellPrice: batch.boxSellPrice,
+      expiresAt: batch.expiresAt,
+      receipts: (receiptsByBatch.get(batch.id) ?? []).map(
+        ({ orderNumber, deliveredAt, quantity }) => ({ orderNumber, deliveredAt, quantity })
+      )
+    }))
   }))
 }
 

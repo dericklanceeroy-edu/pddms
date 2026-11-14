@@ -14,7 +14,7 @@ function RouteComponent(): ReactElement {
         description="Create the master account to secure this installation."
       />
       <Link to="/new/master" className="primary-button w-full">
-        Get started
+        Get Started
       </Link>
     </div>
   )

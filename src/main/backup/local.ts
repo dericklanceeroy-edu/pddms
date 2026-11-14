@@ -1,8 +1,11 @@
 import { database } from '@main/db'
 import { env } from '@main/env'
+import { migrate } from '@main/migrations'
 import type { BackupInfo } from '@shared/security'
+import type { Database } from '@shared/types'
 import SQLite from 'better-sqlite3'
 import { app } from 'electron'
+import { CamelCasePlugin, Kysely, SqliteDialect } from 'kysely'
 import { createHash, randomUUID } from 'node:crypto'
 import { createReadStream, renameSync } from 'node:fs'
 import { copyFile, lstat, mkdir, mkdtemp, readFile, readdir, writeFile } from 'node:fs/promises'
@@ -84,7 +87,34 @@ export async function createBackup(parent = backupDirectory()): Promise<BackupIn
   )
   return { directory, createdAt, invoiceCount: invoices.length }
 }
-export async function validateBackup(directory: string): Promise<BackupInfo> {
+/**
+ * Upgrades a copied backup database to the current schema in place. Backups made before a later
+ * update are restorable: the same add-only migrations the app runs at start-up run on the copy.
+ */
+async function upgradeSnapshot(path: string): Promise<void> {
+  const connection = new SQLite(path, { fileMustExist: true })
+  connection.pragma('foreign_keys = ON')
+  const upgrade = new Kysely<Database>({
+    dialect: new SqliteDialect({ database: connection }),
+    plugins: [new CamelCasePlugin()]
+  })
+  try {
+    await migrate(upgrade)
+  } finally {
+    await upgrade.destroy()
+  }
+}
+
+/**
+ * Checks a backup folder. With `allowUpgrade`, a backup from an older version (fewer tables or
+ * columns) passes here and is upgraded on a staged copy during restore, where the schema is
+ * checked again; anything else that does not match is rejected.
+ */
+export async function validateBackup(
+  directory: string,
+  { allowUpgrade = false }: { allowUpgrade?: boolean } = {}
+): Promise<BackupInfo & { upgradeNeeded: boolean }> {
+  let upgradeNeeded = false
   if ((await lstat(directory)).isSymbolicLink())
     throw new Error('Select a regular backup directory.')
   await digest(join(directory, 'manifest.json'))
@@ -99,8 +129,11 @@ export async function validateBackup(directory: string): Promise<BackupInfo> {
   })
   try {
     snapshot.pragma('trusted_schema = OFF')
-    if (schema(snapshot) !== schema(database))
-      throw new Error('Backup schema is incompatible with this application version.')
+    if (schema(snapshot) !== schema(database)) {
+      if (!allowUpgrade || !isOlderSchema(snapshot))
+        throw new Error('Backup schema is incompatible with this application version.')
+      upgradeNeeded = true
+    }
     if (
       snapshot.pragma('integrity_check', { simple: true }) !== 'ok' ||
       (snapshot.pragma('foreign_key_check') as unknown[]).length
@@ -123,7 +156,41 @@ export async function validateBackup(directory: string): Promise<BackupInfo> {
   } finally {
     snapshot.close()
   }
-  return { directory, createdAt: manifest.createdAt, invoiceCount: manifest.invoices.length }
+  return {
+    directory,
+    createdAt: manifest.createdAt,
+    invoiceCount: manifest.invoices.length,
+    upgradeNeeded
+  }
+}
+
+/** True when every table and column in the backup also exists now (it is older, not newer). */
+function isOlderSchema(snapshot: SQLite.Database): boolean {
+  const columns = (connection: SQLite.Database): Map<string, Set<string>> => {
+    const tables = connection
+      .prepare(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT IN ('kysely_migration', 'kysely_migration_lock')"
+      )
+      .all() as { name: string }[]
+    return new Map(
+      tables.map(({ name }) => [
+        name,
+        new Set(
+          (
+            connection.prepare(`PRAGMA table_info("${name.replaceAll('"', '""')}")`).all() as {
+              name: string
+            }[]
+          ).map((column) => column.name)
+        )
+      ])
+    )
+  }
+  const current = columns(database)
+  for (const [table, names] of columns(snapshot)) {
+    const now = current.get(table)
+    if (!now || [...names].some((name) => !now.has(name))) return false
+  }
+  return true
 }
 export async function listBackups(): Promise<BackupInfo[]> {
   await mkdir(backupDirectory(), { recursive: true })
@@ -148,7 +215,7 @@ export async function listBackups(): Promise<BackupInfo[]> {
   return results.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
 }
 export async function restoreBackup(source: string): Promise<{ safety: BackupInfo }> {
-  await validateBackup(source)
+  const checked = await validateBackup(source, { allowUpgrade: true })
   const staging = await mkdtemp(join(dirname(resolve(env.DATABASE)), 'pddms-restore-'))
   await mkdir(join(staging, 'invoices'))
   const manifest = manifestSchema.parse(
@@ -158,6 +225,15 @@ export async function restoreBackup(source: string): Promise<{ safety: BackupInf
   await copyFile(join(source, 'manifest.json'), join(staging, 'manifest.json'))
   for (const item of manifest.invoices)
     await copyFile(join(source, 'invoices', item.name), join(staging, 'invoices', item.name))
+  if (checked.upgradeNeeded) {
+    await upgradeSnapshot(join(staging, 'database.sqlite'))
+    // Note: The upgraded copy has a new checksum; the staged manifest records it so the full
+    // validation below (schema, integrity, master account, invoices) runs on the upgraded copy.
+    await writeFile(
+      join(staging, 'manifest.json'),
+      JSON.stringify({ ...manifest, database: await digest(join(staging, 'database.sqlite')) })
+    )
+  }
   await validateBackup(staging)
   const safety = await createBackup()
   await mkdir(invoiceDirectory(), { recursive: true })

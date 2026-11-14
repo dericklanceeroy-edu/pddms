@@ -3,13 +3,16 @@ import { deductBatchStock } from '@main/inventory/repository'
 import { isBatchSellable, localDate } from '@shared/inventory'
 import { calculateSale, priceToCents, type SaleLine } from '@shared/sales'
 import type { Database } from '@shared/types'
+import { piecesPerUnit, UnitError, unitSellPrice } from '@shared/units'
 import {
   receivable,
+  wholesaleDeliverSchema,
   WholesaleError,
   wholesaleListSchema,
   wholesaleOrderSchema,
   wholesalePaymentSchema,
   wholesaleScheduleSchema,
+  type WholesaleDelivery,
   type WholesaleDetails,
   type WholesaleDraft,
   type WholesaleFilter,
@@ -17,10 +20,13 @@ import {
   type WholesaleSchedule,
   type WholesaleSummary
 } from '@shared/wholesale'
-import { sql, type Kysely } from 'kysely'
+import { sql, type Kysely, type RawBuilder } from 'kysely'
 import { randomUUID } from 'node:crypto'
 
 const paidSql = sql<number>`COALESCE((SELECT SUM(amount_cents) FROM wholesale_payments WHERE order_id = wholesale_orders.id), 0)`
+const createdByNameSql = sql<string>`COALESCE((SELECT full_name FROM accounts WHERE accounts.id = wholesale_orders.created_by), 'Unknown account')`
+const accountName = (column: 'recorded_by' | 'updated_by'): RawBuilder<string> =>
+  sql<string>`COALESCE((SELECT full_name FROM accounts WHERE accounts.id = wholesale_payments.${sql.raw(column)}), 'Unknown account')`
 export async function listOrders(
   input: WholesaleFilter,
   financial: boolean
@@ -30,6 +36,7 @@ export async function listOrders(
     .selectFrom('wholesaleOrders')
     .selectAll()
     .select(paidSql.as('paidCents'))
+    .select(createdByNameSql.as('createdByName'))
     .orderBy('id', 'desc')
     .limit(50)
   if (filter.beforeId) query = query.where('id', '<', filter.beforeId)
@@ -62,6 +69,7 @@ export async function getOrder(id: number, financial: boolean): Promise<Wholesal
   const order = await db
     .selectFrom('wholesaleOrders')
     .selectAll()
+    .select(createdByNameSql.as('createdByName'))
     .where('id', '=', id)
     .executeTakeFirst()
   if (!order) throw new WholesaleError('Wholesale order not found.')
@@ -77,6 +85,8 @@ export async function getOrder(id: number, financial: boolean): Promise<Wholesal
   const payments = await db
     .selectFrom('wholesalePayments')
     .selectAll()
+    .select(accountName('recorded_by').as('recordedByName'))
+    .select(accountName('updated_by').as('updatedByName'))
     .where('orderId', '=', id)
     .orderBy('id', 'desc')
     .execute()
@@ -130,7 +140,7 @@ export async function createOrder(input: WholesaleDraft, accountId: number): Pro
   const { requestId, ...values } = data
   const fingerprint = JSON.stringify(values)
   return db.transaction().execute(async (transaction) => {
-    await activeAccount(transaction, accountId)
+    const creatorName = await activeAccount(transaction, accountId)
     const existing = await transaction
       .selectFrom('wholesaleOrders')
       .selectAll()
@@ -146,7 +156,11 @@ export async function createOrder(input: WholesaleDraft, accountId: number): Pro
       .selectAll()
       .where('id', '=', data.customerId)
       .executeTakeFirst()
-    if (!customer) throw new WholesaleError('Select an existing customer.')
+    if (!customer) throw new WholesaleError('Select an existing pharmacy client.')
+    if (customer.clientType !== 'pharmacy')
+      throw new WholesaleError(
+        `${customer.fullName} is a retail customer. Wholesale orders are for pharmacy clients only.`
+      )
     const batches = await transaction
       .selectFrom('batches')
       .innerJoin('drugs', 'drugs.id', 'batches.drugId')
@@ -157,6 +171,8 @@ export async function createOrder(input: WholesaleDraft, accountId: number): Pro
         'batches.expiresAt',
         'batches.currentStock',
         'batches.sellPrice',
+        'batches.boxSellPrice',
+        'drugs.piecesPerBox',
         'drugs.brandName',
         'drugs.genericName',
         'drugs.formulation',
@@ -177,10 +193,30 @@ export async function createOrder(input: WholesaleDraft, accountId: number): Pro
         !isBatchSellable(batch.currentStock, String(batch.expiresAt))
       )
         throw new WholesaleError('Select an active product with valid, available stock.')
-      if (priceToCents(batch.sellPrice) !== item.unitPriceCents)
+      let pieces: number
+      let unitPrice: number
+      try {
+        pieces = piecesPerUnit(item.unit, batch.piecesPerBox)
+        unitPrice = unitSellPrice(
+          item.unit,
+          batch.sellPrice,
+          batch.boxSellPrice,
+          batch.piecesPerBox
+        )
+      } catch (error) {
+        if (error instanceof UnitError)
+          throw new WholesaleError(`${batch.brandName}: ${error.message}`)
+        throw error
+      }
+      if (item.quantity * pieces > batch.currentStock)
+        throw new WholesaleError(
+          `${batch.brandName}: only ${batch.currentStock} piece(s) in stock for batch ${batch.physicalTag ?? batch.id}.`
+        )
+      if (priceToCents(unitPrice) !== item.unitPriceCents)
         throw new WholesaleError('Product price changed. Refresh and re-add the batch.')
       return {
         ...item,
+        piecesPerUnit: pieces,
         drugId: batch.drugId,
         productName: `${batch.brandName} (${batch.genericName}) ${batch.formulation}`,
         category: batch.category,
@@ -203,13 +239,19 @@ export async function createOrder(input: WholesaleDraft, accountId: number): Pro
         orderDate: localDate(),
         dueDate: data.dueDate,
         totalCents,
-        status: 'pending',
+        status: 'scheduled',
         notes: data.notes,
         deliveryAddress: data.deliveryAddress,
-        deliveryNotes: '',
-        scheduledDate: null,
+        deliveryNotes: data.deliveryNotes,
+        scheduledDate: data.scheduledDate,
         deliveredAt: null,
-        deliveredByName: null
+        deliveredByName: null,
+        scheduledByName: creatorName,
+        scheduledAt: new Date().toISOString(),
+        driverName: data.driverName || null,
+        receivedByName: null,
+        cancelledByName: null,
+        cancelledAt: null
       })
       .returning('id')
       .executeTakeFirstOrThrow()
@@ -223,7 +265,7 @@ export async function createOrder(input: WholesaleDraft, accountId: number): Pro
 export async function scheduleOrder(input: WholesaleSchedule, accountId: number): Promise<void> {
   const data = wholesaleScheduleSchema.parse(input)
   await db.transaction().execute(async (transaction) => {
-    await activeAccount(transaction, accountId)
+    const name = await activeAccount(transaction, accountId)
     const order = await transaction
       .selectFrom('wholesaleOrders')
       .selectAll()
@@ -239,13 +281,17 @@ export async function scheduleOrder(input: WholesaleSchedule, accountId: number)
         scheduledDate: data.scheduledDate,
         deliveryAddress: data.deliveryAddress,
         deliveryNotes: data.deliveryNotes,
+        driverName: data.driverName || null,
+        scheduledByName: name,
+        scheduledAt: new Date().toISOString(),
         status: 'scheduled'
       })
       .where('id', '=', order.id)
       .executeTakeFirstOrThrow()
   })
 }
-export async function deliverOrder(id: number, accountId: number): Promise<void> {
+export async function deliverOrder(input: WholesaleDelivery, accountId: number): Promise<void> {
+  const { orderId: id, driverName, receivedByName } = wholesaleDeliverSchema.parse(input)
   await db.transaction().execute(async (transaction) => {
     const name = await activeAccount(transaction, accountId)
     const order = await transaction
@@ -281,13 +327,14 @@ export async function deliverOrder(id: number, accountId: number): Promise<void>
         !isBatchSellable(batch.currentStock, String(batch.expiresAt))
       )
         throw new WholesaleError(`${item.productName}: batch is unavailable or expired.`)
-      if (item.quantity > batch.currentStock)
+      const pieces = item.quantity * item.piecesPerUnit
+      if (pieces > batch.currentStock)
         throw new WholesaleError(
           `${item.productName}: insufficient stock. No delivery was recorded.`
         )
       await deductBatchStock(
         transaction,
-        { batchId: item.batchId, quantity: item.quantity, reason: `Wholesale ${order.reference}` },
+        { batchId: item.batchId, quantity: pieces, reason: `Wholesale ${order.reference}` },
         accountId
       )
       await transaction
@@ -301,7 +348,13 @@ export async function deliverOrder(id: number, accountId: number): Promise<void>
     }
     const result = await transaction
       .updateTable('wholesaleOrders')
-      .set({ status: 'delivered', deliveredAt: new Date().toISOString(), deliveredByName: name })
+      .set({
+        status: 'delivered',
+        deliveredAt: new Date().toISOString(),
+        deliveredByName: name,
+        driverName,
+        receivedByName
+      })
       .where('id', '=', id)
       .where('status', '=', 'scheduled')
       .executeTakeFirstOrThrow()
@@ -311,7 +364,7 @@ export async function deliverOrder(id: number, accountId: number): Promise<void>
 }
 export async function cancelOrder(id: number, accountId: number): Promise<void> {
   await db.transaction().execute(async (transaction) => {
-    await activeAccount(transaction, accountId)
+    const name = await activeAccount(transaction, accountId)
     const order = await transaction
       .selectFrom('wholesaleOrders')
       .selectAll()
@@ -327,7 +380,7 @@ export async function cancelOrder(id: number, accountId: number): Promise<void> 
     if (payment) throw new WholesaleError('An order with recorded payments cannot be cancelled.')
     await transaction
       .updateTable('wholesaleOrders')
-      .set({ status: 'cancelled' })
+      .set({ status: 'cancelled', cancelledByName: name, cancelledAt: new Date().toISOString() })
       .where('id', '=', id)
       .execute()
   })

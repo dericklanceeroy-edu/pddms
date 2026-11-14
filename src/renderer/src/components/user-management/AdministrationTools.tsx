@@ -1,7 +1,76 @@
-import { useProfileStore } from '@renderer/stores/useProfileStore'
+import { RESTORE_NOTICE_KEY } from '@renderer/data/restoreNotice'
 import { channels } from '@shared/constants'
 import type { AuditRecord, BackupInfo } from '@shared/security'
-import { useEffect, useState, type ReactElement } from 'react'
+import { useEffect, useRef, useState, type ReactElement } from 'react'
+import { FiCheck, FiMinus } from 'react-icons/fi'
+
+/** Plain names for the permission areas, in the order an administrator thinks about them. */
+const areaLabels: Record<string, string> = {
+  sale: 'Sales & Dispensing',
+  customer: 'Customers',
+  product: 'Inventory Products',
+  inventoryAdjustment: 'Stock Adjustments',
+  supplier: 'Suppliers',
+  purchaseOrder: 'Purchase Orders',
+  wholesale: 'Wholesale Orders',
+  receivable: 'Accounts Receivable',
+  report: 'Reports',
+  account: 'User Accounts',
+  administration: 'Backups & Activity Log'
+}
+/** Activity log areas come from the first part of each action, e.g. "sales.checkout". */
+const logAreaLabels: Record<string, string> = {
+  ...areaLabels,
+  account: 'User Accounts',
+  administration: 'Backups & Activity Log',
+  auth: 'Sign In & Sign Out',
+  dashboard: 'Dashboard',
+  inventory: 'Inventory & Expiry',
+  procurement: 'Invoices & Payments',
+  reporting: 'Reports',
+  sales: 'Sales & Dispensing',
+  setup: 'First-Time Setup'
+}
+const logArea = (resource: string): string => logAreaLabels[resource] ?? resource
+const actionLabels: Record<string, string> = {
+  read: 'View',
+  create: 'Create',
+  update: 'Edit',
+  delete: 'Delete'
+}
+const roleOrder = ['master', 'staff', 'cashier']
+const roleNames: Record<string, string> = { master: 'Master', staff: 'Staff', cashier: 'Cashier' }
+const resultOptions = ['success', 'failed', 'denied', 'started', 'cancelled'] as const
+interface LogFilter {
+  search: string
+  from: string
+  to: string
+  result: string
+  resource: string
+}
+const emptyLogFilter: LogFilter = { search: '', from: '', to: '', result: '', resource: '' }
+/** Drops empty filter values so the request only carries what was chosen. */
+const logPayload = (filter: LogFilter, beforeId?: number): Record<string, unknown> => ({
+  search: filter.search.trim(),
+  ...(filter.from ? { from: filter.from } : {}),
+  ...(filter.to ? { to: filter.to } : {}),
+  ...(filter.result ? { result: filter.result } : {}),
+  ...(filter.resource ? { resource: filter.resource } : {}),
+  ...(beforeId ? { beforeId } : {})
+})
+/** "View · Create · Edit (own only)" for one role and area. */
+function grantedActions(actions: Record<string, string[]> | undefined): string[] {
+  if (!actions) return []
+  const result = new Map<string, boolean>()
+  for (const key of Object.keys(actions)) {
+    const [action, possession] = key.split(':')
+    const own = possession === 'own'
+    result.set(action, (result.get(action) ?? true) && own)
+  }
+  return Object.keys(actionLabels)
+    .filter((action) => result.has(action))
+    .map((action) => `${actionLabels[action]}${result.get(action) ? ' (own)' : ''}`)
+}
 
 type Grants = Record<string, Record<string, Record<string, string[]>>>
 interface Result {
@@ -12,6 +81,7 @@ interface Result {
   backup?: BackupInfo
   safety?: BackupInfo
   grants?: Grants
+  resources?: string[]
   cancelled?: boolean
   reloadRequired?: boolean
 }
@@ -24,8 +94,10 @@ export default function AdministrationTools(): ReactElement {
   const [logs, setLogs] = useState<AuditRecord[]>([])
   const [backups, setBackups] = useState<BackupInfo[]>([])
   const [grants, setGrants] = useState<Grants>({})
-  const [search, setSearch] = useState('')
-  const [loadedSearch, setLoadedSearch] = useState('')
+  const [logFilter, setLogFilter] = useState<LogFilter>(emptyLogFilter)
+  const [loadedFilter, setLoadedFilter] = useState<LogFilter>(emptyLogFilter)
+  const [logResources, setLogResources] = useState<string[]>([])
+  const [logError, setLogError] = useState('')
   const [busy, setBusy] = useState(true)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
@@ -40,6 +112,7 @@ export default function AdministrationTools(): ReactElement {
       .then(([history, copies, permissions]) => {
         if (active) {
           setLogs(history.records ?? [])
+          setLogResources(history.resources ?? [])
           setMore(history.records?.length === 100)
           setBackups(copies.backups ?? [])
           setGrants(permissions.grants ?? {})
@@ -68,6 +141,43 @@ export default function AdministrationTools(): ReactElement {
       setBusy(false)
     }
   }
+  // Note: The activity list follows the filters as they change; typing is debounced so each
+  // keystroke does not start a database query.
+  const firstFilter = useRef(true)
+  const rangeError =
+    logFilter.from && logFilter.to && logFilter.from > logFilter.to
+      ? 'The “From” date must be on or before the “To” date.'
+      : ''
+  useEffect(() => {
+    if (firstFilter.current) {
+      firstFilter.current = false
+      return
+    }
+    if (rangeError) return
+    let active = true
+    const timer = window.setTimeout(() => {
+      setLogError('')
+      void request(channels.administration.logs, logPayload(logFilter))
+        .then((result) => {
+          if (!active) return
+          setLogs(result.records ?? [])
+          setMore(result.records?.length === 100)
+          if (result.resources) setLogResources(result.resources)
+          setLoadedFilter(logFilter)
+        })
+        .catch((cause) => {
+          if (active)
+            setLogError(cause instanceof Error ? cause.message : 'Unable to load activity.')
+        })
+    }, 300)
+    return () => {
+      active = false
+      window.clearTimeout(timer)
+    }
+  }, [logFilter, rangeError])
+  const filtersActive = Object.values(logFilter).some(Boolean)
+  const roles = roleOrder.filter((role) => grants[role])
+  const areas = Object.keys(areaLabels).filter((area) => roles.some((role) => grants[role]?.[area]))
   return (
     <div className="space-y-5">
       {error && (
@@ -80,43 +190,76 @@ export default function AdministrationTools(): ReactElement {
           {message}
         </p>
       )}
-      <section className="panel space-y-3 p-5">
-        <h3 className="text-lg font-semibold">Role permissions</h3>
-        <p className="text-sm text-slate-500">
-          Permissions come from existing AccessControl roles. Assign Staff/Cashier in Edit user to
-          change access. The setup-only Master role is protected. No separate individual permission
-          overrides are used.
-        </p>
-        <div className="max-h-64 overflow-auto">
-          <table className="w-full min-w-[600px] text-left text-sm">
+      <section className="panel space-y-4 p-5 sm:p-6">
+        <div>
+          <h3 className="section-title">Role Permissions</h3>
+          <p className="section-subtitle">
+            What each role can do in each area. To change someone’s access, edit the user and pick
+            another role. The Master role is created during setup and cannot be assigned.
+          </p>
+        </div>
+        <div className="overflow-x-auto rounded-lg border border-slate-200">
+          <table className="data-table w-full min-w-[640px] text-left text-sm">
             <thead>
               <tr>
-                <th className="p-2">Role</th>
-                <th className="p-2">Resource</th>
-                <th className="p-2">Granted actions</th>
+                <th scope="col" className="w-1/4 px-4 py-3">
+                  Area
+                </th>
+                {roles.map((role) => (
+                  <th scope="col" className="px-4 py-3" key={role}>
+                    {roleNames[role] ?? role}
+                  </th>
+                ))}
               </tr>
             </thead>
-            <tbody>
-              {Object.entries(grants).flatMap(([role, resources]) =>
-                Object.entries(resources).map(([resource, actions]) => (
-                  <tr key={`${role}-${resource}`} className="border-t border-slate-100">
-                    <td className="p-2">{role}</td>
-                    <td className="p-2">{resource}</td>
-                    <td className="p-2">{Object.keys(actions).join(', ')}</td>
-                  </tr>
-                ))
-              )}
+            <tbody className="divide-y divide-slate-100">
+              {areas.map((area) => (
+                <tr key={area}>
+                  <th scope="row" className="px-4 py-3 font-semibold text-slate-800">
+                    {areaLabels[area]}
+                  </th>
+                  {roles.map((role) => {
+                    const actions = grantedActions(grants[role]?.[area])
+                    return (
+                      <td className="px-4 py-3 align-top" key={role}>
+                        {actions.length ? (
+                          <ul className="flex flex-wrap gap-1.5">
+                            {actions.map((action) => (
+                              <li
+                                key={action}
+                                className="border-brand-200 bg-brand-50 text-brand-800 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-semibold"
+                              >
+                                <FiCheck aria-hidden="true" /> {action}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-xs text-slate-500">
+                            <FiMinus aria-hidden="true" /> No Access
+                          </span>
+                        )}
+                      </td>
+                    )
+                  })}
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
-      </section>
-      <section className="panel space-y-3 p-5">
-        <h3 className="text-lg font-semibold">Backups & restore</h3>
-        <p className="text-sm text-slate-500">
-          Local backups contain a consistent SQLite snapshot and referenced supplier invoice files.
-          Keep the entire backup folder. Files are not encrypted; store them securely. Restore
-          requires a compatible schema and signs everyone out.
+        <p className="text-xs text-slate-500">
+          “Own” means the role sees only its own records, for example a cashier’s own sales.
         </p>
+      </section>
+      <section className="panel space-y-4 p-5 sm:p-6">
+        <div>
+          <h3 className="section-title">Backups &amp; Restore</h3>
+          <p className="section-subtitle">
+            A backup holds a consistent copy of the database and the supplier invoice files it
+            refers to. Keep the whole backup folder and store it securely; files are not encrypted.
+            Restoring signs everyone out. Backups from earlier versions of Med Prix are upgraded
+            during restore.
+          </p>
+        </div>
         <div className="flex flex-wrap gap-2">
           <button
             className="primary-button"
@@ -131,7 +274,7 @@ export default function AdministrationTools(): ReactElement {
               })
             }
           >
-            Create backup…
+            Create Backup…
           </button>
           <button
             className="secondary-button"
@@ -140,16 +283,23 @@ export default function AdministrationTools(): ReactElement {
               void run(async () => {
                 const result = await request(channels.administration.restore)
                 if (result.reloadRequired) {
-                  window.alert(
-                    `Restore complete. Safety backup: ${result.safety?.directory}. Sign in using credentials from the restored backup.`
-                  )
-                  useProfileStore.getState().reset()
+                  // Note: No native alert here. An alert closing on Windows left the sign-in
+                  // fields unable to take keyboard input; the result is shown on the sign-in page.
+                  try {
+                    window.sessionStorage.setItem(
+                      RESTORE_NOTICE_KEY,
+                      `Backup restored. A safety copy of the data before the restore was saved to ${result.safety?.directory ?? 'the backups folder'}. Sign in with an account from the restored backup.`
+                    )
+                  } catch {
+                    /* Note: The notice is optional; signing in works without it. */
+                  }
+                  window.location.hash = '#/signIn'
                   window.location.reload()
                 }
               })
             }
           >
-            Restore from backup…
+            Restore From Backup…
           </button>
           <button
             className="secondary-button"
@@ -160,12 +310,12 @@ export default function AdministrationTools(): ReactElement {
               )
             }
           >
-            Refresh local backup list
+            Refresh Backup List
           </button>
         </div>
         <p className="text-xs text-slate-500">
           The list shows the default local backup folder and backups created in this session.
-          External backups can be selected through Restore.
+          Backups saved elsewhere can be chosen through Restore From Backup.
         </p>
         <div className="max-h-48 space-y-2 overflow-auto">
           {backups.map((backup) => (
@@ -173,9 +323,10 @@ export default function AdministrationTools(): ReactElement {
               className="rounded-lg border border-slate-200 p-3 text-sm break-all"
               key={backup.directory}
             >
-              {new Date(backup.createdAt).toLocaleString()} · {backup.invoiceCount} invoices
+              <span className="font-semibold">{new Date(backup.createdAt).toLocaleString()}</span> ·{' '}
+              {backup.invoiceCount} invoices
               <br />
-              {backup.directory}
+              <span className="text-slate-500">{backup.directory}</span>
             </p>
           ))}
         </div>
@@ -183,83 +334,165 @@ export default function AdministrationTools(): ReactElement {
           <p className="text-sm text-slate-500">No completed local backups found.</p>
         )}
       </section>
-      <section className="panel space-y-3 p-5">
-        <h3 className="text-lg font-semibold">System activity log</h3>
-        <p className="text-sm text-slate-500">
-          Security events and important saved operations. Passwords and raw request payloads are
-          never logged. A “started” entry without a final result may indicate an interrupted
-          operation.
-        </p>
-        <form
-          className="flex flex-wrap gap-2"
-          onSubmit={(event) => {
-            event.preventDefault()
-            void run(async () => {
-              const result = await request(channels.administration.logs, { search })
-              setLogs(result.records ?? [])
-              setMore(result.records?.length === 100)
-              setLoadedSearch(search)
-            })
-          }}
-        >
-          <input
-            className="field min-w-0 flex-1"
-            aria-label="Search audit logs"
-            maxLength={100}
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Account, action or result"
-          />
-          <button className="secondary-button" disabled={busy}>
-            Search / refresh
+      <section className="panel space-y-4 p-5 sm:p-6">
+        <div>
+          <h3 className="section-title">System Activity Log</h3>
+          <p className="section-subtitle">
+            Security events and important saved operations. Passwords and raw request data are never
+            logged. A “started” entry without a final result may mean the operation was interrupted.
+          </p>
+        </div>
+        <div className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50/70 p-4 sm:grid-cols-2 xl:grid-cols-[minmax(0,2fr)_repeat(4,minmax(0,1fr))_auto] xl:items-end">
+          <label className="block text-sm font-medium text-slate-700">
+            Search
+            <input
+              className="field mt-1.5"
+              maxLength={100}
+              value={logFilter.search}
+              onChange={(event) => setLogFilter({ ...logFilter, search: event.target.value })}
+              placeholder="Account, action or result"
+            />
+          </label>
+          <label className="block text-sm font-medium text-slate-700">
+            From
+            <input
+              className="field mt-1.5"
+              type="date"
+              value={logFilter.from}
+              max={logFilter.to || undefined}
+              onChange={(event) => setLogFilter({ ...logFilter, from: event.target.value })}
+            />
+          </label>
+          <label className="block text-sm font-medium text-slate-700">
+            To
+            <input
+              className="field mt-1.5"
+              type="date"
+              value={logFilter.to}
+              min={logFilter.from || undefined}
+              onChange={(event) => setLogFilter({ ...logFilter, to: event.target.value })}
+            />
+          </label>
+          <label className="block text-sm font-medium text-slate-700">
+            Result
+            <select
+              className="field mt-1.5"
+              value={logFilter.result}
+              onChange={(event) => setLogFilter({ ...logFilter, result: event.target.value })}
+            >
+              <option value="">All Results</option>
+              {resultOptions.map((result) => (
+                <option key={result} value={result}>
+                  {result[0].toUpperCase() + result.slice(1)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block text-sm font-medium text-slate-700">
+            Area
+            <select
+              className="field mt-1.5"
+              value={logFilter.resource}
+              onChange={(event) => setLogFilter({ ...logFilter, resource: event.target.value })}
+            >
+              <option value="">All Areas</option>
+              {logResources.map((resource) => (
+                <option key={resource} value={resource}>
+                  {logArea(resource)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            type="button"
+            className="secondary-button"
+            disabled={!filtersActive}
+            onClick={() => setLogFilter(emptyLogFilter)}
+          >
+            Clear Filters
           </button>
-        </form>
+        </div>
+        {(rangeError || logError) && (
+          <p role="alert" className="text-sm font-medium text-rose-700">
+            {rangeError || logError}
+          </p>
+        )}
         {busy && <p role="status">Loading…</p>}
-        <div className="max-h-[55vh] overflow-auto">
-          <table className="w-full min-w-[720px] text-left text-sm">
-            <thead>
+        <div className="max-h-[55vh] overflow-auto rounded-lg border border-slate-200">
+          <table className="data-table w-full min-w-[720px] text-left text-sm">
+            <thead className="sticky top-0">
               <tr>
-                {['Time', 'Account', 'Action', 'Resource', 'Target ID', 'Result'].map((label) => (
-                  <th className="p-3" key={label}>
+                {['Time', 'Account', 'Action', 'Area', 'Target ID', 'Result'].map((label) => (
+                  <th className="px-3 py-2.5" key={label}>
                     {label}
                   </th>
                 ))}
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-slate-100">
               {logs.map((log) => (
-                <tr className="border-t border-slate-100" key={log.id}>
-                  <td className="p-3">{new Date(log.createdAt).toLocaleString()}</td>
-                  <td className="p-3">{log.actorName}</td>
-                  <td className="p-3">{log.action}</td>
-                  <td className="p-3">{log.resource}</td>
-                  <td className="p-3">{log.targetId ?? '—'}</td>
-                  <td className="p-3">{log.result}</td>
+                <tr key={log.id}>
+                  <td className="px-3 py-2.5 whitespace-nowrap">
+                    {new Date(log.createdAt).toLocaleString()}
+                  </td>
+                  <td className="px-3 py-2.5">
+                    {log.actorId === null ? (
+                      <span className="text-slate-500">Not signed in</span>
+                    ) : (
+                      log.actorName
+                    )}
+                  </td>
+                  <td className="px-3 py-2.5">{log.action}</td>
+                  <td className="px-3 py-2.5">{logArea(log.resource)}</td>
+                  <td className="px-3 py-2.5">{log.targetId ?? '—'}</td>
+                  <td className="px-3 py-2.5">
+                    <ResultBadge result={log.result} />
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-        {!busy && !logs.length && <p>No matching activity.</p>}
+        {!busy && !logs.length && (
+          <p className="text-sm text-slate-500">
+            {filtersActive ? 'No activity matches these filters.' : 'No activity recorded yet.'}
+          </p>
+        )}
         {more && (
           <button
             className="secondary-button"
             disabled={busy}
             onClick={() =>
               void run(async () => {
-                const result = await request(channels.administration.logs, {
-                  search: loadedSearch,
-                  beforeId: logs.at(-1)?.id
-                })
+                const result = await request(
+                  channels.administration.logs,
+                  logPayload(loadedFilter, logs.at(-1)?.id)
+                )
                 setLogs([...logs, ...(result.records ?? [])])
                 setMore(result.records?.length === 100)
               })
             }
           >
-            Older activity
+            Load Older Activity
           </button>
         )}
       </section>
     </div>
+  )
+}
+
+/** Result with a word and a colour, so the colour is never the only signal. */
+function ResultBadge({ result }: { result: string }): ReactElement {
+  const tone =
+    result === 'success'
+      ? 'bg-emerald-50 text-emerald-800 ring-emerald-200'
+      : result === 'denied' || result === 'failed'
+        ? 'bg-rose-50 text-rose-800 ring-rose-200'
+        : 'bg-amber-50 text-amber-800 ring-amber-200'
+  return (
+    <span className={`status-badge ring-1 ${tone}`}>
+      {result[0]?.toUpperCase()}
+      {result.slice(1)}
+    </span>
   )
 }

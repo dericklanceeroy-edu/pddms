@@ -22,7 +22,11 @@ interface Result<T> {
   product?: T
 }
 
-interface CustomerPayload extends Omit<CustomerDraft, 'email' | 'address' | 'discountId'> {
+interface CustomerPayload extends Omit<
+  CustomerDraft,
+  'email' | 'address' | 'discountId' | 'contactPerson'
+> {
+  contactPerson: string | null
   email: string | null
   address: string | null
   discountId: string | null
@@ -32,7 +36,8 @@ const customerPayload = (customer: CustomerDraft): CustomerPayload => ({
   ...customer,
   email: customer.email || null,
   address: customer.address || null,
-  discountId: customer.discountId || null
+  discountId: customer.discountId || null,
+  contactPerson: customer.contactPerson || null
 })
 
 const mapCustomer = (customer: CustomerProfile): CustomerProfile => ({
@@ -40,6 +45,8 @@ const mapCustomer = (customer: CustomerProfile): CustomerProfile => ({
   email: customer.email ?? '',
   address: customer.address ?? '',
   discountId: customer.discountId ?? '',
+  clientType: customer.clientType ?? 'retail',
+  contactPerson: customer.contactPerson ?? '',
   transactions: customer.transactions ?? []
 })
 
@@ -49,8 +56,13 @@ const mapProduct = (
   ...product,
   prescriptionRequired: product.isPrescribed ?? product.prescriptionRequired,
   controlled: product.isControlled ?? product.controlled,
+  piecesPerBox: product.piecesPerBox ?? 1,
   genericEquivalentIds: [],
-  batches: product.batches.map((batch) => ({ ...batch, expiresAt: String(batch.expiresAt) }))
+  batches: product.batches.map((batch) => ({
+    ...batch,
+    boxSellPrice: batch.boxSellPrice ?? null,
+    expiresAt: String(batch.expiresAt)
+  }))
 })
 
 export async function getCustomers(): Promise<CustomerProfile[]> {
@@ -110,7 +122,8 @@ export async function addProduct(product: ItemDraft): Promise<ItemProfile> {
     formulation: product.formulation,
     isPrescribed: product.prescriptionRequired,
     isControlled: product.controlled,
-    reorderLevel: product.reorderLevel
+    reorderLevel: product.reorderLevel,
+    piecesPerBox: product.piecesPerBox
   })
   const result = (await window.electron.ipcRenderer.invoke(channels.product.createOne, {
     ...payload
@@ -129,7 +142,8 @@ export async function updateProduct(id: number, product: ItemDraft): Promise<Ite
     formulation: product.formulation,
     isPrescribed: product.prescriptionRequired,
     isControlled: product.controlled,
-    reorderLevel: product.reorderLevel
+    reorderLevel: product.reorderLevel,
+    piecesPerBox: product.piecesPerBox
   })
   const result = (await window.electron.ipcRenderer.invoke(channels.product.updateOneById, id, {
     ...payload

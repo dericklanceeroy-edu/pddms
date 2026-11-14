@@ -8,6 +8,7 @@ import type {
   DashboardView
 } from '@shared/dashboard'
 import { EXPIRY_WARNING_DAYS, getExpiryStatus } from '@shared/inventory'
+import { sql } from 'kysely'
 
 const millisecondsPerDay = 86_400_000
 
@@ -231,7 +232,9 @@ export async function getAdminDashboard(cashierId?: number): Promise<AdminDashbo
   const dailyItems = await db
     .selectFrom('saleItems')
     .innerJoin('sales', 'sales.id', 'saleItems.saleId')
-    .select(({ fn }) => fn.sum<number>('saleItems.quantity').as('quantity'))
+    .select(({ fn }) =>
+      fn.sum<number>(sql<number>`sale_items.quantity * sale_items.pieces_per_unit`).as('quantity')
+    )
     .where('sales.createdAt', '>=', start)
     .where('sales.createdAt', '<', end)
     .$if(cashierId !== undefined, (query) => query.where('sales.cashierId', '=', cashierId!))
@@ -247,7 +250,9 @@ export async function getAdminDashboard(cashierId?: number): Promise<AdminDashbo
       'sales.discountType',
       'sales.cashierName'
     ])
-    .select(({ fn }) => fn.sum<number>('saleItems.quantity').as('itemCount'))
+    .select(({ fn }) =>
+      fn.sum<number>(sql<number>`sale_items.quantity * sale_items.pieces_per_unit`).as('itemCount')
+    )
     .$if(cashierId !== undefined, (query) => query.where('sales.cashierId', '=', cashierId!))
     .groupBy('sales.id')
     .orderBy('sales.id', 'desc')

@@ -22,10 +22,10 @@ const destinations: Record<
   DashboardOperationsPulseId,
   { to: '/suppliers' | '/inventory'; tab?: 'orders' | 'invoices'; label: string }
 > = {
-  'purchase-orders': { to: '/suppliers', tab: 'orders', label: 'Open purchase orders' },
-  'supplier-payments': { to: '/suppliers', tab: 'invoices', label: 'Open invoices & payments' },
-  'stock-valuation': { to: '/inventory', label: 'Open inventory' },
-  'inventory-alerts': { to: '/inventory', label: 'Open inventory' }
+  'purchase-orders': { to: '/suppliers', tab: 'orders', label: 'Open Purchase Orders' },
+  'supplier-payments': { to: '/suppliers', tab: 'invoices', label: 'Open Invoices & Payments' },
+  'stock-valuation': { to: '/inventory', label: 'Open Inventory' },
+  'inventory-alerts': { to: '/inventory', label: 'Open Inventory' }
 }
 
 const currencyFormatter = new Intl.NumberFormat('en-PH', {
@@ -62,7 +62,7 @@ export default function OperationsPulse({
             <FiTruck className="size-4.5" aria-hidden="true" />
           </div>
           <div>
-            <h3 className="font-semibold tracking-tight text-slate-950">Purchasing and stock</h3>
+            <h3 className="font-semibold tracking-tight text-slate-950">Purchasing and Stock</h3>
             <p className="mt-0.5 text-xs leading-5 text-slate-500">
               Open purchase orders, supplier invoices due and stock signals
             </p>

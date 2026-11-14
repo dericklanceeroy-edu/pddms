@@ -5,7 +5,7 @@ import type { ReactElement } from 'react'
 export default function InventoryReport({ items }: { items: ItemProfile[] }): ReactElement {
   return (
     <section className="panel min-w-0 overflow-hidden">
-      <h3 className="p-5 font-semibold">Current inventory report</h3>
+      <h3 className="p-5 font-semibold">Current Inventory Report</h3>
       <div className="max-h-[65vh] overflow-auto" tabIndex={0} aria-label="Inventory report table">
         <table className="w-full min-w-[850px] text-left text-sm">
           <thead className="sticky top-0 bg-slate-50">

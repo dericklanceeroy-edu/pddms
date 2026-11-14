@@ -101,7 +101,7 @@ export function ExpiryWatchlist({ alerts }: { alerts: DashboardExpiryAlert[] }):
   return (
     <article className="panel min-w-0 overflow-hidden">
       <PanelHeader
-        title="Expiry watchlist"
+        title="Expiry Watchlist"
         description="Live batches expiring within the next 90 days"
         headingId="expiry-watchlist-title"
         count={alerts.length}
@@ -125,7 +125,7 @@ export function ExpiryWatchlist({ alerts }: { alerts: DashboardExpiryAlert[] }):
                 Stock
               </th>
               <th scope="col" className="px-4 py-3 font-semibold">
-                Expiry date
+                Expiry Date
               </th>
               <th scope="col" className="px-5 py-3 text-right font-semibold sm:px-6">
                 Status
@@ -177,7 +177,7 @@ export function LowStockWatchlist({ alerts }: { alerts: DashboardLowStockAlert[]
   return (
     <article className="panel min-w-0 overflow-hidden">
       <PanelHeader
-        title="Low-stock alert"
+        title="Low-Stock Alert"
         description="Products at or below the system reorder level"
         headingId="low-stock-watchlist-title"
         count={alerts.length}
@@ -195,13 +195,13 @@ export function LowStockWatchlist({ alerts }: { alerts: DashboardLowStockAlert[]
                 Product
               </th>
               <th scope="col" className="px-4 py-3 text-right font-semibold">
-                On hand
+                On Hand
               </th>
               <th scope="col" className="px-4 py-3 text-right font-semibold">
                 Reorder at
               </th>
               <th scope="col" className="px-4 py-3 font-semibold">
-                Last stocked
+                Last Stocked
               </th>
               <th scope="col" className="px-5 py-3 text-right font-semibold sm:px-6">
                 Status
@@ -277,7 +277,7 @@ export function RecentTransactions({
                 Receipt
               </th>
               <th scope="col" className="px-4 py-3 font-semibold">
-                Date & time
+                Date & Time
               </th>
               {showCashier && (
                 <th scope="col" className="px-4 py-3 font-semibold">

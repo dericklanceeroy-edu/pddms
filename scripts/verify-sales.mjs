@@ -41,7 +41,8 @@ if (!process.env.SALES_TEST_PHASE) {
   const { state } = await import('../src/main/api/index.ts')
   const { channels } = await import('../src/shared/constants.ts')
   const { handlers, dialog } = await import('./inventory-test-electron.mjs')
-  const { calculateSale, customerDiscount, receiptText, setCartQuantity, removeCartItem } =
+  const { receiptPlainText: receiptText } = await import('../src/shared/receipt.ts')
+  const { calculateSale, customerDiscount, setCartQuantity, removeCartItem } =
     await import('../src/shared/sales.ts')
   const { localDate } = await import('../src/shared/inventory.ts')
   const { sql } = await import('kysely')
@@ -157,6 +158,8 @@ if (!process.env.SALES_TEST_PHASE) {
       await ok(channels.purchaseOrder.recordDeliveryById, order.id, {
         requestId: randomUUID(),
         deliveredAt: localDate(),
+        deliveredByName: 'Supplier Driver',
+        checkedByName: 'Receiving Clerk',
         items: order.items.map((item, index) => ({
           itemId: item.id,
           receivedQuantity: 20,
@@ -403,12 +406,12 @@ if (!process.env.SALES_TEST_PHASE) {
       await bad(channels.sales.checkout, { ...exact, requestId: randomUUID() })
       const { createElement } = await import('react')
       const { renderToStaticMarkup } = await import('react-dom/server')
-      const { Receipt } = await import('../src/renderer/src/components/sales/SalesWorkspace.tsx')
-      assert.ok(
-        renderToStaticMarkup(createElement(Receipt, { sale, close: () => {} })).includes(
-          'Completed sale'
-        )
-      )
+      const { ReceiptSlip } = await import('../src/renderer/src/components/sales/Receipt.tsx')
+      const { receiptNumber } = await import('../src/shared/receipt.ts')
+      const receiptMarkup = renderToStaticMarkup(createElement(ReceiptSlip, { sale }))
+      assert.ok(receiptMarkup.includes('Med Prix Distributor and Pharmacy'))
+      assert.ok(receiptMarkup.includes(receiptNumber(sale)))
+      assert.ok(receiptMarkup.includes(`Barcode ${receiptNumber(sale)}`))
       console.log(
         'PASS: login, cart edits/cancel, Senior/PWD math, invalid checkout, atomic rollback, receipt/export failure, idempotency, concurrent oversell, history authorization, blocked session, receipt rendering'
       )
