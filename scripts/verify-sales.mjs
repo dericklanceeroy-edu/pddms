@@ -37,6 +37,7 @@ if (!process.env.SALES_TEST_PHASE) {
   }
 } else {
   const { db } = await import('../src/main/db.ts')
+  const { packLines } = await import('./test-packs.mjs')
   const { initializeDatabase } = await import('../src/main/migrations.ts')
   const { state } = await import('../src/main/api/index.ts')
   const { channels } = await import('../src/shared/constants.ts')
@@ -151,7 +152,11 @@ if (!process.env.SALES_TEST_PHASE) {
       const order = (
         await ok(channels.purchaseOrder.createOne, {
           supplierId: supplier.id,
-          items: products.map((product) => ({ drugId: product.id, quantity: 20, unitCost: 80 }))
+          items: await packLines(
+            db,
+            supplier.id,
+            products.map((product) => ({ drugId: product.id, quantity: 20, unitCost: 80 }))
+          )
         })
       ).order
       await ok(channels.purchaseOrder.updateStatusById, order.id, { status: 'submitted' })
@@ -460,15 +465,24 @@ if (!process.env.SALES_TEST_PHASE) {
       const controlledSale = (
         await ok(channels.sales.checkout, {
           ...controlled,
-          prescription: { ...doctor, prescriptionNumber: 'S2-2026-001' }
+          prescription: {
+            ...doctor,
+            prescriptionNumber: 'S2-2026-001',
+            patientAge: 45,
+            patientAddress: '12 Rizal St, Quezon City',
+            prescriberAddress: 'Clinic 3, Main Ave, Quezon City',
+            prescriberS2License: 'S2-000123'
+          }
         })
       ).sale
       assert.equal(controlledSale.prescriptionNumber, 'S2-2026-001')
       await db
         .updateTable('drugs')
-        .set({ isPrescribed: 0, isControlled: 0, piecesPerBox: 10 })
+        .set({ isPrescribed: 0, isControlled: 0 })
         .where('id', '=', products[1].id)
         .execute()
+      // Note: Box size belongs to the batch (as delivered), not to the product.
+      await db.updateTable('batches').set({ piecesPerBox: 10 }).where('id', '=', beta.batchId).execute()
       const stockBefore = (
         await db
           .selectFrom('batches')
@@ -506,7 +520,7 @@ if (!process.env.SALES_TEST_PHASE) {
         expectedTotalCents: 112000 + (stockBefore - 20) * 11200,
         cashCents: 112000 + (stockBefore - 20) * 11200
       })
-      await db.updateTable('drugs').set({ piecesPerBox: 1 }).where('id', '=', products[1].id).execute()
+      await db.updateTable('batches').set({ piecesPerBox: 1 }).where('id', '=', beta.batchId).execute()
       const pharmacy = await db
         .insertInto('customers')
         .values({

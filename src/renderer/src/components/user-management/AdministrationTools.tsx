@@ -1,6 +1,7 @@
+import ArchivedRecords from '@renderer/components/user-management/ArchivedRecords'
 import { RESTORE_NOTICE_KEY } from '@renderer/data/restoreNotice'
 import { channels } from '@shared/constants'
-import type { AuditRecord, BackupInfo } from '@shared/security'
+import type { AuditDetails, AuditRecord, BackupInfo } from '@shared/security'
 import { useEffect, useRef, useState, type ReactElement } from 'react'
 import { FiCheck, FiMinus } from 'react-icons/fi'
 
@@ -354,6 +355,7 @@ export default function AdministrationTools(): ReactElement {
           <p className="text-sm text-slate-500">No completed local backups found.</p>
         )}
       </section>
+      <ArchivedRecords />
       <section className="panel space-y-4 p-5 sm:p-6">
         <div>
           <h3 className="section-title">System Activity Log</h3>
@@ -439,14 +441,16 @@ export default function AdministrationTools(): ReactElement {
         )}
         {busy && <p role="status">Loading…</p>}
         <div className="max-h-[55vh] overflow-auto rounded-lg border border-slate-200">
-          <table className="data-table w-full min-w-[720px] text-left text-sm">
+          <table className="data-table w-full min-w-[960px] text-left text-sm">
             <thead className="sticky top-0">
               <tr>
-                {['Time', 'Account', 'Action', 'Area', 'Target ID', 'Result'].map((label) => (
-                  <th className="px-3 py-2.5" key={label}>
-                    {label}
-                  </th>
-                ))}
+                {['Time', 'Account', 'Action', 'Area', 'Target ID', 'Result', 'Details'].map(
+                  (label) => (
+                    <th className="px-3 py-2.5" key={label}>
+                      {label}
+                    </th>
+                  )
+                )}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -467,6 +471,9 @@ export default function AdministrationTools(): ReactElement {
                   <td className="px-3 py-2.5">{log.targetId ?? '—'}</td>
                   <td className="px-3 py-2.5">
                     <ResultBadge result={log.result} />
+                  </td>
+                  <td className="max-w-md min-w-56 px-3 py-2.5 align-top">
+                    <AuditDetailsCell details={log.details} />
                   </td>
                 </tr>
               ))}
@@ -497,6 +504,36 @@ export default function AdministrationTools(): ReactElement {
           </button>
         )}
       </section>
+    </div>
+  )
+}
+
+/** What the entry changed: summary, reason and each field's old → new value. */
+function AuditDetailsCell({ details }: { details: string | null }): ReactElement {
+  if (!details) return <span className="text-slate-400">—</span>
+  let parsed: AuditDetails
+  try {
+    parsed = JSON.parse(details) as AuditDetails
+  } catch {
+    return <span className="text-slate-400">—</span>
+  }
+  const show = (value: unknown): string =>
+    value === null || value === undefined || value === '' ? 'empty' : String(value)
+  return (
+    <div className="space-y-1 text-xs">
+      {parsed.summary && <p className="font-medium text-slate-800">{parsed.summary}</p>}
+      {parsed.reason && <p className="text-slate-600">Reason: {parsed.reason}</p>}
+      {parsed.changes && parsed.changes.length > 0 && (
+        <ul className="space-y-0.5 text-slate-600">
+          {parsed.changes.slice(0, 8).map((change, index) => (
+            <li key={index}>
+              <span className="font-semibold">{change.field}:</span> {show(change.from)} →{' '}
+              {show(change.to)}
+            </li>
+          ))}
+          {parsed.changes.length > 8 && <li>…and {parsed.changes.length - 8} more</li>}
+        </ul>
+      )}
     </div>
   )
 }

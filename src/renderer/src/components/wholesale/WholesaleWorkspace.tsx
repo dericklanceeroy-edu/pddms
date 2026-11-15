@@ -595,8 +595,9 @@ function OrderForm({
         product.batches.map((batch) => ({
           ...batch,
           product,
-          // Note: A product without pieces per box set is sold as a box of 1.
-          perBox: Math.max(1, product.piecesPerBox)
+          // Note: Each batch keeps the box size it was delivered in (e.g. 50 or 100 pieces);
+          // a batch received loose is sold as a box of 1.
+          perBox: Math.max(1, batch.piecesPerBox)
         }))
       ),
     [products]
@@ -627,6 +628,43 @@ function OrderForm({
     total = calculateSale(lines, 'none').totalCents
   } catch (cause) {
     totalError = cause instanceof Error ? cause.message : 'Invalid total.'
+  }
+  /**
+   * Soonest-expiring sellable batch of the same product and box size: sold first (FEFO). Boxes of
+   * 50 and boxes of 100 are different packs, so each size has its own "sell first" batch.
+   */
+  const sellFirst = (batch: (typeof batches)[number]): (typeof batches)[number] | undefined =>
+    batches.find(
+      (value) =>
+        value.product.id === batch.product.id &&
+        value.perBox === batch.perBox &&
+        isBatchSellable(value.stock, value.expiresAt) &&
+        availableUnits(value.stock, 'box', value.perBox) >= 1
+    )
+  const [confirmDialog, confirm] = useConfirm()
+  const pick = async (batchId: number): Promise<void> => {
+    const batch = batches.find((value) => value.id === batchId)
+    const first = batch && sellFirst(batch)
+    if (
+      batch &&
+      first &&
+      first.id !== batch.id &&
+      !lines.some((line) => line.batchId === batchId)
+    ) {
+      const accepted = await confirm({
+        title: 'Use a later-expiring batch?',
+        message: (
+          <>
+            Batch <strong>{first.batchNumber}</strong> (boxes of {first.perBox}) expires sooner,{' '}
+            {showDate(first.expiresAt)}, and should be sold first. Use this later batch only if the
+            client asked for a longer expiry.
+          </>
+        ),
+        confirmLabel: 'Use This Batch'
+      })
+      if (!accepted) return
+    }
+    add(batchId)
   }
   const add = (batchId: number): void => {
     const batch = batches.find((value) => value.id === batchId)
@@ -750,7 +788,7 @@ function OrderForm({
                 {clients.map((client) => (
                   <option key={client.id} value={client.id}>
                     {client.fullName}
-                    {client.contactPerson ? ` · ${client.contactPerson}` : ''}
+                    {client.address ? ` · ${client.address}` : ''}
                   </option>
                 ))}
               </select>
@@ -844,7 +882,8 @@ function OrderForm({
             </span>
           </legend>
           <p className="text-sm text-slate-600">
-            Search the catalog, enter the number of boxes, then select Add. Prices are per box.
+            Search the catalog, enter the number of boxes, then select Add. Prices are per box of
+            that batch. Batches are listed soonest expiry first; sell the one marked “Sell first”.
           </p>
           <label className="relative block">
             <span className="sr-only">Search products</span>
@@ -870,13 +909,19 @@ function OrderForm({
                 </p>
                 {productBatches.map((batch) => {
                   const available = availableUnits(batch.stock, 'box', batch.perBox)
+                  const first = sellFirst(batch)?.id === batch.id
                   return (
                     <div
                       key={batch.id}
-                      className="mt-1.5 grid grid-cols-1 items-center gap-2 rounded-md border border-slate-200 bg-white p-2 sm:grid-cols-[minmax(0,1fr)_6rem_5.5rem]"
+                      className={`mt-1.5 grid grid-cols-1 items-center gap-2 rounded-md border bg-white p-2 sm:grid-cols-[minmax(0,1fr)_6rem_5.5rem] ${first ? 'border-brand-500' : 'border-slate-200'}`}
                     >
                       <div className="min-w-0 text-sm">
                         <p className="font-medium break-words text-slate-800">
+                          {first && (
+                            <span className="bg-brand-700 mr-1.5 rounded px-1.5 py-0.5 text-xs font-semibold text-white">
+                              Sell first
+                            </span>
+                          )}
                           Batch {batch.batchNumber} ·{' '}
                           {money(
                             priceToCents(
@@ -917,7 +962,7 @@ function OrderForm({
                         type="button"
                         className="secondary-button"
                         disabled={available < 1}
-                        onClick={() => add(batch.id)}
+                        onClick={() => void pick(batch.id)}
                       >
                         Add
                       </button>
@@ -1015,6 +1060,7 @@ function OrderForm({
           </div>
         </div>
       </form>
+      {confirmDialog}
     </Modal>
   )
 }
@@ -1095,39 +1141,43 @@ function OrderDetails({
             </span>
           </p>
         )}
-        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,24rem)]">
+        {/* Note: Two balanced columns that use the full width: the order (where, what, delivery)
+            on the left; who handled it, the next actions and the money on the right. */}
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <Fact label="Status">
+            <StatusBadge status={order.status} />
+          </Fact>
+          <Fact label="Order Total">{money(order.totalCents)}</Fact>
+          <Fact label="Delivery Date">
+            {order.scheduledDate ? showDate(order.scheduledDate) : 'Not scheduled'}
+          </Fact>
+          <Fact label="Payment Due">{showDate(order.dueDate)}</Fact>
+        </div>
+        <div className="grid gap-5 lg:grid-cols-2">
           <div className="min-w-0 space-y-5">
-            <div className="grid gap-3 sm:grid-cols-4">
-              <Fact label="Status">
-                <StatusBadge status={order.status} />
-              </Fact>
-              <Fact label="Order Total">{money(order.totalCents)}</Fact>
-              <Fact label="Delivery Date">
-                {order.scheduledDate ? showDate(order.scheduledDate) : 'Not scheduled'}
-              </Fact>
-              <Fact label="Payment Due">{showDate(order.dueDate)}</Fact>
-            </div>
-            <div className="grid gap-3 text-sm sm:grid-cols-2">
-              <p className="break-words">
-                <span className="font-semibold text-slate-700">Delivery address: </span>
-                {order.deliveryAddress}
-              </p>
-              {order.deliveryNotes && (
+            <section className="space-y-2 rounded-lg border border-slate-200 p-4">
+              <h4 className="card-title">Order Details</h4>
+              <div className="grid gap-2 text-sm">
                 <p className="break-words">
-                  <span className="font-semibold text-slate-700">Delivery notes: </span>
-                  {order.deliveryNotes}
+                  <span className="font-semibold text-slate-700">Delivery address: </span>
+                  {order.deliveryAddress}
                 </p>
-              )}
-              {order.notes && (
-                <p className="break-words">
-                  <span className="font-semibold text-slate-700">Order notes: </span>
-                  {order.notes}
-                </p>
-              )}
-            </div>
-            <HandledBy order={order} />
+                {order.deliveryNotes && (
+                  <p className="break-words">
+                    <span className="font-semibold text-slate-700">Delivery notes: </span>
+                    {order.deliveryNotes}
+                  </p>
+                )}
+                {order.notes && (
+                  <p className="break-words">
+                    <span className="font-semibold text-slate-700">Order notes: </span>
+                    {order.notes}
+                  </p>
+                )}
+              </div>
+            </section>
             <div className="overflow-auto rounded-lg border border-slate-200">
-              <table className="data-table w-full min-w-[620px] text-left text-sm">
+              <table className="data-table w-full min-w-[480px] text-left text-sm">
                 <thead>
                   <tr>
                     {['Product', 'Batch / Expiry', 'Quantity', 'Price', 'Total'].map((label) => (
@@ -1207,77 +1257,12 @@ function OrderDetails({
                 </button>
               </div>
             )}
-            {admin && order.receivable && (
-              <section className="space-y-3">
-                <h4 className="card-title">Payment History</h4>
-                <div className="max-h-64 overflow-auto rounded-lg border border-slate-200">
-                  <table className="data-table w-full min-w-[550px] text-left text-sm">
-                    <thead>
-                      <tr>
-                        {[
-                          'Date',
-                          'Reference',
-                          'Method',
-                          'Amount',
-                          'Notes',
-                          'Recorded By',
-                          'Action'
-                        ].map((label) => (
-                          <th className="px-3 py-2.5" key={label}>
-                            {label}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {order.payments?.map((item) => (
-                        <tr key={item.id}>
-                          <td className="px-3 py-2.5">{showDate(item.paidAt)}</td>
-                          <td className="max-w-52 px-3 py-2.5 break-all">{item.reference}</td>
-                          <td className="px-3 py-2.5">{paymentMethodLabel(item.method)}</td>
-                          <td className="px-3 py-2.5 tabular-nums">{money(item.amountCents)}</td>
-                          <td className="max-w-64 px-3 py-2.5 break-words">{item.notes}</td>
-                          <td className="px-3 py-2.5">
-                            {item.recordedByName}
-                            {item.updatedAt !== item.createdAt && (
-                              <p className="text-xs text-slate-500">
-                                Edited by {item.updatedByName}
-                              </p>
-                            )}
-                          </td>
-                          <td className="px-3 py-2.5">
-                            <button
-                              className="secondary-button"
-                              disabled={busy}
-                              onClick={() => {
-                                setEditingPayment(item.id)
-                                setAmount(String(item.amountCents / 100))
-                                setPaidAt(item.paidAt)
-                                setReference(item.reference)
-                                // Note: Older payments may have a free-text method; pick one again.
-                                setMethod(
-                                  (paymentMethods as readonly string[]).includes(item.method)
-                                    ? item.method
-                                    : ''
-                                )
-                                setPaymentNotes(item.notes)
-                              }}
-                            >
-                              Correct Payment
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                {!order.payments?.length && (
-                  <p className="text-sm text-slate-500">No payments recorded.</p>
-                )}
-              </section>
-            )}
           </div>
-          <aside className="min-w-0 space-y-4" aria-label="Delivery and payment actions">
+          <aside className="min-w-0 space-y-4" aria-label="People, delivery and payment">
+            <section className="space-y-2">
+              <h4 className="card-title">Handled By</h4>
+              <HandledBy order={order} />
+            </section>
             {open && (
               <section className="space-y-3 rounded-lg border border-slate-200 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1602,6 +1587,75 @@ function OrderDetails({
                 )}
               </section>
             )}
+            {admin && order.receivable && (
+              <section className="space-y-3">
+                <h4 className="card-title">Payment History</h4>
+                <div className="max-h-64 overflow-auto rounded-lg border border-slate-200">
+                  <table className="data-table w-full min-w-[550px] text-left text-sm">
+                    <thead>
+                      <tr>
+                        {[
+                          'Date',
+                          'Reference',
+                          'Method',
+                          'Amount',
+                          'Notes',
+                          'Recorded By',
+                          'Action'
+                        ].map((label) => (
+                          <th className="px-3 py-2.5" key={label}>
+                            {label}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {order.payments?.map((item) => (
+                        <tr key={item.id}>
+                          <td className="px-3 py-2.5">{showDate(item.paidAt)}</td>
+                          <td className="max-w-52 px-3 py-2.5 break-all">{item.reference}</td>
+                          <td className="px-3 py-2.5">{paymentMethodLabel(item.method)}</td>
+                          <td className="px-3 py-2.5 tabular-nums">{money(item.amountCents)}</td>
+                          <td className="max-w-64 px-3 py-2.5 break-words">{item.notes}</td>
+                          <td className="px-3 py-2.5">
+                            {item.recordedByName}
+                            {item.updatedAt !== item.createdAt && (
+                              <p className="text-xs text-slate-500">
+                                Edited by {item.updatedByName}
+                              </p>
+                            )}
+                          </td>
+                          <td className="px-3 py-2.5">
+                            <button
+                              className="secondary-button"
+                              disabled={busy}
+                              onClick={() => {
+                                setEditingPayment(item.id)
+                                setAmount(String(item.amountCents / 100))
+                                setPaidAt(item.paidAt)
+                                setReference(item.reference)
+                                // Note: Older payments may have a free-text method; pick one again.
+                                setMethod(
+                                  (paymentMethods as readonly string[]).includes(item.method)
+                                    ? item.method
+                                    : ''
+                                )
+                                setPaymentNotes(item.notes)
+                              }}
+                            >
+                              Correct Payment
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {!order.payments?.length && (
+                  <p className="text-sm text-slate-500">No payments recorded.</p>
+                )}
+              </section>
+            )}
           </aside>
         </div>
       </div>
@@ -1711,7 +1765,14 @@ function PharmacyClients({ clients }: { clients: CustomerProfile[] }): ReactElem
             <div className="min-w-0 flex-1">
               <p className="truncate font-semibold text-slate-900">{client.fullName}</p>
               <p className="truncate text-sm text-slate-500">
-                {[client.contactPerson, client.phone, client.address].filter(Boolean).join(' · ')}
+                {[
+                  client.contactPerson,
+                  client.phone,
+                  client.address,
+                  client.tin && `TIN ${client.tin}`
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
               </p>
             </div>
             <FiChevronRight

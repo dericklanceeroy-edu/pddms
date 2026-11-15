@@ -42,6 +42,7 @@ if (!process.env.WHOLESALE_TEST_PHASE) {
   }
 } else {
   const { db } = await import('../src/main/db.ts')
+  const { packLines } = await import('./test-packs.mjs')
   const { initializeDatabase } = await import('../src/main/migrations.ts')
   const { state } = await import('../src/main/api/index.ts')
   const { channels } = await import('../src/shared/constants.ts')
@@ -161,7 +162,11 @@ if (!process.env.WHOLESALE_TEST_PHASE) {
       const po = (
         await ok(channels.purchaseOrder.createOne, {
           supplierId: supplier.id,
-          items: products.map((product) => ({ drugId: product.id, quantity: 20, unitCost: 80 }))
+          items: await packLines(
+            db,
+            supplier.id,
+            products.map((product) => ({ drugId: product.id, quantity: 20, unitCost: 80 }))
+          )
         })
       ).order
       await ok(channels.purchaseOrder.updateStatusById, po.id, { status: 'submitted' })

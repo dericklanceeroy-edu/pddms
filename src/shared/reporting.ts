@@ -13,6 +13,9 @@ export const reportTitles = {
   apPayments: 'Accounts Payable Payments',
   discounts: 'Discount Monitoring',
   regulated: 'Regulated Product Sales',
+  voids: 'Voided Sales',
+  losses: 'Write-offs and Losses',
+  cashCounts: 'End-of-Day Cash Counts',
   products: 'Product Information & Summaries'
 } as const
 export type ReportKind = keyof typeof reportTitles

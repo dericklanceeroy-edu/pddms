@@ -49,6 +49,7 @@ if (!process.env.UNITS_TEST_PHASE) {
   const { deliveryReceiptText } = await import('../src/shared/wholesale.ts')
   const { handlers } = await import('./inventory-test-electron.mjs')
   const { sql } = await import('kysely')
+  const { packLines } = await import('./test-packs.mjs')
   await import('../src/main/sales/controller.ts')
   await import('../src/main/product/controller.ts')
   await import('../src/main/purchase-order/controller.ts')
@@ -158,7 +159,7 @@ if (!process.env.UNITS_TEST_PHASE) {
         .returningAll()
         .executeTakeFirstOrThrow()
 
-      // Products: pieces per box is validated and defaults to 1.
+      // Products are medicines counted in pieces; the box size now belongs to the supplier pack.
       const product = (fields) =>
         invoke(channels.product.createOne, {
           genericName: 'Generic',
@@ -169,47 +170,30 @@ if (!process.env.UNITS_TEST_PHASE) {
           reorderLevel: 5,
           ...fields
         })
-      assert.equal((await product({ brandName: 'Zero Box', piecesPerBox: 0 })).success, false)
-      assert.equal((await product({ brandName: 'Half Box', piecesPerBox: 2.5 })).success, false)
-      const boxed = (
-        await ok(channels.product.createOne, {
-          brandName: 'Boxed Tablet',
-          genericName: 'Generic',
-          formulation: '500 mg tablet',
-          category: 'Medicine',
-          isPrescribed: false,
-          isControlled: false,
-          reorderLevel: 5,
-          piecesPerBox: 10
-        })
-      ).product
-      const loose = (
-        await ok(channels.product.createOne, {
-          brandName: 'Loose Syrup',
-          genericName: 'Generic',
-          formulation: '60 ml syrup',
-          category: 'Medicine',
-          isPrescribed: false,
-          isControlled: false,
-          reorderLevel: 5
-        })
-      ).product
-      assert.equal(boxed.piecesPerBox, 10)
-      assert.equal(loose.piecesPerBox, 1)
+      assert.equal((await product({ brandName: 'Old Box Field', piecesPerBox: 10 })).success, false)
+      const boxed = (await product({ brandName: 'Boxed Tablet' })).product
+      const loose = (await product({ brandName: 'Loose Syrup', formulation: '60 ml syrup' })).product
+      assert.ok(boxed && loose)
 
-      // Purchase orders are per box only; quantity and cost are per box. A product sold loose
-      // has a box of 1.
+      // Purchase orders pick a pack from the supplier price list; quantity and cost are per box.
+      // A product sold loose has a pack of 1.
+      const [boxPack, loosePack] = await packLines(db, supplier.id, [
+        { drugId: boxed.id, quantity: 3, unitCost: 500, piecesPerBox: 10 },
+        { drugId: loose.id, quantity: 20, unitCost: 20 }
+      ])
       await bad(channels.purchaseOrder.createOne, {
         supplierId: supplier.id,
-        items: [{ drugId: boxed.id, quantity: 1, unitCost: 10, unit: 'piece' }]
+        items: [{ ...boxPack, unit: 'piece' }]
+      })
+      // The cost comes from the price list; a cost typed by the person ordering is refused.
+      await bad(channels.purchaseOrder.createOne, {
+        supplierId: supplier.id,
+        items: [{ ...boxPack, unitCost: 1 }]
       })
       const order = (
         await ok(channels.purchaseOrder.createOne, {
           supplierId: supplier.id,
-          items: [
-            { drugId: boxed.id, quantity: 3, unitCost: 500, unit: 'box' },
-            { drugId: loose.id, quantity: 20, unitCost: 20 }
-          ]
+          items: [boxPack, loosePack]
         })
       ).order
       assert.equal(order.totalAmount, 1900)
@@ -303,8 +287,10 @@ if (!process.env.UNITS_TEST_PHASE) {
       assert.equal(boxBatch.currentStock, 20)
       assert.equal(boxBatch.buyPrice, 50)
       assert.equal(boxBatch.boxSellPrice, 550)
+      assert.equal(boxBatch.piecesPerBox, 10)
       assert.equal(looseBatch.currentStock, 20)
       assert.equal(looseBatch.boxSellPrice, null)
+      assert.equal(looseBatch.piecesPerBox, 1)
       // The last box tops up the same batch because the per-piece cost matches.
       await ok(
         channels.purchaseOrder.recordDeliveryById,
@@ -344,7 +330,7 @@ if (!process.env.UNITS_TEST_PHASE) {
       const cancelled = (
         await ok(channels.purchaseOrder.createOne, {
           supplierId: supplier.id,
-          items: [{ drugId: loose.id, quantity: 1, unitCost: 20 }]
+          items: [{ ...loosePack, quantity: 1 }]
         })
       ).order
       const closed = (

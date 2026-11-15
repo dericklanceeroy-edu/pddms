@@ -7,16 +7,14 @@ import type {
   SupplierInvoiceWithDetails,
   SupplierPaymentWithDetails
 } from '@shared/types'
-import type { StockUnit } from '@shared/units'
 
 export type SupplierFormValues = Omit<Supplier, 'id'>
 
+/** One order line: a pack from the supplier's price list and the number of boxes. The cost per
+ * box comes from the price list and cannot be typed by the person ordering. */
 export interface PurchaseOrderLineDraft {
-  drugId: number
+  packId: number
   quantity: number
-  unitCost: number
-  /** Quantity and unit cost are per box for box lines. */
-  unit: StockUnit
 }
 
 export interface PurchaseOrderFormValues {
@@ -35,8 +33,16 @@ export interface DeliveryFormValues {
   items: Array<{
     itemId: number
     receivedQuantity: number
+    /** Boxes refused at the door (crushed, wet, wrong item); not added to stock or owed. */
+    rejectedQuantity: number
+    rejectionReason: string
+    /** What actually arrived; null means the same as the order. */
+    piecesPerBox: number | null
+    unitCost: number | null
+    /** Required when the box size or invoice cost differs from the order. */
+    differenceReason: string
     batchNumber: string
-    sellPrice: number
+    sellPrice: number | null
     boxSellPrice: number | null
     wholesaleBoxPrice: number | null
     expiresAt: string
@@ -119,12 +125,21 @@ export const orderStatusHelp: Record<OrderStatus, string> = {
     'Cancelled orders are closed permanently. Received stock and payments remain on record.'
 }
 
-export type ProcurementTab = 'suppliers' | 'orders' | 'receiving' | 'invoices' | 'history'
+export type ProcurementTab =
+  | 'suppliers'
+  | 'prices'
+  | 'orders'
+  | 'receiving'
+  | 'invoices'
+  | 'returns'
+  | 'history'
 
 export const procurementTabs: Array<{ id: ProcurementTab; label: string }> = [
   { id: 'suppliers', label: 'Suppliers' },
+  { id: 'prices', label: 'Price List' },
   { id: 'orders', label: 'Purchase Orders' },
   { id: 'receiving', label: 'Receiving' },
   { id: 'invoices', label: 'Invoices & Payments' },
+  { id: 'returns', label: 'Returns & Credits' },
   { id: 'history', label: 'History' }
 ]

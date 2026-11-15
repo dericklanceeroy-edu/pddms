@@ -173,6 +173,7 @@ async function seed() {
     'supplier',
     'product',
     'customer',
+    'price-list',
     'purchase-order',
     'procurement',
     'sales',
@@ -275,6 +276,25 @@ async function seed() {
         })
       ).product
 
+    // Supplier price list, set by the owner from each supplier's quotation (one piece per pack).
+    const packs = {}
+    for (const [supplierIndex, keys] of [
+      [0, [['paracetamol', 1.2], ['cetirizine', 2.5], ['ascorbic', 1.5]]],
+      [1, [['amoxicillin', 4], ['losartan', 3], ['metformin', 1.8], ['cetirizine', 2.5]]],
+      [2, [['salbutamol', 35], ['omeprazole', 3.5]]]
+    ])
+      for (const [key, unitCost] of keys)
+        packs[`${supplierIndex}:${key}`] = (
+          await call(channels.priceList.createPack, {
+            supplierId: suppliers[supplierIndex].id,
+            drugId: products[key].id,
+            piecesPerBox: 1,
+            unitCost,
+            effectiveFrom: day(-210),
+            quotationReference: `DEMO-QUOTE-${supplierIndex + 1}`
+          })
+        ).data
+
     // Purchasing and receiving, done by the staff account.
     await call(channels.auth.signOut)
     await signIn(staff)
@@ -284,10 +304,9 @@ async function seed() {
           supplierId: supplier.id,
           expectedAt,
           notes,
-          items: lines.map(([key, quantity, unitCost]) => ({
-            drugId: products[key].id,
-            quantity,
-            unitCost
+          items: lines.map(([key, quantity]) => ({
+            packId: packs[`${suppliers.indexOf(supplier)}:${key}`],
+            quantity
           }))
         })
       ).order
@@ -462,7 +481,13 @@ async function seed() {
     const rx = (prescriptionNumber) => ({
       prescriberName: 'Dr. Demo Prescriber',
       prescriberLicense: 'PRC-0000000',
-      prescriptionNumber
+      prescriptionNumber,
+      // Note: Demo-only register details for controlled medicines (separate demo database).
+      patientName: 'Demo Patient',
+      patientAge: 40,
+      patientAddress: 'Demo address, Quezon City',
+      prescriberAddress: 'Demo clinic, Quezon City',
+      prescriberS2License: 'S2-DEMO-0000'
     })
     const sell = async (customerId, items, prescription = null) => {
       const { totals } = await call(channels.sales.quote, { customerId, items })

@@ -156,7 +156,8 @@ export async function createOrder(input: WholesaleDraft, accountId: number): Pro
       .selectAll()
       .where('id', '=', data.customerId)
       .executeTakeFirst()
-    if (!customer) throw new WholesaleError('Select an existing pharmacy client.')
+    if (!customer || customer.isArchived)
+      throw new WholesaleError('Select an existing pharmacy client (archived clients cannot order).')
     if (customer.clientType !== 'pharmacy')
       throw new WholesaleError(
         `${customer.fullName} is a retail customer. Wholesale orders are for pharmacy clients only.`
@@ -173,7 +174,7 @@ export async function createOrder(input: WholesaleDraft, accountId: number): Pro
         'batches.sellPrice',
         'batches.boxSellPrice',
         'batches.wholesaleBoxPrice',
-        'drugs.piecesPerBox',
+        'batches.piecesPerBox',
         'drugs.brandName',
         'drugs.genericName',
         'drugs.formulation',
@@ -365,7 +366,12 @@ export async function deliverOrder(input: WholesaleDelivery, accountId: number):
         )
       await deductBatchStock(
         transaction,
-        { batchId: item.batchId, quantity: pieces, reason: `Wholesale ${order.reference}` },
+        {
+          batchId: item.batchId,
+          quantity: pieces,
+          reason: `Wholesale ${order.reference}`,
+          kind: 'wholesale'
+        },
         accountId
       )
       await transaction

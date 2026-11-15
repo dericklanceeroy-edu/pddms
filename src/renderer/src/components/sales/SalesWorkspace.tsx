@@ -1,14 +1,18 @@
 import DashboardShell from '@renderer/components/dashboard/DashboardShell'
+import { useConfirm } from '@renderer/components/ui/ConfirmDialog'
 import FilteredInput from '@renderer/components/ui/FilteredInput'
 import { getSellableStock, type CustomerProfile, type ItemProfile } from '@renderer/data/profiles'
 import { useAccount } from '@renderer/hooks/useAccount'
 import { getCustomers, getProducts } from '@renderer/services/profiles'
 import { completeSale, getSale, getSaleHistory } from '@renderer/services/sales'
 import { useProfileStore } from '@renderer/stores/useProfileStore'
+import { customerDetail } from '@shared/controls'
+import { phoneKey } from '@shared/duplicates'
 import { expiryLabels, getExpiryStatus, isBatchSellable, localDate } from '@shared/inventory'
 import {
   calculateSale,
   cartKey,
+  missingRegisterFields,
   money,
   posPaymentMethods,
   priceToCents,
@@ -25,12 +29,29 @@ import {
 } from '@shared/sales'
 import { availableUnits, piecesLabel, unitSellPrice, unitWord, type StockUnit } from '@shared/units'
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
-import { FiSearch, FiTrash2 } from 'react-icons/fi'
+import { FiDollarSign, FiSearch, FiSlash, FiTrash2 } from 'react-icons/fi'
+import CashCountDialog from './CashCountDialog'
 import Receipt from './Receipt'
+import VoidSaleDialog from './VoidSaleDialog'
 
 /** Pharmacy clients buy through Wholesale; the counter lists retail customers only. */
 const retailOnly = (people: CustomerProfile[]): CustomerProfile[] =>
   people.filter((person) => person.clientType !== 'pharmacy')
+
+const emptyPrescription: Prescription = {
+  prescriberName: '',
+  prescriberLicense: '',
+  prescriptionNumber: '',
+  patientName: '',
+  patientAge: null,
+  patientAddress: '',
+  prescriberAddress: '',
+  prescriberS2License: ''
+}
+
+/** "Sell first": the sellable batch that expires soonest (batches arrive sorted by expiry). */
+const firstSellable = (item: ItemProfile): number | undefined =>
+  item.batches.find((batch) => isBatchSellable(batch.stock, batch.expiresAt))?.id
 
 export default function SalesWorkspace(): ReactElement {
   const { account } = useAccount()
@@ -45,11 +66,11 @@ export default function SalesWorkspace(): ReactElement {
   const [cash, setCash] = useState('')
   const [paymentMethod, setPaymentMethod] = useState<PosPaymentMethod>('Cash')
   const [paymentReference, setPaymentReference] = useState('')
-  const [prescription, setPrescription] = useState<Prescription>({
-    prescriberName: '',
-    prescriberLicense: '',
-    prescriptionNumber: ''
-  })
+  const [prescription, setPrescription] = useState<Prescription>(emptyPrescription)
+  const [customerQuery, setCustomerQuery] = useState('')
+  const [voiding, setVoiding] = useState<Omit<SaleRecord, 'items'> | null>(null)
+  const [cashCount, setCashCount] = useState(false)
+  const [confirmDialog, confirm] = useConfirm()
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -142,12 +163,12 @@ export default function SalesWorkspace(): ReactElement {
       const batch = item?.batches.find((value) => value.id === batchId)
       if (!item || !batch || !isBatchSellable(batch.stock, batch.expiresAt))
         throw new Error('This batch is unavailable or expired.')
-      const price = unitSellPrice(unit, batch.sellPrice, batch.boxSellPrice, item.piecesPerBox)
+      const price = unitSellPrice(unit, batch.sellPrice, batch.boxSellPrice, batch.piecesPerBox)
       setCart(
         setCartQuantity(
           base,
           { batchId, quantity, unit, unitPriceCents: priceToCents(price) },
-          availableUnits(batch.stock - otherPieces(base, batchId, unit), unit, item.piecesPerBox)
+          availableUnits(batch.stock - otherPieces(base, batchId, unit), unit, batch.piecesPerBox)
         )
       )
     } catch (cause) {
@@ -157,8 +178,8 @@ export default function SalesWorkspace(): ReactElement {
   /** Pieces already in the cart from the same batch under the other unit (box or piece). */
   const otherPieces = (base: CartLine[], batchId: number, unit: StockUnit): number => {
     const piecesPerBox =
-      products.find((value) => value.batches.some((batch) => batch.id === batchId))?.piecesPerBox ??
-      1
+      products.flatMap((value) => value.batches).find((batch) => batch.id === batchId)
+        ?.piecesPerBox ?? 1
     return base
       .filter((line) => line.batchId === batchId && line.unit !== unit)
       .reduce((total, line) => total + line.quantity * (line.unit === 'box' ? piecesPerBox : 1), 0)
@@ -174,8 +195,72 @@ export default function SalesWorkspace(): ReactElement {
     setCash('')
     setPaymentMethod('Cash')
     setPaymentReference('')
-    setPrescription({ prescriberName: '', prescriberLicense: '', prescriptionNumber: '' })
+    setPrescription(emptyPrescription)
+    setCustomerQuery('')
   }
+  /**
+   * Adds from a batch. Soonest expiry is sold first (FEFO); choosing a batch that expires later
+   * asks the cashier to confirm, e.g. when the customer asked for a longer expiry.
+   */
+  const addFromBatch = async (
+    item: ItemProfile,
+    batchId: number,
+    unit: StockUnit
+  ): Promise<void> => {
+    const first = firstSellable(item)
+    const line = cart.find((value) => value.batchId === batchId && value.unit === unit)
+    const earlier = item.batches.find((batch) => batch.id === first)
+    if (first !== undefined && first !== batchId && !line && earlier) {
+      const accepted = await confirm({
+        title: 'Sell a later-expiring batch?',
+        message: (
+          <>
+            Batch <strong>{earlier.batchNumber}</strong> expires sooner ({earlier.expiresAt}) and
+            should be sold first. Use this later batch only if there is a reason, e.g. the customer
+            needs a longer expiry.
+          </>
+        ),
+        confirmLabel: 'Use This Batch',
+        cancelLabel: 'Go back'
+      })
+      if (!accepted) return
+    }
+    changeQuantity(batchId, line ? line.quantity + 1 : 1, unit)
+  }
+  /** Quick add from the soonest-expiring batch that still has enough stock for the unit. */
+  const quickAdd = (item: ItemProfile, unit: StockUnit): void => {
+    const inCart = (batchId: number, piecesPerBox: number): number =>
+      cart
+        .filter((line) => line.batchId === batchId)
+        .reduce((sum, line) => sum + line.quantity * (line.unit === 'box' ? piecesPerBox : 1), 0)
+    const batch = item.batches.find(
+      (value) =>
+        isBatchSellable(value.stock, value.expiresAt) &&
+        availableUnits(
+          value.stock - inCart(value.id, value.piecesPerBox),
+          unit,
+          value.piecesPerBox
+        ) >= 1
+    )
+    if (!batch) {
+      setError(`No ${unit === 'box' ? 'whole box' : 'piece'} of ${item.brandName} is left to sell.`)
+      return
+    }
+    const line = cart.find((value) => value.batchId === batch.id && value.unit === unit)
+    changeQuantity(batch.id, line ? line.quantity + 1 : 1, unit)
+  }
+  const shownCustomers = useMemo(() => {
+    const term = customerQuery.trim().toLowerCase()
+    if (!term) return customers
+    const digits = phoneKey(term)
+    return customers.filter(
+      (customer) =>
+        customer.fullName.toLowerCase().includes(term) ||
+        (digits.length >= 3 && phoneKey(customer.phone).includes(digits)) ||
+        customer.discountId.toLowerCase().includes(term)
+    )
+  }, [customers, customerQuery])
+  const chosenCustomer = customers.find((item) => item.id === customerId)
   const pay = async (): Promise<void> => {
     if (paying.current) return
     paying.current = true
@@ -198,6 +283,11 @@ export default function SalesWorkspace(): ReactElement {
         setCashError(`Enter the ${paymentMethod} reference number from the customer's app.`)
         return
       }
+      // Note: A registered customer's saved address is used when the patient address is left empty.
+      const filled: Prescription = {
+        ...prescription,
+        patientAddress: prescription.patientAddress?.trim() || chosenCustomer?.address || ''
+      }
       if (rxProducts.length) {
         if (
           prescription.prescriberName.trim().length < 2 ||
@@ -206,9 +296,24 @@ export default function SalesWorkspace(): ReactElement {
           setCashError("Enter the prescribing doctor's name and PRC license number.")
           return
         }
-        if (controlledProducts.length && !prescription.prescriptionNumber?.trim()) {
-          setCashError('Enter the prescription number for the controlled medicine.')
-          return
+        if (controlledProducts.length) {
+          const missing = missingRegisterFields(
+            {
+              ...emptyPrescription,
+              ...filled,
+              prescriptionNumber: prescription.prescriptionNumber?.trim() ?? '',
+              patientName: prescription.patientName?.trim() ?? '',
+              patientAddress: filled.patientAddress ?? '',
+              prescriberAddress: prescription.prescriberAddress?.trim() ?? '',
+              prescriberS2License: prescription.prescriberS2License?.trim() ?? '',
+              patientAge: prescription.patientAge ?? null
+            },
+            customerId !== null || !!walkIn
+          )
+          if (missing.length) {
+            setCashError(`Controlled medicine: enter the ${missing.join(', ')}.`)
+            return
+          }
         }
       }
       const values = {
@@ -219,7 +324,7 @@ export default function SalesWorkspace(): ReactElement {
         cashCents: priceToCents(Number(received)),
         paymentMethod,
         paymentReference: eWallet ? paymentReference.trim() : null,
-        prescription: rxProducts.length ? prescription : null
+        prescription: rxProducts.length ? filled : null
       }
       const fingerprint = JSON.stringify(values)
       if (pending.current?.fingerprint !== fingerprint)
@@ -276,6 +381,9 @@ export default function SalesWorkspace(): ReactElement {
             >
               Refresh Stock
             </button>
+            <button className="secondary-button" disabled={busy} onClick={() => setCashCount(true)}>
+              <FiDollarSign aria-hidden="true" /> End-of-Day Cash Count
+            </button>
             <button
               className="secondary-button"
               disabled={busy}
@@ -304,15 +412,18 @@ export default function SalesWorkspace(): ReactElement {
         )}
         {history ? (
           <section className="panel space-y-3 p-5">
-            <h3 className="section-title">Completed Transactions</h3>
+            <h3 className="section-title">Transactions</h3>
             <p className="text-sm text-slate-500">
-              Newest first · {account?.role === 'master' ? 'All cashiers' : 'Your sales only'}
+              Newest first · {account?.role === 'master' ? 'All cashiers' : 'Your sales only'}. A
+              sale rung up wrong can be voided: its items go back to their batch and it is left out
+              of totals.{' '}
+              {account?.role === 'master' ? '' : 'An administrator must approve each void.'}
             </p>
             <div className="max-h-[65vh] overflow-auto">
-              <table className="w-full min-w-[640px] text-left text-sm">
+              <table className="w-full min-w-[720px] text-left text-sm">
                 <thead>
                   <tr>
-                    {['Reference / date', 'Customer', 'Cashier', 'Total', 'Receipt'].map(
+                    {['Reference / date', 'Customer', 'Cashier', 'Total', 'Actions'].map(
                       (label) => (
                         <th className="p-3" key={label}>
                           {label}
@@ -323,10 +434,25 @@ export default function SalesWorkspace(): ReactElement {
                 </thead>
                 <tbody>
                   {history.map((sale) => (
-                    <tr className="border-t border-slate-100" key={sale.id}>
+                    <tr
+                      className={`border-t border-slate-100 ${sale.status === 'voided' ? 'bg-slate-50 text-slate-500' : ''}`}
+                      key={sale.id}
+                    >
                       <td className="max-w-64 p-3 break-all">
                         {sale.reference}
                         <p>{new Date(sale.createdAt).toLocaleString()}</p>
+                        {sale.status === 'voided' && (
+                          <p className="mt-1 text-xs font-semibold break-words text-rose-700">
+                            <span className="rounded border border-rose-300 px-1.5 py-0.5">
+                              VOID
+                            </span>{' '}
+                            {sale.voidReason} · by {sale.voidedByName}
+                            {sale.voidApprovedByName &&
+                            sale.voidApprovedByName !== sale.voidedByName
+                              ? `, approved by ${sale.voidApprovedByName}`
+                              : ''}
+                          </p>
+                        )}
                       </td>
                       <td className="p-3">
                         {sale.customerName}
@@ -338,7 +464,7 @@ export default function SalesWorkspace(): ReactElement {
                         )}
                       </td>
                       <td className="p-3">{sale.cashierName}</td>
-                      <td className="p-3">
+                      <td className={`p-3 ${sale.status === 'voided' ? 'line-through' : ''}`}>
                         {money(sale.totalCents)}
                         <p className="text-sm text-slate-600">
                           {sale.paymentMethod ?? 'Cash'}
@@ -359,6 +485,15 @@ export default function SalesWorkspace(): ReactElement {
                         >
                           View
                         </button>
+                        {sale.status === 'completed' && (
+                          <button
+                            className="secondary-button ml-2 text-rose-700"
+                            disabled={busy}
+                            onClick={() => setVoiding(sale)}
+                          >
+                            <FiSlash aria-hidden="true" /> Void
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -421,7 +556,7 @@ export default function SalesWorkspace(): ReactElement {
                       className={`text-right text-sm font-semibold ${getSellableStock(item) ? 'text-slate-700' : 'text-rose-700'}`}
                     >
                       {getSellableStock(item)
-                        ? `${piecesLabel(getSellableStock(item), item.piecesPerBox)} sellable`
+                        ? `${getSellableStock(item)} pcs sellable`
                         : 'Out of stock'}
                     </span>
                   </button>
@@ -432,28 +567,58 @@ export default function SalesWorkspace(): ReactElement {
                 <div className="space-y-3 border-t border-slate-200 pt-4">
                   <h4 className="card-title break-words">{product.brandName} — Batches</h4>
                   <p className="text-sm text-slate-600">
-                    Select the batch being dispensed.{' '}
+                    Batches are listed soonest expiry first; sell the batch marked “Sell first”.{' '}
                     {product.prescriptionRequired && (
                       <span className="font-semibold text-amber-800">Prescription required. </span>
                     )}
                     {product.controlled && (
-                      <span className="font-semibold text-rose-700">Controlled medicine.</span>
+                      <span className="font-semibold text-rose-700">
+                        Controlled medicine: recorded in the dangerous drugs register.
+                      </span>
                     )}
                   </p>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      className="primary-button"
+                      disabled={busy || firstSellable(product) === undefined}
+                      onClick={() => quickAdd(product, 'piece')}
+                    >
+                      Add Piece (Sell First)
+                    </button>
+                    {product.batches.some(
+                      (batch) =>
+                        batch.piecesPerBox > 1 && isBatchSellable(batch.stock, batch.expiresAt)
+                    ) && (
+                      <button
+                        className="secondary-button"
+                        disabled={busy}
+                        onClick={() => quickAdd(product, 'box')}
+                      >
+                        Add Box (Sell First)
+                      </button>
+                    )}
+                  </div>
                   {product.batches.map((batch) => (
                     <div
                       key={batch.id}
-                      className="grid grid-cols-1 items-center gap-3 rounded-md border border-slate-200 p-3 sm:grid-cols-[minmax(0,1fr)_13.5rem]"
+                      className={`grid grid-cols-1 items-center gap-3 rounded-md border p-3 sm:grid-cols-[minmax(0,1fr)_13.5rem] ${firstSellable(product) === batch.id ? 'border-brand-500 bg-brand-50/50' : 'border-slate-200'}`}
                     >
                       <div className="min-w-0 break-words">
-                        <p className="font-semibold text-slate-900">{batch.batchNumber}</p>
+                        <p className="font-semibold text-slate-900">
+                          {batch.batchNumber}
+                          {firstSellable(product) === batch.id && (
+                            <span className="bg-brand-700 ml-2 rounded px-1.5 py-0.5 text-xs font-semibold text-white">
+                              Sell first
+                            </span>
+                          )}
+                        </p>
                         <p className="text-sm text-slate-700">
                           {money(priceToCents(batch.sellPrice))} per piece
-                          {product.piecesPerBox > 1 &&
-                            ` · ${money(priceToCents(unitSellPrice('box', batch.sellPrice, batch.boxSellPrice, product.piecesPerBox)))} per box of ${product.piecesPerBox}`}
+                          {batch.piecesPerBox > 1 &&
+                            ` · ${money(priceToCents(unitSellPrice('box', batch.sellPrice, batch.boxSellPrice, batch.piecesPerBox)))} per box of ${batch.piecesPerBox}`}
                         </p>
                         <p className="text-sm text-slate-600">
-                          {piecesLabel(batch.stock, product.piecesPerBox)} on hand · Expires{' '}
+                          {piecesLabel(batch.stock, batch.piecesPerBox)} on hand · Expires{' '}
                           {batch.expiresAt}
                         </p>
                         <p
@@ -464,30 +629,23 @@ export default function SalesWorkspace(): ReactElement {
                       </div>
                       {/* Note: Fixed-width button column so buttons line up whatever the batch text length. */}
                       <div className="grid grid-cols-2 gap-2 self-center">
-                        {(product.piecesPerBox > 1
+                        {(batch.piecesPerBox > 1
                           ? (['piece', 'box'] as const)
                           : (['piece'] as const)
-                        ).map((unit) => {
-                          const line = cart.find(
-                            (item) => item.batchId === batch.id && item.unit === unit
-                          )
-                          return (
-                            <button
-                              key={unit}
-                              className={`${unit === 'piece' ? 'primary-button' : 'secondary-button'} w-full px-2 ${product.piecesPerBox > 1 ? '' : 'col-span-2'}`}
-                              disabled={
-                                busy ||
-                                !isBatchSellable(batch.stock, batch.expiresAt) ||
-                                availableUnits(batch.stock, unit, product.piecesPerBox) < 1
-                              }
-                              onClick={() =>
-                                changeQuantity(batch.id, line ? line.quantity + 1 : 1, unit)
-                              }
-                            >
-                              {unit === 'piece' ? 'Add Piece' : 'Add Box'}
-                            </button>
-                          )
-                        })}
+                        ).map((unit) => (
+                          <button
+                            key={unit}
+                            className={`${unit === 'piece' ? 'primary-button' : 'secondary-button'} w-full px-2 ${batch.piecesPerBox > 1 ? '' : 'col-span-2'}`}
+                            disabled={
+                              busy ||
+                              !isBatchSellable(batch.stock, batch.expiresAt) ||
+                              availableUnits(batch.stock, unit, batch.piecesPerBox) < 1
+                            }
+                            onClick={() => void addFromBatch(product, batch.id, unit)}
+                          >
+                            {unit === 'piece' ? 'Add Piece' : 'Add Box'}
+                          </button>
+                        ))}
                       </div>
                     </div>
                   ))}
@@ -517,7 +675,7 @@ export default function SalesWorkspace(): ReactElement {
                     value.batches.some((batch) => batch.id === line.batchId)
                   )
                   const batch = item?.batches.find((value) => value.id === line.batchId)
-                  const piecesPerBox = item?.piecesPerBox ?? 1
+                  const piecesPerBox = batch?.piecesPerBox ?? 1
                   return (
                     <div
                       className="space-y-2 rounded-md border border-slate-200 p-3"
@@ -607,10 +765,27 @@ export default function SalesWorkspace(): ReactElement {
                   )
                 })}
               </div>
-              <label className="field-label">
-                Customer
+              <div className="space-y-2">
+                <label className="field-label" htmlFor="customer-search">
+                  Customer
+                </label>
+                <span className="relative block">
+                  <FiSearch
+                    aria-hidden="true"
+                    className="absolute top-1/2 left-3.5 -translate-y-1/2 text-slate-400"
+                  />
+                  <input
+                    id="customer-search"
+                    className="field mt-0 pl-10"
+                    value={customerQuery}
+                    disabled={busy}
+                    placeholder="Search name, mobile number or Senior/PWD ID"
+                    onChange={(event) => setCustomerQuery(event.target.value)}
+                  />
+                </span>
                 <select
-                  className="field mt-1.5 font-normal"
+                  className="field mt-0 font-normal"
+                  aria-label="Choose customer"
                   value={walkIn ? 'walk-in-discount' : (customerId ?? '')}
                   disabled={busy}
                   onChange={(event) => {
@@ -630,18 +805,41 @@ export default function SalesWorkspace(): ReactElement {
                 >
                   <option value="">Walk-in Customer (No Discount)</option>
                   <option value="walk-in-discount">Walk-in Senior Citizen / PWD (Enter ID)</option>
-                  {customers.map((customer) => (
+                  {chosenCustomer && !shownCustomers.includes(chosenCustomer) && (
+                    <option value={chosenCustomer.id}>
+                      {chosenCustomer.fullName} ·{' '}
+                      {customerDetail({
+                        ...chosenCustomer,
+                        discountId: chosenCustomer.discountId || null,
+                        address: chosenCustomer.address || null
+                      })}
+                    </option>
+                  )}
+                  {shownCustomers.map((customer) => (
                     <option key={customer.id} value={customer.id}>
                       {customer.fullName} ·{' '}
                       {customer.discountType === 'none'
                         ? 'Regular'
                         : customer.discountType === 'senior'
                           ? 'Senior Citizen'
-                          : 'PWD'}
+                          : 'PWD'}{' '}
+                      ·{' '}
+                      {customerDetail({
+                        ...customer,
+                        discountId: customer.discountId || null,
+                        address: customer.address || null
+                      })}
                     </option>
                   ))}
                 </select>
-              </label>
+                {customerQuery && (
+                  <p className="text-xs text-slate-500" role="status">
+                    {shownCustomers.length} matching customer
+                    {shownCustomers.length === 1 ? '' : 's'}. Customers with the same name are told
+                    apart by mobile number or ID.
+                  </p>
+                )}
+              </div>
               {walkIn && (
                 <fieldset className="space-y-3 rounded-md border border-slate-200 p-3">
                   <legend className="px-1 text-sm font-bold">
@@ -730,7 +928,7 @@ export default function SalesWorkspace(): ReactElement {
                     {rxProducts.length === 1 ? 'needs' : 'need'} a prescription. Check the
                     prescription, then record the prescribing doctor.
                     {controlledProducts.length > 0 &&
-                      ' Controlled medicine: the prescription number is also required.'}
+                      ' Controlled medicine: the dangerous drugs register also needs the prescription (SPFDD) number, the patient and the doctor’s S2 license.'}
                   </p>
                   <label className="field-label">
                     Prescribing Doctor<span className="required-mark">*</span>
@@ -763,7 +961,9 @@ export default function SalesWorkspace(): ReactElement {
                     </span>
                   </label>
                   <label className="field-label">
-                    Prescription No.
+                    {controlledProducts.length > 0
+                      ? 'Prescription (SPFDD) No.'
+                      : 'Prescription No.'}
                     {controlledProducts.length > 0 ? (
                       <span className="required-mark">*</span>
                     ) : (
@@ -781,6 +981,91 @@ export default function SalesWorkspace(): ReactElement {
                       />
                     </span>
                   </label>
+                  {controlledProducts.length > 0 && (
+                    <div className="grid gap-3 border-t border-amber-200 pt-3 sm:grid-cols-2">
+                      <p className="text-xs text-amber-900 sm:col-span-2">
+                        Dangerous drugs register (DDB form 1-14). The patient’s name is the{' '}
+                        {customerId !== null || walkIn ? 'selected customer' : 'name below'}.
+                      </p>
+                      {customerId === null && !walkIn && (
+                        <label className="field-label sm:col-span-2">
+                          Patient Name<span className="required-mark">*</span>
+                          <span className="mt-1.5 block font-normal">
+                            <FilteredInput
+                              rule="personName"
+                              maxLength={120}
+                              value={prescription.patientName ?? ''}
+                              disabled={busy}
+                              onValueChange={(value) =>
+                                setPrescription({ ...prescription, patientName: value })
+                              }
+                            />
+                          </span>
+                        </label>
+                      )}
+                      <label className="field-label">
+                        Patient Age<span className="required-mark">*</span>
+                        <input
+                          className="field mt-1.5 font-normal"
+                          type="number"
+                          min="0"
+                          max="130"
+                          step="1"
+                          value={prescription.patientAge ?? ''}
+                          disabled={busy}
+                          onChange={(event) =>
+                            setPrescription({
+                              ...prescription,
+                              patientAge:
+                                event.target.value === '' ? null : Number(event.target.value)
+                            })
+                          }
+                        />
+                      </label>
+                      <label className="field-label">
+                        Doctor’s S2 License No.<span className="required-mark">*</span>
+                        <span className="mt-1.5 block font-normal">
+                          <FilteredInput
+                            rule="reference"
+                            maxLength={40}
+                            value={prescription.prescriberS2License ?? ''}
+                            disabled={busy}
+                            onValueChange={(value) =>
+                              setPrescription({ ...prescription, prescriberS2License: value })
+                            }
+                          />
+                        </span>
+                      </label>
+                      <label className="field-label sm:col-span-2">
+                        Patient Address<span className="required-mark">*</span>
+                        <input
+                          className="field mt-1.5 font-normal"
+                          maxLength={300}
+                          value={prescription.patientAddress ?? ''}
+                          placeholder={chosenCustomer?.address || 'e.g. Purok 2, Koronadal City'}
+                          disabled={busy}
+                          onChange={(event) =>
+                            setPrescription({ ...prescription, patientAddress: event.target.value })
+                          }
+                        />
+                      </label>
+                      <label className="field-label sm:col-span-2">
+                        Doctor’s Clinic Address<span className="required-mark">*</span>
+                        <input
+                          className="field mt-1.5 font-normal"
+                          maxLength={300}
+                          value={prescription.prescriberAddress ?? ''}
+                          disabled={busy}
+                          onChange={(event) =>
+                            setPrescription({
+                              ...prescription,
+                              prescriberAddress: event.target.value
+                            })
+                          }
+                        />
+                      </label>
+                    </div>
+                  )}
                 </fieldset>
               )}
               {pricing.error && (
@@ -906,6 +1191,22 @@ export default function SalesWorkspace(): ReactElement {
           </div>
         )}
         {receipt && <Receipt sale={receipt} close={() => setReceipt(null)} />}
+        {voiding && (
+          <VoidSaleDialog
+            sale={voiding}
+            needsApproval={account?.role !== 'master'}
+            close={() => setVoiding(null)}
+            voided={async (sale) => {
+              setVoiding(null)
+              setNotice(`${sale.reference} voided. Its items are back in stock.`)
+              setReceipt(sale)
+              useProfileStore.getState().reset()
+              await Promise.all([loadHistory(), refresh()])
+            }}
+          />
+        )}
+        {cashCount && <CashCountDialog close={() => setCashCount(false)} />}
+        {confirmDialog}
       </div>
     </DashboardShell>
   )

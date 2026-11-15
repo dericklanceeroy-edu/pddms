@@ -75,6 +75,7 @@ if (!process.env.SYSTEM_TEST_PHASE) {
     legacy.close()
   }
   const { db, database } = await import('../src/main/db.ts')
+  const { packLines } = await import('./test-packs.mjs')
   const { initializeDatabase } = await import('../src/main/migrations.ts')
   const { Migrator } = await import('kysely/migration')
   const files = (await readdir(new URL('../migrations/', import.meta.url)))
@@ -293,7 +294,7 @@ if (!process.env.SYSTEM_TEST_PHASE) {
       const order = (
         await ok(channels.purchaseOrder.createOne, {
           supplierId: supplier.id,
-          items: [{ drugId: product.id, quantity: 10, unitCost: 10.25 }]
+          items: await packLines(db, supplier.id, [{ drugId: product.id, quantity: 10, unitCost: 10.25 }])
         })
       ).order
       await ok(channels.purchaseOrder.updateStatusById, order.id, { status: 'submitted' })

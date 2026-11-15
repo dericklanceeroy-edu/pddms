@@ -10,7 +10,18 @@ import { checkoutSchema, saleDraftSchema, SalesError } from '@shared/sales'
 import { describeIssue } from '@shared/validation'
 import { writeFile } from 'node:fs/promises'
 import z from 'zod'
-import { checkout, getSale, history, quote } from './repository'
+import { cashCountSchema, voidSaleSchema } from '@shared/controls'
+import { isoDateSchema } from '@shared/schemas'
+import {
+  cashCountPreview,
+  checkout,
+  findCashCounts,
+  getSale,
+  history,
+  quote,
+  recordCashCount,
+  voidSale
+} from './repository'
 
 async function session(read = false): Promise<{ id: number; all: boolean }> {
   const id = state.session?.account.id
@@ -37,7 +48,9 @@ const failure = (error: unknown): { success: false; error: string } => ({
   error:
     error instanceof SalesError
       ? error.message
-      : error instanceof z.ZodError
+      : error instanceof Error && error.name === 'UnauthorizedError'
+        ? 'You do not have permission to do this.'
+        : error instanceof z.ZodError
         ? [...new Set(error.issues.map(describeIssue))].join(' ')
         : 'Unable to complete the sales operation. Refresh or retry; check transaction history before starting another payment.'
 })
@@ -104,6 +117,55 @@ ipcMain.handle(channels.sales.exportReceipt, async (event, id: unknown) => {
       await writeFile(selection.filePath, receiptPlainText(persisted), 'utf8')
     else await writeFile(selection.filePath, await receiptPdf(receiptHtml(persisted)))
     return { success: true }
+  } catch (error) {
+    return failure(error)
+  }
+})
+ipcMain.handle(channels.sales.void, async (_, payload: unknown) => {
+  try {
+    const account = await session(true)
+    const actor = state.session!.account
+    const sale = await voidSale(
+      voidSaleSchema.parse(payload),
+      { id: actor.id, fullName: actor.fullName, role: actor.role },
+      account.all ? undefined : account.id
+    )
+    state.database.stale = true
+    return { success: true, sale }
+  } catch (error) {
+    return failure(error)
+  }
+})
+ipcMain.handle(channels.sales.cashCountPreview, async () => {
+  try {
+    const account = await session()
+    return { success: true, preview: await cashCountPreview(account.id) }
+  } catch (error) {
+    return failure(error)
+  }
+})
+ipcMain.handle(channels.sales.recordCashCount, async (_, payload: unknown) => {
+  try {
+    await session()
+    const actor = state.session!.account
+    const count = await recordCashCount(cashCountSchema.parse(payload), actor)
+    state.database.stale = true
+    return { success: true, count, data: count.id }
+  } catch (error) {
+    return failure(error)
+  }
+})
+ipcMain.handle(channels.sales.cashCounts, async (_, payload: unknown) => {
+  try {
+    const account = await session(true)
+    const range = z
+      .strictObject({ from: isoDateSchema('Enter a start date.'), to: isoDateSchema('Enter an end date.') })
+      .parse(payload)
+    const all = accessControl.can(state.session!.account.role).readAny(resources.cashCount).granted
+    return {
+      success: true,
+      counts: await findCashCounts(range.from, range.to, all ? undefined : account.id)
+    }
   } catch (error) {
     return failure(error)
   }

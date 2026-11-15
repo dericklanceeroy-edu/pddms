@@ -32,10 +32,16 @@ export const isBatchSellable = (stock: number, expiresAt: string, now = new Date
 export interface StockOutValues {
   batchId: number
   quantity: number
+  reasonCode: import('./types').WriteOffReason
+  /** Notes; required when the reason is "Other". */
   reason: string
 }
 
-export interface StockOutRecord extends StockOutValues {
+export interface StockOutRecord {
+  batchId: number
+  quantity: number
+  reasonCode: import('./types').WriteOffReason | null
+  reason: string
   id: number
   batchNumber: string
   recordedByName: string

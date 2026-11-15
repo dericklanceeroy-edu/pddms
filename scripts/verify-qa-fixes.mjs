@@ -2,7 +2,7 @@
 /**
  * Verifies the rules added after the November 15 QA reports, end to end through the IPC handlers:
  * duplicate customers, products and suppliers; cashier limits on pharmacy clients; protected
- * customer records; pieces-per-box changes; last agreed supplier costs; purchase order cost and
+ * customer records; supplier price list costs on orders; purchase order cost and
  * date limits; invoice amount, size and file checks; payment references; sign-in and refused
  * permission audit entries; and backups when an invoice file is missing.
  */
@@ -57,6 +57,7 @@ if (!process.env.QA_FIXES_TEST_PHASE) {
     'customer',
     'supplier',
     'product',
+    'price-list',
     'purchase-order',
     'procurement',
     'sales'
@@ -132,8 +133,7 @@ if (!process.env.QA_FIXES_TEST_PHASE) {
     category: 'Analgesic',
     isPrescribed: false,
     isControlled: false,
-    reorderLevel: 5,
-    piecesPerBox: 10
+    reorderLevel: 5
   }
   const product = (await ok(channels.product.createOne, productInput)).product
   await bad(channels.product.createOne, /already exists/, {
@@ -148,39 +148,44 @@ if (!process.env.QA_FIXES_TEST_PHASE) {
     formulation: '500 MG TABLETS'
   })
 
-  // L7 and L6: purchase order cost floor and expected-date limit.
-  const orderInput = (unitCost, extra = {}) => ({
+  // L7 and L6: the price list refuses a cost below ₱0.01; purchase orders keep the date limit.
+  const pack = (unitCost) => ({
     supplierId: supplier.id,
-    items: [{ drugId: product.id, quantity: 5, unitCost }],
+    drugId: product.id,
+    piecesPerBox: 10,
+    unitCost,
+    effectiveFrom: localDate(),
+    quotationReference: 'Q-QA-1'
+  })
+  await bad(channels.priceList.createPack, null, pack(0))
+  await bad(channels.priceList.createPack, null, pack(0.001))
+  const packId = (await ok(channels.priceList.createPack, pack(100))).data
+  const orderInput = (extra = {}) => ({
+    supplierId: supplier.id,
+    items: [{ packId, quantity: 5 }],
     ...extra
   })
-  await bad(channels.purchaseOrder.createOne, null, orderInput(0))
-  await bad(channels.purchaseOrder.createOne, null, orderInput(0.001))
-  await bad(
-    channels.purchaseOrder.createOne,
-    null,
-    orderInput(100, { expectedAt: yearsFromToday(2) })
-  )
+  await bad(channels.purchaseOrder.createOne, null, orderInput({ expectedAt: yearsFromToday(2) }))
+  // A cost typed on the order line is refused: the price list sets it.
+  await bad(channels.purchaseOrder.createOne, null, {
+    ...orderInput(),
+    items: [{ packId, quantity: 5, unitCost: 1 }]
+  })
 
-  // F4: each order line remembers the supplier's agreed cost per box; editing a draft updates it.
-  const draft = (await ok(channels.purchaseOrder.createOne, orderInput(100))).order
-  const costOf = async () =>
-    (await ok(channels.purchaseOrder.getSupplierCosts)).costs.find(
-      (cost) => cost.supplierId === supplier.id && cost.drugId === product.id
-    )?.unitCost
-  assert.equal(await costOf(), 100)
-  await ok(channels.purchaseOrder.updateOneById, draft.id, orderInput(110))
-  assert.equal(await costOf(), 110)
-  assert.equal(
-    (await ok(channels.purchaseOrder.getSupplierCosts)).costs.filter(
-      (cost) => cost.supplierId === supplier.id
-    ).length,
-    1
-  )
+  // Fix list 1: the order takes the supplier's agreed cost per box from the price list; a new
+  // price recorded by the owner is picked up when the draft is edited or submitted.
+  const draft = (await ok(channels.purchaseOrder.createOne, orderInput())).order
+  assert.equal(draft.items[0].unitCost, 100)
+  await ok(channels.priceList.updatePrice, {
+    packId,
+    unitCost: 110,
+    effectiveFrom: localDate(),
+    quotationReference: 'Q-QA-2'
+  })
   const order = (
     await ok(channels.purchaseOrder.updateStatusById, draft.id, { status: 'submitted' })
   ).order
-  // The batch keeps the cost actually paid; the agreed cost is only a starting value.
+  assert.equal(order.items[0].unitCost, 110)
   await ok(channels.purchaseOrder.recordDeliveryById, order.id, {
     requestId: randomUUID(),
     deliveredAt: localDate(),
@@ -204,24 +209,10 @@ if (!process.env.QA_FIXES_TEST_PHASE) {
     .executeTakeFirstOrThrow()
   assert.equal(batch.currentStock, 50)
   assert.equal(batch.buyPrice, 11)
+  assert.equal(batch.piecesPerBox, 10)
 
-  // L11: changing pieces per box while stock is on hand needs confirmation.
-  await bad(channels.product.updateOneById, /Confirm the change/, product.id, { piecesPerBox: 12 })
-  assert.equal(
-    (await db.selectFrom('drugs').select('piecesPerBox').where('id', '=', product.id).executeTakeFirst())
-      .piecesPerBox,
-    10
-  )
-  await ok(channels.product.updateOneById, product.id, {
-    piecesPerBox: 12,
-    confirmPiecesChange: true
-  })
-  await ok(channels.product.updateOneById, product.id, {
-    piecesPerBox: 10,
-    confirmPiecesChange: true
-  })
-  // Products without stock change freely.
-  await ok(channels.product.updateOneById, syrup.id, { piecesPerBox: 4 })
+  // Fix list 3: pieces per box is no longer a product field.
+  await bad(channels.product.updateOneById, null, product.id, { piecesPerBox: 12 })
 
   // L3: invoices cannot total more than the order value (5 boxes x ₱110 = ₱550).
   const invoicePath = join(directory, 'invoice.pdf')
@@ -285,8 +276,8 @@ if (!process.env.QA_FIXES_TEST_PHASE) {
   await ok(channels.procurement.recordPayment, payment('GCash', 'GC-QA-0001'))
   await ok(channels.procurement.recordPayment, payment('Cash', null))
 
-  // D1 and Q3: the same name and mobile number cannot be saved twice, as a customer or a pharmacy
-  // client; different people may share one number.
+  // D1 and fix list 5: one mobile number belongs to one retail customer; the same name is only a
+  // warning (different people can share a name), saved after confirming.
   const customerInput = {
     fullName: 'Juan Dela Cruz',
     phone: '09171234567',
@@ -299,36 +290,48 @@ if (!process.env.QA_FIXES_TEST_PHASE) {
     contactPerson: null
   }
   const juan = (await ok(channels.customer.createOne, customerInput)).customer
-  await bad(channels.customer.createOne, /already saved as a customer/, {
+  await bad(channels.customer.createOne, /already belongs to Juan Dela Cruz/, {
     ...customerInput,
-    fullName: 'juan  dela cruz',
+    fullName: 'Another Person',
     phone: '+63 917 123 4567'
   })
-  await bad(channels.customer.createOne, /already saved as a customer/, {
+  const sameName = await bad(channels.customer.createOne, /already saved/, {
     ...customerInput,
-    clientType: 'pharmacy',
-    contactPerson: 'Juan'
+    fullName: 'juan  dela cruz',
+    phone: '09171230000'
   })
+  assert.deepEqual(
+    sameName.duplicates.map((match) => match.id),
+    [juan.id]
+  )
   const maria = (
-    await ok(channels.customer.createOne, { ...customerInput, fullName: 'Maria Dela Cruz' })
+    await ok(channels.customer.createOne, {
+      ...customerInput,
+      fullName: 'Maria Dela Cruz',
+      phone: '09171230001'
+    })
   ).customer
   await bad(channels.customer.updateOneById, /already saved/, maria.id, {
     ...customerInput,
-    fullName: 'JUAN DELA CRUZ'
+    fullName: 'JUAN DELA CRUZ',
+    phone: '09171230001'
   })
   const clinic = (
     await ok(channels.customer.createOne, {
       ...customerInput,
       fullName: 'St. Jude Pharmacy',
       phone: '09179998888',
+      address: 'Main Street',
       clientType: 'pharmacy',
       contactPerson: 'Ana Reyes'
     })
   ).customer
-  await bad(channels.customer.createOne, /already saved as a pharmacy client/, {
+  // Fix list 6: the same pharmacy name at the same address is the same client.
+  await bad(channels.customer.createOne, /already saved/, {
     ...customerInput,
     fullName: 'St Jude Pharmacy',
-    phone: '0917 999 8888',
+    phone: '0917 999 7777',
+    address: 'main street',
     clientType: 'pharmacy',
     contactPerson: 'Ana Reyes'
   })
@@ -350,7 +353,8 @@ if (!process.env.QA_FIXES_TEST_PHASE) {
     expectedTotalCents: 1500,
     cashCents: 2000
   })
-  await bad(channels.customer.removeOneById, /Customers with sales history can't be removed/, juan.id)
+  const blocked = await bad(channels.customer.removeOneById, /Used in 1 sale/, juan.id)
+  assert.equal(blocked.archivable, true)
   await ok(channels.customer.removeOneById, maria.id)
 
   // L18: cashiers see and edit retail customers only.
@@ -362,6 +366,7 @@ if (!process.env.QA_FIXES_TEST_PHASE) {
     ...customerInput,
     fullName: 'New Pharmacy',
     phone: '09175556666',
+    address: 'Side Street',
     clientType: 'pharmacy',
     contactPerson: 'Ana Reyes'
   })
@@ -369,11 +374,13 @@ if (!process.env.QA_FIXES_TEST_PHASE) {
     ...customerInput,
     fullName: 'St. Jude Pharmacy',
     phone: '09179998888',
+    address: 'Main Street',
     clientType: 'pharmacy',
     contactPerson: 'Someone Else'
   })
   await bad(channels.customer.updateOneById, /managed in Wholesale & Deliveries/, juan.id, {
     ...customerInput,
+    address: 'Main Street',
     clientType: 'pharmacy',
     contactPerson: 'Juan'
   })
@@ -432,6 +439,6 @@ if (!process.env.QA_FIXES_TEST_PHASE) {
   assert.equal((await validateBackup(backup.directory)).invoiceCount, 1)
 
   console.log(
-    'PASS: duplicate customers/products/suppliers, cashier customer limits, protected customers, pieces-per-box confirmation, agreed supplier costs, PO cost/date limits, invoice cap/size/type, payment references, audit actors and denied views, backup with a missing invoice'
+    'PASS: duplicate customers/products/suppliers, cashier customer limits, protected customers, supplier price list on orders, box size on batches, PO cost/date limits, invoice cap/size/type, payment references, audit actors and denied views, backup with a missing invoice'
   )
 }

@@ -5,7 +5,16 @@ import { batchWholesalePriceSchema, newDrugSchema, productUpdateSchema } from '@
 import { formatValidationError } from '@shared/validation'
 import { isId } from '@shared/validators'
 import { ipcMain } from '@main/api/ipc'
-import { findAll, insertOne, removeOneById, setWholesalePrice, updateOneById } from './repository'
+import {
+  deleteBlock,
+  findAll,
+  findArchived,
+  insertOne,
+  removeOneById,
+  setArchived,
+  setWholesalePrice,
+  updateOneById
+} from './repository'
 
 ipcMain.handle(channels.product.getAll, async () => {
   try {
@@ -43,9 +52,46 @@ ipcMain.handle(channels.product.removeOneById, async (_, id: unknown) => {
   try {
     authorize((session) => accessControl.can(session.account.role).deleteAny(resources.product))
     if (!isId(id)) return { success: false, error: 'Invalid product.' }
+    // Note: A product with history is never deleted; the reason is shown and Archive is offered.
+    const block = await deleteBlock(id)
+    if (block) return { success: false, error: block.reason, archivable: block.archivable }
     await removeOneById(id)
     state.database.stale = true
     return { success: true }
+  } catch (error) {
+    return { success: false, error: formatValidationError(error) }
+  }
+})
+
+ipcMain.handle(channels.product.archiveOneById, async (_, id: unknown) => {
+  try {
+    authorize((session) => accessControl.can(session.account.role).deleteAny(resources.product))
+    if (!isId(id)) return { success: false, error: 'Invalid product.' }
+    await setArchived(id, true)
+    state.database.stale = true
+    return { success: true }
+  } catch (error) {
+    return { success: false, error: formatValidationError(error) }
+  }
+})
+
+// Note: Only the administrator sees archived products and brings them back.
+ipcMain.handle(channels.product.restoreOneById, async (_, id: unknown) => {
+  try {
+    authorize((session) => accessControl.can(session.account.role).readAny(resources.administration))
+    if (!isId(id)) return { success: false, error: 'Invalid product.' }
+    await setArchived(id, false)
+    state.database.stale = true
+    return { success: true }
+  } catch (error) {
+    return { success: false, error: formatValidationError(error) }
+  }
+})
+
+ipcMain.handle(channels.product.getArchived, async () => {
+  try {
+    authorize((session) => accessControl.can(session.account.role).readAny(resources.administration))
+    return { success: true, products: await findArchived() }
   } catch (error) {
     return { success: false, error: formatValidationError(error) }
   }

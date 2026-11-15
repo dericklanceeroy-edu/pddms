@@ -23,6 +23,10 @@ export const channels = {
     exportReceipt: 'wholesale.exportReceipt'
   },
   sales: {
+    void: 'sales.void',
+    cashCountPreview: 'sales.cashCountPreview',
+    recordCashCount: 'sales.recordCashCount',
+    cashCounts: 'sales.cashCounts',
     quote: 'sales.quote',
     checkout: 'sales.checkout',
     history: 'sales.history',
@@ -30,6 +34,15 @@ export const channels = {
     exportReceipt: 'sales.exportReceipt'
   },
   inventory: {
+    startCount: 'inventory.startCount',
+    listCounts: 'inventory.listCounts',
+    getCount: 'inventory.getCount',
+    recordCountLines: 'inventory.recordCountLines',
+    completeCount: 'inventory.completeCount',
+    cancelCount: 'inventory.cancelCount',
+    exportCountSheet: 'inventory.exportCountSheet',
+    register: 'inventory.register',
+    exportRegister: 'inventory.exportRegister',
     recordStockOut: 'inventory.recordStockOut',
     getStockOuts: 'inventory.getStockOuts',
     exportReport: 'inventory.exportReport'
@@ -55,13 +68,20 @@ export const channels = {
     getAll: 'customer.getAll',
     createOne: 'customer.createOne',
     updateOneById: 'customer.updateOneById',
-    removeOneById: 'customer.removeOneById'
+    removeOneById: 'customer.removeOneById',
+    archiveOneById: 'customer.archiveOneById',
+    restoreOneById: 'customer.restoreOneById',
+    getArchived: 'customer.getArchived',
+    mergeInto: 'customer.mergeInto'
   },
   product: {
     getAll: 'product.getAll',
     createOne: 'product.createOne',
     updateOneById: 'product.updateOneById',
     removeOneById: 'product.removeOneById',
+    archiveOneById: 'product.archiveOneById',
+    restoreOneById: 'product.restoreOneById',
+    getArchived: 'product.getArchived',
     setWholesalePrice: 'product.setWholesalePrice'
   },
   supplier: {
@@ -76,8 +96,21 @@ export const channels = {
     updateOneById: 'purchaseOrder.updateOneById',
     updateStatusById: 'purchaseOrder.updateStatusById',
     recordDeliveryById: 'purchaseOrder.recordDeliveryById',
-    removeOneById: 'purchaseOrder.removeOneById',
-    getSupplierCosts: 'purchaseOrder.getSupplierCosts'
+    removeOneById: 'purchaseOrder.removeOneById'
+  },
+  priceList: {
+    getAll: 'priceList.getAll',
+    createPack: 'priceList.createPack',
+    updatePrice: 'priceList.updatePrice',
+    archivePack: 'priceList.archivePack',
+    restorePack: 'priceList.restorePack',
+    differences: 'priceList.differences'
+  },
+  supplierReturn: {
+    getAll: 'supplierReturn.getAll',
+    recordReturn: 'supplierReturn.recordReturn',
+    recordCreditNote: 'supplierReturn.recordCreditNote',
+    applyCreditNote: 'supplierReturn.applyCreditNote'
   },
   procurement: {
     getRecords: 'procurement.getRecords',
@@ -111,5 +144,13 @@ export const resources = {
   customer: 'customer',
   product: 'product',
   supplier: 'supplier',
-  purchaseOrder: 'purchaseOrder'
+  purchaseOrder: 'purchaseOrder',
+  /** Supplier price list (agreed cost per pack). */
+  priceList: 'priceList',
+  /** Stock sent back to suppliers and supplier credit notes. */
+  supplierReturn: 'supplierReturn',
+  /** Voiding a completed retail sale. */
+  saleVoid: 'saleVoid',
+  /** End-of-day cash drawer counts of all cashiers. */
+  cashCount: 'cashCount'
 } as const

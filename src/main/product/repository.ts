@@ -1,4 +1,7 @@
+import { noteAudit } from '@main/audit/repository'
 import { db } from '@main/db'
+import type { DeleteBlock } from '@shared/controls'
+import { auditChanges } from '@shared/security'
 import { productKey } from '@shared/duplicates'
 import type { Database, Drug, DrugUpdate, NewProduct, Product, ProductUpdate } from '@shared/types'
 import { sql, type Transaction } from 'kysely'
@@ -12,6 +15,8 @@ export interface ProductWithInventory extends Product {
     sellPrice: number
     boxSellPrice: number | null
     wholesaleBoxPrice: number | null
+    /** Pieces in one box of this batch, as it arrived from the supplier. */
+    piecesPerBox: number
     expiresAt: Date
     receipts: Array<{ orderNumber: string; deliveredAt: string; quantity: number }>
   }>
@@ -35,9 +40,13 @@ export async function findAll(): Promise<ProductWithInventory[]> {
       'batches.sellPrice',
       'batches.boxSellPrice',
       'batches.wholesaleBoxPrice',
+      'batches.piecesPerBox',
       'batches.expiresAt',
       'suppliers.organization'
     ])
+    // Note: First expiry, first out: the batch to sell first is listed first.
+    .orderBy('batches.expiresAt')
+    .orderBy('batches.id')
     .execute()
 
   const receipts = await db
@@ -83,6 +92,7 @@ export async function findAll(): Promise<ProductWithInventory[]> {
       sellPrice: batch.sellPrice,
       boxSellPrice: batch.boxSellPrice,
       wholesaleBoxPrice: batch.wholesaleBoxPrice,
+      piecesPerBox: batch.piecesPerBox,
       expiresAt: batch.expiresAt,
       receipts: (receiptsByBatch.get(batch.id) ?? []).map(
         ({ orderNumber, deliveredAt, quantity }) => ({ orderNumber, deliveredAt, quantity })
@@ -126,7 +136,14 @@ export async function setWholesalePrice(batchId: number, price: number | null): 
     const batch = await transaction
       .selectFrom('batches')
       .innerJoin('drugs', 'drugs.id', 'batches.drugId')
-      .select(['batches.id', 'batches.buyPrice', 'batches.physicalTag', 'drugs.piecesPerBox'])
+      .select([
+        'batches.id',
+        'batches.buyPrice',
+        'batches.physicalTag',
+        'batches.piecesPerBox',
+        'batches.wholesaleBoxPrice',
+        'drugs.brandName'
+      ])
       .where('batches.id', '=', batchId)
       .where('drugs.isArchived', '=', 0)
       .executeTakeFirst()
@@ -141,6 +158,10 @@ export async function setWholesalePrice(batchId: number, price: number | null): 
       .set({ wholesaleBoxPrice: price })
       .where('id', '=', batchId)
       .executeTakeFirstOrThrow()
+    noteAudit({
+      summary: `${batch.brandName}, batch ${batch.physicalTag ?? batch.id}: wholesale price per box`,
+      changes: [{ field: 'Wholesale price per box', from: batch.wholesaleBoxPrice, to: price }]
+    })
   })
 }
 
@@ -181,20 +202,7 @@ export async function updateOneById(id: number, data: ProductUpdate): Promise<Pr
       data.formulation ?? current.formulation,
       id
     )
-    if (data.piecesPerBox !== undefined && data.piecesPerBox !== current.piecesPerBox) {
-      const stock = await transaction
-        .selectFrom('batches')
-        .select((eb) => eb.fn.sum<number>('currentStock').as('pieces'))
-        .where('drugId', '=', id)
-        .executeTakeFirstOrThrow()
-      const pieces = Number(stock.pieces ?? 0)
-      if (pieces > 0 && !data.confirmPiecesChange)
-        throw new Error(
-          `This product has ${pieces} piece(s) in stock, counted in boxes of ${current.piecesPerBox}. Confirm the change to pieces per box: stock stays in pieces, but box counts and box prices will use boxes of ${data.piecesPerBox}.`
-        )
-    }
-    const { isPrescribed, isControlled, confirmPiecesChange, ...details } = data
-    void confirmPiecesChange
+    const { isPrescribed, isControlled, ...details } = data
     const values: DrugUpdate = { ...details }
     if (isPrescribed !== undefined) values.isPrescribed = isPrescribed ? 1 : 0
     if (isControlled !== undefined) values.isControlled = isControlled ? 1 : 0
@@ -205,14 +213,99 @@ export async function updateOneById(id: number, data: ProductUpdate): Promise<Pr
       .where('isArchived', '=', 0)
       .returningAll()
       .executeTakeFirstOrThrow()
+    noteAudit({
+      summary: `${current.brandName} ${current.formulation}`,
+      changes: auditChanges(
+        { ...current, isPrescribed: current.isPrescribed === 1, isControlled: current.isControlled === 1 },
+        data as Record<string, unknown>,
+        productLabels
+      )
+    })
     return toProduct(drug)
   })
 }
 
+const productLabels = {
+  brandName: 'Brand name',
+  genericName: 'Generic name',
+  formulation: 'Formulation',
+  category: 'Category',
+  isPrescribed: 'Prescription required',
+  isControlled: 'Controlled (dangerous drug)',
+  reorderLevel: 'Reorder level'
+}
+
+/** Why a product cannot be deleted: anything with stock, order or sale history is archived. */
+export async function deleteBlock(id: number): Promise<DeleteBlock | null> {
+  const count = async (table: 'batches' | 'purchaseOrderItems' | 'saleItems' | 'wholesaleOrderItems'): Promise<number> =>
+    Number(
+      (
+        await db
+          .selectFrom(table)
+          .select((eb) => eb.fn.countAll<number>().as('count'))
+          .where('drugId', '=', id)
+          .executeTakeFirstOrThrow()
+      ).count
+    )
+  const [batches, orders, sales, wholesale] = await Promise.all([
+    count('batches'),
+    count('purchaseOrderItems'),
+    count('saleItems'),
+    count('wholesaleOrderItems')
+  ])
+  const uses = [
+    sales && `${sales} sale line(s)`,
+    wholesale && `${wholesale} wholesale order line(s)`,
+    orders && `${orders} purchase order line(s)`,
+    batches && `${batches} stock batch(es)`
+  ].filter(Boolean)
+  return uses.length
+    ? {
+        reason: `Used in ${uses.join(', ')}. Archive it instead: it stays on old receipts and reports but is hidden from new sales and orders.`,
+        archivable: true
+      }
+    : null
+}
+
+/** Permanently deletes a product that was never stocked, ordered or sold. */
 export async function removeOneById(id: number): Promise<void> {
-  await db
-    .updateTable('drugs')
-    .set({ isArchived: 1 })
-    .where('id', '=', id)
-    .executeTakeFirstOrThrow()
+  const product = await db.selectFrom('drugs').selectAll().where('id', '=', id).executeTakeFirst()
+  if (!product) throw new Error('Product not found.')
+  const block = await deleteBlock(id)
+  if (block) throw new Error(block.reason)
+  await db.transaction().execute(async (transaction) => {
+    // Note: Price list entries of a never-ordered product are set-up only, not history.
+    const packs = transaction.selectFrom('supplierPacks').select('id').where('drugId', '=', id)
+    await transaction.deleteFrom('supplierPackPrices').where('packId', 'in', packs).execute()
+    await transaction.deleteFrom('supplierPacks').where('drugId', '=', id).execute()
+    await transaction.deleteFrom('drugs').where('id', '=', id).executeTakeFirstOrThrow()
+  })
+  noteAudit({ summary: `Deleted ${product.brandName} ${product.formulation} (never used)` })
+}
+
+export async function setArchived(id: number, archived: boolean): Promise<void> {
+  await db.transaction().execute(async (transaction) => {
+    const product = await transaction
+      .selectFrom('drugs')
+      .selectAll()
+      .where('id', '=', id)
+      .executeTakeFirst()
+    if (!product) throw new Error('Product not found.')
+    if (!archived) await rejectDuplicate(transaction, product.brandName, product.formulation, id)
+    await transaction
+      .updateTable('drugs')
+      .set({ isArchived: archived ? 1 : 0 })
+      .where('id', '=', id)
+      .execute()
+    noteAudit({
+      summary: `${product.brandName} ${product.formulation} ${archived ? 'archived' : 'restored'}`,
+      changes: [{ field: 'Archived', from: product.isArchived === 1, to: archived }]
+    })
+  })
+}
+
+export async function findArchived(): Promise<Product[]> {
+  return (
+    await db.selectFrom('drugs').selectAll().where('isArchived', '=', 1).orderBy('brandName').execute()
+  ).map(toProduct)
 }
