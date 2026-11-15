@@ -14,6 +14,8 @@ export interface ItemBatch {
   boxSellPrice: number | null
   /** Price of one box for pharmacy clients; null means the retail box price. */
   wholesaleBoxPrice: number | null
+  /** Pieces in one box of this batch, as delivered; 1 means it is handled by the piece only. */
+  piecesPerBox: number
   expiresAt: string
   receipts: Array<{ orderNumber: string; deliveredAt: string; quantity: number }>
 }
@@ -27,8 +29,6 @@ export interface ItemProfile {
   prescriptionRequired: boolean
   controlled: boolean
   reorderLevel: number
-  /** Pieces in one box; 1 means the product is handled by the piece only. */
-  piecesPerBox: number
   genericEquivalentIds: number[]
   batches: ItemBatch[]
 }
@@ -38,6 +38,8 @@ export interface CustomerTransaction {
   purchasedAt: string
   itemCount: number
   total: number
+  /** A voided sale stays in the history with a total of 0. */
+  voided?: boolean
 }
 
 export type ClientType = 'retail' | 'pharmacy'
@@ -52,6 +54,8 @@ export interface CustomerProfile {
   phone: string
   email: string
   address: string
+  /** Tax identification number, for pharmacy clients. */
+  tin: string
   discountType: CustomerDiscount
   discountId: string
   discountExpiresAt: string | null
@@ -60,10 +64,7 @@ export interface CustomerProfile {
 }
 
 export type CustomerDraft = Omit<CustomerProfile, 'id' | 'transactions' | 'createdAt'>
-export type ItemDraft = Omit<ItemProfile, 'id' | 'genericEquivalentIds' | 'batches'> & {
-  /** Set when the user confirmed changing pieces per box while stock is on hand. */
-  confirmPiecesChange?: boolean
-}
+export type ItemDraft = Omit<ItemProfile, 'id' | 'genericEquivalentIds' | 'batches'>
 
 export const getItemStock = (item: ItemProfile): number =>
   item.batches.reduce((total, batch) => total + batch.stock, 0)
@@ -78,3 +79,9 @@ export const getStockStatus = (item: ItemProfile): StockStatus => {
   if (stock === 0) return 'out-of-stock'
   return stock <= item.reorderLevel ? 'low-stock' : 'in-stock'
 }
+
+/** Box sizes of the batches in stock, smallest first, e.g. [50, 100]; empty when sold by the piece. */
+export const boxSizes = (item: ItemProfile): number[] =>
+  [...new Set(item.batches.filter((batch) => batch.stock > 0 && batch.piecesPerBox > 1).map((batch) => batch.piecesPerBox))].sort(
+    (a, b) => a - b
+  )

@@ -1,13 +1,19 @@
 import DashboardShell from '@renderer/components/dashboard/DashboardShell'
+import { useConfirm } from '@renderer/components/ui/ConfirmDialog'
+import { splitErrors, type FieldErrors } from '@renderer/components/ui/fieldErrors'
 import FilteredInput from '@renderer/components/ui/FilteredInput'
 import FormField, { RequiredNote } from '@renderer/components/ui/FormField'
-import { splitErrors, type FieldErrors } from '@renderer/components/ui/fieldErrors'
+import Modal from '@renderer/components/ui/Modal'
+import { removeOrArchive } from '@renderer/components/ui/removeOrArchive'
 import {
   type ClientType,
   type CustomerDiscount,
   type CustomerProfile
 } from '@renderer/data/profiles'
+import { useAccount } from '@renderer/hooks/useAccount'
+import { mergeCustomers, RequestError } from '@renderer/services/controls'
 import { useProfileStore } from '@renderer/stores/useProfileStore'
+import { customerDetail, type DuplicateMatch } from '@shared/controls'
 import { localDate } from '@shared/inventory'
 import { newCustomerSchema } from '@shared/schemas'
 import { validationIssues } from '@shared/validation'
@@ -18,6 +24,7 @@ import {
   FiCheckCircle,
   FiCreditCard,
   FiEdit2,
+  FiGitMerge,
   FiMapPin,
   FiPhone,
   FiShield,
@@ -36,6 +43,7 @@ const emptyCustomer: CustomerProfile = {
   phone: '',
   email: '',
   address: '',
+  tin: '',
   discountType: 'none',
   discountId: '',
   discountExpiresAt: null,
@@ -56,6 +64,13 @@ export default function CustomerProfileView({
 }): ReactElement {
   const saveCustomer = useProfileStore((state) => state.saveCustomer)
   const removeCustomer = useProfileStore((state) => state.removeCustomer)
+  const archive = useProfileStore((state) => state.archive)
+  const allCustomers = useProfileStore((state) => state.customers)
+  const { account } = useAccount()
+  const isAdmin = account?.role === 'master'
+  const [confirmDialog, confirm] = useConfirm()
+  const [duplicates, setDuplicates] = useState<DuplicateMatch[]>([])
+  const [merging, setMerging] = useState(false)
   const navigate = useNavigate()
   const isNew = customer === null
 
@@ -65,8 +80,6 @@ export default function CustomerProfileView({
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
   const [success, setSuccess] = useState('')
   const [isSaving, setIsSaving] = useState(false)
-  const [confirmRemove, setConfirmRemove] = useState(false)
-  const [isRemoving, setIsRemoving] = useState(false)
   const [touched, setTouched] = useState<Record<string, boolean>>({})
   const pharmacy = clientType === 'pharmacy'
   const home = pharmacy ? '/wholesale' : '/customers'
@@ -79,6 +92,7 @@ export default function CustomerProfileView({
       phone: draft.phone,
       email: draft.email.trim() || null,
       address: draft.address.trim() || null,
+      tin: draft.clientType === 'pharmacy' ? draft.tin.trim() || null : null,
       discountType: draft.discountType,
       discountId: draft.discountType === 'none' ? null : draft.discountId || null,
       discountExpiresAt: draft.discountType === 'none' ? null : draft.discountExpiresAt
@@ -111,8 +125,8 @@ export default function CustomerProfileView({
       ? 'No discount ID registered'
       : `${draft.discountId || 'No discount ID registered'}${draft.discountExpiresAt ? ` · Expires ${date.format(new Date(draft.discountExpiresAt))}` : ''}`
 
-  const save = async (event: FormEvent): Promise<void> => {
-    event.preventDefault()
+  const save = async (event: FormEvent | null, confirmDuplicate = false): Promise<void> => {
+    event?.preventDefault()
 
     const fullName = draft.fullName.trim()
     const phone = draft.phone.trim()
@@ -122,6 +136,7 @@ export default function CustomerProfileView({
     setIsSaving(true)
     setError('')
     setFieldErrors({})
+    setDuplicates([])
     try {
       const saved = await saveCustomer(
         {
@@ -131,11 +146,13 @@ export default function CustomerProfileView({
           phone,
           email,
           address: draft.address.trim(),
+          tin: pharmacy ? draft.tin.trim() : '',
           discountType: draft.discountType,
           discountId: draft.discountType === 'none' ? '' : discountId,
           discountExpiresAt: draft.discountType === 'none' ? null : draft.discountExpiresAt
         },
-        isNew ? undefined : draft.id
+        isNew ? undefined : draft.id,
+        confirmDuplicate
       )
 
       setDraft(saved)
@@ -156,6 +173,9 @@ export default function CustomerProfileView({
           : navigate({ to: '/customers/$customerId', params: { customerId: String(saved.id) } }))
       }
     } catch (cause) {
+      // Note: A similar saved record is a warning: open it, or save anyway if it is a different
+      // person (or another branch of the pharmacy).
+      if (cause instanceof RequestError && cause.duplicates.length) setDuplicates(cause.duplicates)
       const { fields, form } = splitErrors(cause, 'Unable to save the customer.')
       setFieldErrors(fields)
       setError(form)
@@ -165,16 +185,25 @@ export default function CustomerProfileView({
   }
 
   const remove = async (): Promise<void> => {
-    setIsRemoving(true)
+    setError('')
+    setSuccess('')
     try {
-      await removeCustomer(draft.id)
-      await navigate({ to: home })
+      const done = await removeOrArchive({
+        confirm,
+        name: draft.fullName,
+        noun: pharmacy ? 'pharmacy client' : 'customer',
+        remove: () => removeCustomer(draft.id),
+        archive: () => archive('customer', draft.id)
+      })
+      if (done) await navigate({ to: home })
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Unable to remove the customer.')
-      setConfirmRemove(false)
-      setIsRemoving(false)
     }
   }
+  const openRecord = (id: number): Promise<void> =>
+    pharmacy
+      ? navigate({ to: '/wholesale/clients/$clientId', params: { clientId: String(id) } })
+      : navigate({ to: '/customers/$customerId', params: { customerId: String(id) } })
 
   return (
     <DashboardShell
@@ -304,10 +333,34 @@ export default function CustomerProfileView({
                     </select>
                   </FormField>
                 )}
+                {pharmacy && (
+                  <FormField
+                    label="TIN"
+                    error={shown('tin')}
+                    hint="Tax identification number, e.g. 123-456-789-000."
+                  >
+                    <input
+                      className="field"
+                      maxLength={20}
+                      inputMode="numeric"
+                      placeholder="e.g. 123-456-789-000"
+                      value={draft.tin}
+                      onBlur={() => touch('tin')}
+                      onChange={(event) =>
+                        change({ tin: event.target.value.replace(/[^\d-]/g, '') })
+                      }
+                    />
+                  </FormField>
+                )}
                 <FormField
                   label={pharmacy ? 'Delivery Address' : 'Address'}
+                  required={pharmacy}
                   error={shown('address')}
-                  hint={pharmacy ? 'Filled in automatically on new wholesale orders.' : undefined}
+                  hint={
+                    pharmacy
+                      ? 'Required. A pharmacy with the same name is saved as a separate branch only at a different address. Filled in automatically on new wholesale orders.'
+                      : undefined
+                  }
                   className="sm:col-span-2"
                 >
                   <input
@@ -363,12 +416,42 @@ export default function CustomerProfileView({
               </div>
 
               {error && (
-                <p
+                <div
                   role="alert"
-                  className="rounded-lg border border-rose-200/80 bg-rose-50/80 px-4 py-3 text-sm text-rose-700"
+                  className={`rounded-lg border px-4 py-3 text-sm ${duplicates.length ? 'border-amber-300 bg-amber-50 text-amber-900' : 'border-rose-200/80 bg-rose-50/80 text-rose-700'}`}
                 >
-                  {error}
-                </p>
+                  <p className={duplicates.length ? 'font-semibold' : ''}>{error}</p>
+                  {duplicates.length > 0 && (
+                    <>
+                      <ul className="mt-2 space-y-1.5">
+                        {duplicates.map((match) => (
+                          <li key={match.id} className="flex flex-wrap items-center gap-2">
+                            <span>
+                              {match.fullName} · {match.detail}
+                            </span>
+                            <button
+                              type="button"
+                              className="secondary-button h-8 text-xs"
+                              onClick={() => void openRecord(match.id)}
+                            >
+                              Open Existing Profile
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                      <button
+                        type="button"
+                        className="primary-button mt-3 h-9 text-xs"
+                        disabled={isSaving}
+                        onClick={() => void save(null, true)}
+                      >
+                        {pharmacy
+                          ? 'Save Anyway (Different Client)'
+                          : 'Save Anyway (Different Person)'}
+                      </button>
+                    </>
+                  )}
+                </div>
               )}
 
               <div className="flex flex-wrap justify-end gap-2 border-t border-slate-200 pt-5">
@@ -452,8 +535,14 @@ export default function CustomerProfileView({
               <div className="relative">
                 <p className="card-title">Profile Actions</p>
                 <p className="mt-2 text-sm leading-6 text-slate-500">
-                  Make changes to this record or remove it from the active list.
+                  Edit this record, merge it into a duplicate, or remove it. Records with history
+                  are archived instead of deleted.
                 </p>
+                {error && !editing && (
+                  <p role="alert" className="mt-3 text-sm font-medium text-rose-700">
+                    {error}
+                  </p>
+                )}
                 <div className="mt-5 grid gap-2">
                   <button
                     onClick={() => {
@@ -464,8 +553,13 @@ export default function CustomerProfileView({
                   >
                     <FiEdit2 /> Edit Profile
                   </button>
-                  <button onClick={() => setConfirmRemove(true)} className="danger-button w-full">
-                    <FiTrash2 /> {pharmacy ? 'Remove Client' : 'Remove Customer'}
+                  {isAdmin && (
+                    <button onClick={() => setMerging(true)} className="secondary-button w-full">
+                      <FiGitMerge /> Merge Duplicate Into…
+                    </button>
+                  )}
+                  <button onClick={() => void remove()} className="danger-button w-full">
+                    <FiTrash2 /> Delete or Archive
                   </button>
                 </div>
               </div>
@@ -498,7 +592,7 @@ export default function CustomerProfileView({
               value={draft.address || 'No address recorded'}
               description={
                 pharmacy
-                  ? 'Default address for wholesale deliveries'
+                  ? `Default address for wholesale deliveries${draft.tin ? ` · TIN ${draft.tin}` : ''}`
                   : 'Used for the customer record'
               }
             />
@@ -528,8 +622,18 @@ export default function CustomerProfileView({
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {draft.transactions.map((transaction) => (
-                        <tr key={transaction.id} className="transition hover:bg-white">
-                          <td className="px-5 py-4 font-medium sm:px-6">{transaction.id}</td>
+                        <tr
+                          key={transaction.id}
+                          className={`transition hover:bg-white ${transaction.voided ? 'text-slate-500' : ''}`}
+                        >
+                          <td className="px-5 py-4 font-medium sm:px-6">
+                            {transaction.id}
+                            {transaction.voided && (
+                              <span className="ml-2 rounded border border-rose-300 px-1.5 py-0.5 text-xs font-semibold text-rose-700">
+                                VOID
+                              </span>
+                            )}
+                          </td>
                           <td className="px-5 py-4 text-slate-500">
                             {date.format(new Date(transaction.purchasedAt))}
                           </td>
@@ -553,47 +657,21 @@ export default function CustomerProfileView({
         )}
       </div>
 
-      {confirmRemove && (
-        <div className="fixed inset-0 z-[70] grid place-items-center bg-slate-950/55 p-4">
-          <button
-            className="absolute inset-0"
-            aria-label="Cancel customer removal"
-            onClick={() => setConfirmRemove(false)}
-          />
-          <section
-            role="alertdialog"
-            aria-modal="true"
-            aria-labelledby="remove-customer-title"
-            className="glass-surface relative z-10 w-full max-w-md rounded-lg p-6"
-          >
-            <h2 id="remove-customer-title" className="text-xl font-semibold">
-              {pharmacy ? 'Remove Pharmacy Client?' : 'Remove Customer?'}
-            </h2>
-            <p className="mt-2 text-sm leading-6 text-slate-500">
-              {draft.fullName} will be removed from the{' '}
-              {pharmacy ? 'pharmacy client list' : 'customer list'}. A{' '}
-              {pharmacy ? 'client with wholesale orders' : 'customer with recorded sales'} cannot be
-              removed. This cannot be undone.
-            </p>
-            <div className="mt-6 flex justify-end gap-2">
-              <button
-                disabled={isRemoving}
-                onClick={() => setConfirmRemove(false)}
-                className="secondary-button disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                disabled={isRemoving}
-                onClick={() => void remove()}
-                className="danger-button disabled:cursor-wait disabled:opacity-60"
-              >
-                {isRemoving ? 'Removing…' : pharmacy ? 'Remove Client' : 'Remove Customer'}
-              </button>
-            </div>
-          </section>
-        </div>
+      {merging && (
+        <MergeDialog
+          source={draft}
+          candidates={allCustomers.filter(
+            (other) => other.id !== draft.id && other.clientType === draft.clientType
+          )}
+          close={() => setMerging(false)}
+          merged={async (targetId) => {
+            setMerging(false)
+            await useProfileStore.getState().loadCustomers(true)
+            await openRecord(targetId)
+          }}
+        />
       )}
+      {confirmDialog}
     </DashboardShell>
   )
 }
@@ -620,5 +698,104 @@ function ProfileDetail({
         <p className="mt-2 text-sm leading-6 break-words text-slate-500">{description}</p>
       </div>
     </section>
+  )
+}
+
+/** Administrator: moves this record's sales and orders to the kept record, then archives it. */
+function MergeDialog({
+  source,
+  candidates,
+  close,
+  merged
+}: {
+  source: CustomerProfile
+  candidates: CustomerProfile[]
+  close: VoidFunction
+  merged: (targetId: number) => Promise<void>
+}): ReactElement {
+  const [query, setQuery] = useState(source.fullName)
+  const [targetId, setTargetId] = useState(0)
+  const [error, setError] = useState('')
+  const [saving, setSaving] = useState(false)
+  const detail = (customer: CustomerProfile): string =>
+    customerDetail({
+      ...customer,
+      discountId: customer.discountId || null,
+      address: customer.address || null
+    })
+  const term = query.trim().toLowerCase()
+  const shown = candidates.filter(
+    (customer) =>
+      !term ||
+      customer.fullName.toLowerCase().includes(term) ||
+      customer.phone.includes(term) ||
+      customer.discountId.toLowerCase().includes(term)
+  )
+  const target = candidates.find((customer) => customer.id === targetId)
+  return (
+    <Modal
+      title={`Merge ${source.fullName}`}
+      description="Use this when the same person or pharmacy was saved twice."
+      close={close}
+      busy={saving}
+    >
+      <div className="space-y-4">
+        <p className="text-sm text-slate-600">
+          All sales and wholesale orders of <strong>{source.fullName}</strong> ({detail(source)})
+          move to the record you keep. This record is then archived and marked as merged, so old
+          receipts still read correctly. This cannot be undone.
+        </p>
+        <FormField label="Find the Record to Keep">
+          <input
+            className="field"
+            value={query}
+            placeholder="Name, mobile or ID"
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        </FormField>
+        <FormField label="Keep This Record" required>
+          <select
+            className="field"
+            value={targetId}
+            onChange={(event) => setTargetId(Number(event.target.value))}
+          >
+            <option value={0}>Select the record to keep</option>
+            {shown.map((customer) => (
+              <option key={customer.id} value={customer.id}>
+                {customer.fullName} · {detail(customer)}
+              </option>
+            ))}
+          </select>
+        </FormField>
+        {error && (
+          <p role="alert" className="text-sm font-medium text-rose-700">
+            {error}
+          </p>
+        )}
+        <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
+          <button type="button" className="secondary-button" onClick={close} disabled={saving}>
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="primary-button"
+            disabled={saving || !target}
+            onClick={() => {
+              if (!target) return
+              setSaving(true)
+              setError('')
+              void mergeCustomers(source.id, target.id)
+                .then(() => merged(target.id))
+                .catch((cause: unknown) => {
+                  setError(cause instanceof Error ? cause.message : 'Unable to merge the records.')
+                  setSaving(false)
+                })
+            }}
+          >
+            {saving ? 'Merging…' : target ? `Merge Into ${target.fullName}` : 'Merge'}
+          </button>
+        </div>
+      </div>
+    </Modal>
   )
 }

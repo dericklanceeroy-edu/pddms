@@ -1,7 +1,10 @@
 import DashboardShell from '@renderer/components/dashboard/DashboardShell'
+import { useConfirm } from '@renderer/components/ui/ConfirmDialog'
 import FilteredInput from '@renderer/components/ui/FilteredInput'
 import Modal from '@renderer/components/ui/Modal'
+import { removeOrArchive } from '@renderer/components/ui/removeOrArchive'
 import {
+  boxSizes,
   getItemStock,
   getSellableStock,
   getStockStatus,
@@ -32,7 +35,6 @@ const emptyItem: ItemProfile = {
   prescriptionRequired: false,
   controlled: false,
   reorderLevel: 0,
-  piecesPerBox: 1,
   genericEquivalentIds: [],
   batches: []
 }
@@ -50,10 +52,9 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
   )
   const [error, setError] = useState('')
   const [isSaving, setIsSaving] = useState(false)
-  const [confirmRemove, setConfirmRemove] = useState(false)
-  const [isRemoving, setIsRemoving] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
-  const [confirmPieces, setConfirmPieces] = useState(false)
+  const [confirmDialog, confirm] = useConfirm()
+  const archive = useProfileStore((state) => state.archive)
   const [pricing, setPricing] = useState<ItemProfile['batches'][number] | null>(null)
   const canEdit = account?.role === 'master' || account?.role === 'staff'
 
@@ -92,8 +93,7 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
           formulation,
           prescriptionRequired: draft.prescriptionRequired,
           controlled: draft.controlled,
-          reorderLevel: draft.reorderLevel,
-          piecesPerBox: draft.piecesPerBox
+          reorderLevel: draft.reorderLevel
         })
         await navigate({ to: '/items/$itemId', params: { itemId: String(saved.id) } })
       } catch (cause) {
@@ -153,24 +153,24 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
   const stock = getItemStock(item)
   const status = getStockStatus(item)
   const remove = async (): Promise<void> => {
-    setIsRemoving(true)
+    setError('')
     try {
-      await removeItem(item.id)
-      await navigate({ to: '/inventory' })
+      const done = await removeOrArchive({
+        confirm,
+        name: item.brandName,
+        noun: 'product',
+        remove: () => removeItem(item.id),
+        archive: () => archive('product', item.id)
+      })
+      if (done) await navigate({ to: '/inventory' })
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Unable to remove the product.')
-      setConfirmRemove(false)
-      setIsRemoving(false)
     }
   }
+  const sizes = boxSizes(item)
 
-  const piecesChangeWithStock = draft.piecesPerBox !== item.piecesPerBox && stock > 0
   const saveEdit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault()
-    if (piecesChangeWithStock && !confirmPieces) {
-      setError('Confirm the change to pieces per box before saving.')
-      return
-    }
     const genericName = draft.genericName.trim()
     const brandName = draft.brandName.trim()
     const category = draft.category.trim()
@@ -196,12 +196,9 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
         formulation,
         prescriptionRequired: draft.prescriptionRequired,
         controlled: draft.controlled,
-        reorderLevel: draft.reorderLevel,
-        piecesPerBox: draft.piecesPerBox,
-        confirmPiecesChange: confirmPieces
+        reorderLevel: draft.reorderLevel
       })
       setDraft({ ...saved, batches: item.batches })
-      setConfirmPieces(false)
       setIsEditing(false)
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Unable to update the product.')
@@ -266,10 +263,10 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
               {account?.role === 'master' && (
                 <button
                   type="button"
-                  onClick={() => setConfirmRemove(true)}
+                  onClick={() => void remove()}
                   className="danger-button whitespace-nowrap"
                 >
-                  <FiTrash2 /> Remove Product
+                  <FiTrash2 /> Delete or Archive
                 </button>
               )}
             </div>
@@ -304,27 +301,6 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
               draft={draft}
               update={(field, value) => setDraft((current) => ({ ...current, [field]: value }))}
             />
-            {piecesChangeWithStock && (
-              <div
-                role="note"
-                className="status-message space-y-2 border-amber-300 bg-amber-50 text-amber-900"
-              >
-                <p>
-                  This product has {stock} pieces in stock, counted in boxes of {item.piecesPerBox}.
-                  Stock stays in pieces, but box counts, box sales and box prices will use boxes of{' '}
-                  {draft.piecesPerBox} from now on. Check the box and wholesale prices of the
-                  batches below after saving.
-                </p>
-                <label className="flex items-center gap-2 font-semibold">
-                  <input
-                    type="checkbox"
-                    checked={confirmPieces}
-                    onChange={(event) => setConfirmPieces(event.target.checked)}
-                  />
-                  I understand. Change pieces per box.
-                </label>
-              </div>
-            )}
             {error && (
               <p role="alert" className="status-message border-rose-200 bg-rose-50 text-rose-800">
                 {error}
@@ -350,11 +326,16 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
         <section className="grid gap-5 md:grid-cols-3">
           <Metric
             label="Stock on Hand / Sellable"
-            value={`${piecesLabel(stock, item.piecesPerBox)} / ${getSellableStock(item)} sellable`}
+            value={`${stock} pcs / ${getSellableStock(item)} sellable`}
           />
           <Metric
             label="Reorder Level"
-            value={`${item.reorderLevel} pieces${item.piecesPerBox > 1 ? ` · ${item.piecesPerBox} pieces per box` : ' · sold by the piece'}`}
+            value={`${item.reorderLevel} pieces`}
+            hint={
+              sizes.length
+                ? `Boxes in stock: ${sizes.map((size) => `${size} pcs`).join(', ')}`
+                : 'In stock by the piece only'
+            }
           />
           <Metric
             label="Current Price"
@@ -368,11 +349,12 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
               description="Stock received through supplier deliveries. Expired batches are not sellable."
             />
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[620px] text-sm">
+              <table className="w-full min-w-[720px] text-sm">
                 <thead className="surface-header text-left">
                   <tr>
                     <th className="px-5 py-3">Batch</th>
                     <th className="px-5 py-3">Supplier</th>
+                    <th className="px-5 py-3">Box Size</th>
                     <th className="px-5 py-3">Stock</th>
                     <th className="px-5 py-3">Price</th>
                     <th className="px-5 py-3">Expiry</th>
@@ -393,17 +375,20 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
                       <td className="max-w-48 px-5 py-4 break-words text-slate-500">
                         {batch.supplier}
                       </td>
-                      <td className="px-5 py-4">{piecesLabel(batch.stock, item.piecesPerBox)}</td>
+                      <td className="px-5 py-4 whitespace-nowrap">
+                        {batch.piecesPerBox > 1 ? `${batch.piecesPerBox} pcs` : 'Piece only'}
+                      </td>
+                      <td className="px-5 py-4">{piecesLabel(batch.stock, batch.piecesPerBox)}</td>
                       <td className="px-5 py-4">
                         {currency.format(batch.sellPrice)} / piece
-                        {item.piecesPerBox > 1 && (
+                        {batch.piecesPerBox > 1 && (
                           <p className="text-xs text-slate-500">
                             {currency.format(
                               unitSellPrice(
                                 'box',
                                 batch.sellPrice,
                                 batch.boxSellPrice,
-                                item.piecesPerBox
+                                batch.piecesPerBox
                               )
                             )}{' '}
                             / box
@@ -416,7 +401,7 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
                               batch.sellPrice,
                               batch.boxSellPrice,
                               batch.wholesaleBoxPrice,
-                              item.piecesPerBox
+                              batch.piecesPerBox
                             )
                           )}{' '}
                           / box{batch.wholesaleBoxPrice === null ? ' (same as retail)' : ''}
@@ -485,20 +470,11 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
         )}
         {account?.role === 'master' && <StockOutPanel item={item} />}
       </div>
-      {confirmRemove && (
-        <ConfirmationDialog
-          title="Remove product?"
-          description={`${item.brandName} will be removed from the active product catalog.`}
-          confirmLabel={isRemoving ? 'Removing…' : 'Remove Product'}
-          disabled={isRemoving}
-          close={() => setConfirmRemove(false)}
-          confirm={() => void remove()}
-        />
-      )}
+      {confirmDialog}
       {pricing && (
         <WholesalePriceDialog
           batch={pricing}
-          piecesPerBox={item.piecesPerBox}
+          piecesPerBox={pricing.piecesPerBox}
           close={() => setPricing(null)}
           saved={async () => {
             setPricing(null)
@@ -538,7 +514,6 @@ type EditableProductField =
   | 'category'
   | 'formulation'
   | 'reorderLevel'
-  | 'piecesPerBox'
   | 'prescriptionRequired'
   | 'controlled'
 
@@ -609,27 +584,10 @@ function ProductFields({
           }
         />
       </Field>
-      <Field
-        label="Pieces Per Box"
-        hint="Purchase and wholesale orders are by the box. Use 1 if one box (or bottle) holds one piece. Stock is always counted in pieces."
-      >
-        <input
-          required
-          type="number"
-          min="1"
-          max="10000"
-          step="1"
-          className="field"
-          placeholder={'e.g. 100'}
-          value={draft.piecesPerBox}
-          onChange={(event) =>
-            update(
-              'piecesPerBox',
-              event.target.value === '' ? Number.NaN : Number(event.target.value)
-            )
-          }
-        />
-      </Field>
+      <p className="self-end text-xs leading-5 text-slate-500">
+        Stock is always counted in pieces. Box sizes come from each supplier&apos;s price list and
+        are recorded per batch when stock is received, so one product can have boxes of 50 and 100.
+      </p>
       <section className="rounded-md border border-slate-200 bg-slate-50 p-4 sm:col-span-2">
         <p className="text-sm font-medium text-slate-700">
           Dispensing Controls <span className="text-xs font-normal text-slate-600">(optional)</span>
@@ -659,58 +617,21 @@ function ProductFields({
   )
 }
 
-function ConfirmationDialog({
-  title,
-  description,
-  confirmLabel,
-  disabled,
-  close,
-  confirm
+function Metric({
+  label,
+  value,
+  hint
 }: {
-  title: string
-  description: string
-  confirmLabel: string
-  disabled: boolean
-  close: VoidFunction
-  confirm: VoidFunction
+  label: string
+  value: string
+  hint?: string
 }): ReactElement {
-  return (
-    <div className="fixed inset-0 z-[70] grid place-items-center bg-slate-950/55 p-4">
-      <button className="absolute inset-0" aria-label="Cancel removal" onClick={close} />
-      <section
-        role="alertdialog"
-        aria-modal="true"
-        className="glass-surface relative z-10 w-full max-w-md rounded-lg p-6"
-      >
-        <h2 className="text-xl font-semibold">{title}</h2>
-        <p className="mt-2 text-sm leading-6 text-slate-500">{description}</p>
-        <div className="mt-6 flex justify-end gap-2">
-          <button
-            disabled={disabled}
-            onClick={close}
-            className="secondary-button disabled:opacity-50"
-          >
-            Cancel
-          </button>
-          <button
-            disabled={disabled}
-            onClick={confirm}
-            className="danger-button disabled:cursor-wait disabled:opacity-60"
-          >
-            {confirmLabel}
-          </button>
-        </div>
-      </section>
-    </div>
-  )
-}
-
-function Metric({ label, value }: { label: string; value: string }): ReactElement {
   return (
     <div className="panel relative overflow-hidden p-5 sm:p-6">
       <div className="relative">
         <p className="text-sm text-slate-500">{label}</p>
         <p className="mt-2 text-2xl font-semibold tracking-tight">{value}</p>
+        {hint && <p className="mt-1 text-xs text-slate-500">{hint}</p>}
       </div>
     </div>
   )

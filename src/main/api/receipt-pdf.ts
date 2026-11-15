@@ -18,3 +18,25 @@ export async function receiptPdf(html: string): Promise<Buffer> {
     renderer.destroy()
   }
 }
+
+/** Renders an A4 page (count sheet, register) to PDF in a hidden window with scripts disabled. */
+export async function a4Pdf(html: string, landscape = false): Promise<Buffer> {
+  const renderer = new BrowserWindow({
+    show: false,
+    webPreferences: { javascript: false, sandbox: true, contextIsolation: true }
+  })
+  try {
+    await renderer.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`)
+    return await renderer.webContents.printToPDF({
+      landscape,
+      pageSize: 'A4',
+      printBackground: true,
+      displayHeaderFooter: true,
+      headerTemplate: '<span></span>',
+      footerTemplate:
+        '<div style="font-size:8px;width:100%;text-align:center;color:#666">Page <span class="pageNumber"></span> of <span class="totalPages"></span></div>'
+    })
+  } finally {
+    renderer.destroy()
+  }
+}

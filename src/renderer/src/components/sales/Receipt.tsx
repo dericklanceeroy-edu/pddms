@@ -40,8 +40,12 @@ export default function Receipt({
   const [saving, setSaving] = useState(false)
   return (
     <Modal
-      title="Sale Completed"
-      description="Check the receipt with the customer, then save it as a PDF or text file."
+      title={sale.status === 'voided' ? 'Voided Sale' : 'Sale Completed'}
+      description={
+        sale.status === 'voided'
+          ? 'This sale was voided. It stays in history marked VOID and is left out of totals.'
+          : 'Check the receipt with the customer, then save it as a PDF or text file.'
+      }
       close={close}
       size="sm"
       busy={saving}
@@ -101,6 +105,13 @@ export function ReceiptSlip({ sale }: { sale: SaleRecord }): ReactElement {
         <p>{businessTin}</p>
         <p className="mt-1 font-bold">SALES RECEIPT</p>
       </header>
+      {model.voidNote && (
+        <>
+          <Rule />
+          <p className="text-center text-[15px] font-bold tracking-widest">*** VOID ***</p>
+          <p className="break-words">{model.voidNote}</p>
+        </>
+      )}
       <Rule />
       <Row left={`DATE: ${model.date}`} right={`TIME: ${model.time}`} />
       <p>RECEIPT NO: {model.number}</p>

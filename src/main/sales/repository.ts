@@ -1,9 +1,24 @@
+import { noteAudit } from '@main/audit/repository'
 import { db } from '@main/db'
+import {
+  cashCountSchema,
+  countedCents,
+  overShortLabel,
+  voidSaleSchema,
+  type CashCountInput,
+  type CashCountPreview,
+  type CashCountRecord,
+  type VoidSale
+} from '@shared/controls'
+import { dateBounds } from '@shared/reporting'
+import { isLocked, LOGIN_LOCK_MS, LOGIN_MAX_ATTEMPTS, LOGIN_WINDOW_MS } from '@shared/security'
+import { verify } from 'argon2'
 import { deductBatchStock } from '@main/inventory/repository'
-import { isBatchSellable } from '@shared/inventory'
+import { isBatchSellable, localDate } from '@shared/inventory'
 import {
   calculateSale,
   checkoutSchema,
+  missingRegisterFields,
   priceToCents,
   saleDiscount,
   saleDraftSchema,
@@ -41,7 +56,7 @@ async function prepare(
           .selectAll()
           .where('id', '=', draft.customerId)
           .executeTakeFirst()
-  if (draft.customerId !== null && !customer)
+  if (draft.customerId !== null && (!customer || customer.isArchived))
     throw new SalesError('Customer not found. Select a current customer.')
   if (customer?.clientType === 'pharmacy')
     throw new SalesError('Pharmacy clients buy through Wholesale & Deliveries, not at the counter.')
@@ -62,7 +77,7 @@ async function prepare(
       'drugs.genericName',
       'drugs.formulation',
       'drugs.category',
-      'drugs.piecesPerBox',
+      'batches.piecesPerBox',
       'drugs.isArchived',
       'drugs.isPrescribed',
       'drugs.isControlled'
@@ -230,12 +245,19 @@ export async function checkout(input: Checkout, accountId: number): Promise<Sale
         throw new SalesError(
           `Enter the prescription details for ${rx.required.join(', ')} (prescription required).`
         )
-      if (rx.controlled.length && !data.prescription.prescriptionNumber)
-        throw new SalesError(
-          `Enter the prescription number for controlled medicine: ${rx.controlled.join(', ')}.`
+      if (rx.controlled.length) {
+        const missing = missingRegisterFields(
+          data.prescription,
+          data.customerId !== null || !!data.walkInDiscount
         )
+        if (missing.length)
+          throw new SalesError(
+            `${rx.controlled.join(', ')} is a controlled (dangerous) drug. Enter the ${missing.join(', ')} for the dangerous drugs register.`
+          )
+      }
     }
     const prescription = rx.required.length ? data.prescription : null
+    const register = rx.controlled.length ? data.prescription : null
     const reference = `SALE-${randomUUID().toUpperCase()}`
     const sale = await transaction
       .insertInto('sales')
@@ -245,7 +267,11 @@ export async function checkout(input: Checkout, accountId: number): Promise<Sale
         cashierId: accountId,
         cashierName: account.fullName,
         customerId: data.customerId,
-        customerName: prepared.customerName,
+        // Note: A walk-in buying a controlled drug is recorded under the patient's name.
+        customerName:
+          data.customerId === null && !data.walkInDiscount && register?.patientName
+            ? register.patientName
+            : prepared.customerName,
         discountId: prepared.discountId,
         discountExpiresAt: prepared.discountExpiresAt,
         ...prepared.totals,
@@ -256,6 +282,16 @@ export async function checkout(input: Checkout, accountId: number): Promise<Sale
         prescriberName: prescription?.prescriberName ?? null,
         prescriberLicense: prescription?.prescriberLicense ?? null,
         prescriptionNumber: prescription?.prescriptionNumber || null,
+        patientAge: register?.patientAge ?? null,
+        patientAddress: register?.patientAddress || null,
+        prescriberAddress: register?.prescriberAddress || null,
+        prescriberS2License: register?.prescriberS2License || null,
+        status: 'completed',
+        voidedAt: null,
+        voidedBy: null,
+        voidedByName: null,
+        voidApprovedByName: null,
+        voidReason: null,
         createdAt: new Date().toISOString()
       })
       .returning('id')
@@ -266,7 +302,8 @@ export async function checkout(input: Checkout, accountId: number): Promise<Sale
         {
           batchId: item.batchId,
           quantity: item.quantity * item.piecesPerUnit,
-          reason: `Sale ${reference}`
+          reason: `Sale ${reference}`,
+          kind: 'sale'
         },
         accountId
       )
@@ -278,4 +315,183 @@ export async function checkout(input: Checkout, accountId: number): Promise<Sale
     return sale.id
   })
   return getSale(id, accountId)
+}
+
+/**
+ * Checks an administrator's username and password typed at the counter to approve a void. Wrong
+ * passwords count toward that account's sign-in lock, exactly like a failed sign-in.
+ */
+async function approveAsAdministrator(username: string, password: string): Promise<string> {
+  const account = await db
+    .selectFrom('accounts')
+    .selectAll()
+    .where('username', '=', username.trim())
+    .executeTakeFirst()
+  const refused = new SalesError('Administrator username or password is incorrect.')
+  if (!account || account.role !== 'master' || account.isArchived || !account.isVerified)
+    throw refused
+  if (isLocked(account))
+    throw new SalesError('That administrator account is locked for a minute after failed attempts.')
+  if (!(await verify(account.password, password))) {
+    const now = Date.now()
+    const reset =
+      !account.lastFailedAt ||
+      (account.lockedUntil && Date.parse(account.lockedUntil) <= now) ||
+      now - Date.parse(account.lastFailedAt) > LOGIN_WINDOW_MS
+    const count = reset ? 1 : account.failedAttempts + 1
+    await db
+      .updateTable('accounts')
+      .set({
+        failedAttempts: count,
+        lastFailedAt: new Date(now).toISOString(),
+        lockedUntil: count >= LOGIN_MAX_ATTEMPTS ? new Date(now + LOGIN_LOCK_MS).toISOString() : null
+      })
+      .where('id', '=', account.id)
+      .execute()
+    throw refused
+  }
+  await db
+    .updateTable('accounts')
+    .set({ failedAttempts: 0, lastFailedAt: null, lockedUntil: null })
+    .where('id', '=', account.id)
+    .execute()
+  return account.fullName
+}
+
+/**
+ * Voids a whole retail sale that was rung up wrong. Medicines are not returned or refunded; a
+ * void only undoes a sale entry: each line's pieces go back to the batch they came from, the sale
+ * stays in history marked VOID and is left out of totals. An administrator voids directly; anyone
+ * else needs an administrator to type their username and password at the counter.
+ */
+export async function voidSale(
+  input: VoidSale,
+  actor: { id: number; fullName: string; role: string },
+  visibleTo?: number
+): Promise<SaleRecord> {
+  const data = voidSaleSchema.parse(input)
+  let approver = actor.fullName
+  if (actor.role !== 'master') {
+    if (!data.approval)
+      throw new SalesError('An administrator must approve this void with their username and password.')
+    approver = await approveAsAdministrator(data.approval.username, data.approval.password)
+  }
+  await db.transaction().execute(async (transaction) => {
+    let query = transaction.selectFrom('sales').selectAll().where('id', '=', data.saleId)
+    if (visibleTo !== undefined) query = query.where('cashierId', '=', visibleTo)
+    const sale = await query.executeTakeFirst()
+    if (!sale) throw new SalesError('Transaction not found or access denied.')
+    if (sale.status === 'voided') throw new SalesError('This sale is already voided.')
+    const items = await transaction
+      .selectFrom('saleItems')
+      .selectAll()
+      .where('saleId', '=', sale.id)
+      .execute()
+    for (const item of items)
+      await transaction
+        .updateTable('batches')
+        .set((eb) => ({ currentStock: eb('currentStock', '+', item.quantity * item.piecesPerUnit) }))
+        .where('id', '=', item.batchId)
+        .executeTakeFirstOrThrow()
+    await transaction
+      .updateTable('sales')
+      .set({
+        status: 'voided',
+        voidedAt: new Date().toISOString(),
+        voidedBy: actor.id,
+        voidedByName: actor.fullName,
+        voidApprovedByName: approver,
+        voidReason: data.reason
+      })
+      .where('id', '=', sale.id)
+      .where('status', '=', 'completed')
+      .executeTakeFirstOrThrow()
+    noteAudit({
+      summary: `Voided ${sale.reference} (${(sale.totalCents / 100).toFixed(2)} PHP, ${items.length} line(s)); stock returned to the original batches. Approved by ${approver}.`,
+      reason: data.reason,
+      changes: [{ field: 'Status', from: 'completed', to: 'voided' }]
+    })
+  })
+  return getSale(data.saleId)
+}
+
+/** Cash sales of one cashier today, for the end-of-day drawer count. */
+export async function cashCountPreview(cashierId: number): Promise<CashCountPreview> {
+  const { start, end } = dateBounds(localDate(), localDate())
+  const rows = await db
+    .selectFrom('sales')
+    .select(['paymentMethod', 'status', 'totalCents'])
+    .where('cashierId', '=', cashierId)
+    .where('createdAt', '>=', start)
+    .where('createdAt', '<', end)
+    .execute()
+  const completed = rows.filter((row) => row.status === 'completed')
+  const cash = completed.filter((row) => row.paymentMethod === 'Cash')
+  return {
+    businessDate: localDate(),
+    cashSalesCents: cash.reduce((sum, row) => sum + row.totalCents, 0),
+    cashSalesCount: cash.length,
+    ewalletSalesCents: completed
+      .filter((row) => row.paymentMethod !== 'Cash')
+      .reduce((sum, row) => sum + row.totalCents, 0),
+    voidedCount: rows.length - completed.length
+  }
+}
+
+const toCashCount = (
+  row: Omit<CashCountRecord, 'denominations'> & { denominations: string }
+): CashCountRecord => ({ ...row, denominations: JSON.parse(row.denominations) })
+
+/**
+ * Saves the cashier's closing count. Expected cash = opening float + today's completed cash sales
+ * (cash received minus change, i.e. the sale totals); the difference is over (+) or short (−).
+ */
+export async function recordCashCount(
+  input: CashCountInput,
+  cashier: { id: number; fullName: string }
+): Promise<CashCountRecord> {
+  const data = cashCountSchema.parse(input)
+  const preview = await cashCountPreview(cashier.id)
+  const counted = countedCents(data.denominations)
+  const expected = data.openingFloatCents + preview.cashSalesCents
+  const record = await db
+    .insertInto('cashCounts')
+    .values({
+      cashierId: cashier.id,
+      cashierName: cashier.fullName,
+      businessDate: preview.businessDate,
+      openingFloatCents: data.openingFloatCents,
+      cashSalesCents: preview.cashSalesCents,
+      cashSalesCount: preview.cashSalesCount,
+      expectedCents: expected,
+      countedCents: counted,
+      differenceCents: counted - expected,
+      denominations: JSON.stringify(data.denominations),
+      notes: data.notes || null,
+      countedByName: cashier.fullName,
+      createdAt: new Date().toISOString()
+    })
+    .returningAll()
+    .executeTakeFirstOrThrow()
+  noteAudit({
+    summary: `Cash count ${preview.businessDate}: counted ${(counted / 100).toFixed(2)}, expected ${(expected / 100).toFixed(2)} (${overShortLabel(counted - expected)} ${(Math.abs(counted - expected) / 100).toFixed(2)})`,
+    reason: data.notes || undefined
+  })
+  return toCashCount(record)
+}
+
+export async function findCashCounts(
+  from: string,
+  to: string,
+  cashierId?: number
+): Promise<CashCountRecord[]> {
+  let query = db
+    .selectFrom('cashCounts')
+    .selectAll()
+    .where('businessDate', '>=', from)
+    .where('businessDate', '<=', to)
+    .orderBy('id', 'desc')
+    .limit(500)
+  if (cashierId !== undefined) query = query.where('cashierId', '=', cashierId)
+  return (await query.execute()).map(toCashCount)
 }

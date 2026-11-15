@@ -218,25 +218,31 @@ if (!process.env.VALIDATION_TEST_PHASE) {
     fullName: 'St. Jude Drugstore & Clinic (GenSan)',
     contactPerson: 'Ana Reyes',
     discountType: 'none',
-    discountId: null
+    discountId: null,
+    address: '12 Pioneer Ave, General Santos City',
+    tin: '123-456-789-000'
   }
   accepts(schemas.newCustomerSchema, pharmacy)
+  // Each pharmacy branch needs its delivery address; a TIN is for pharmacy clients only.
+  rejects(schemas.newCustomerSchema, { ...pharmacy, address: null }, 'address')
+  rejects(schemas.newCustomerSchema, { ...pharmacy, tin: '12-34' }, 'tin')
+  rejects(schemas.newCustomerSchema, { ...customer, tin: '123-456-789' }, 'tin')
   rejects(schemas.newCustomerSchema, { ...pharmacy, discountType: 'senior' }, 'discountType')
   rejects(schemas.newCustomerSchema, { ...pharmacy, contactPerson: 'Ana <Reyes>' }, 'contactPerson')
   rejects(schemas.newCustomerSchema, { ...customer, fullName: 'Lola & Co.' }, 'fullName')
   assert.equal(accepts(schemas.newCustomerSchema, customer).clientType, 'retail')
 
-  // 13. Purchase orders are per box only; payment methods come from a fixed list.
-  const poLine = { drugId: 1, quantity: 2, unitCost: 10 }
-  assert.equal(
-    accepts(schemas.newPurchaseOrderSchema, { supplierId: 1, items: [poLine] }).items[0].unit,
-    'box'
-  )
-  rejects(
-    schemas.newPurchaseOrderSchema,
-    { supplierId: 1, items: [{ ...poLine, unit: 'piece' }] },
-    'unit'
-  )
+  // 13. Purchase orders name a pack from the supplier price list; the person ordering cannot
+  // send a cost, a unit or a box size. Payment methods come from a fixed list.
+  const poLine = { packId: 1, quantity: 2 }
+  accepts(schemas.newPurchaseOrderSchema, { supplierId: 1, items: [poLine] })
+  for (const extra of [{ unitCost: 1 }, { unit: 'piece' }, { piecesPerUnit: 5 }, { drugId: 1 }])
+    assert.equal(
+      schemas.newPurchaseOrderSchema.safeParse({ supplierId: 1, items: [{ ...poLine, ...extra }] })
+        .success,
+      false,
+      JSON.stringify(extra)
+    )
   const paymentMethod = (method) => schemas.paymentMethodSchema.safeParse(method).success
   for (const method of ['Cash', 'GCash', 'Maya', 'Bank transfer', 'Check', 'E-wallet', 'Other'])
     assert.equal(paymentMethod(method), true, method)

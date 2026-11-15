@@ -263,6 +263,11 @@ export default function ProcurementRecords({
                   </dd>
                 </div>
               </dl>
+              {summary.creditAmount > 0 && (
+                <p className="mt-2 text-xs text-sky-800">
+                  Includes {currency.format(summary.creditAmount)} supplier credit applied.
+                </p>
+              )}
               {summary.outstandingAmount > 0 && (
                 <button
                   type="button"
@@ -537,6 +542,17 @@ function ReceivingReports({
                         {item.unit === 'box' &&
                           ` (${item.quantity * item.piecesPerUnit} pcs into stock)`}
                       </p>
+                      {(item.piecesPerUnit !== item.orderedPiecesPerUnit ||
+                        Math.abs(item.unitCost - item.orderedUnitCost) > 0.000001) && (
+                        <p className="mt-1 rounded bg-amber-50 px-2 py-1 text-xs text-amber-900">
+                          Differs from the order:{' '}
+                          {item.piecesPerUnit !== item.orderedPiecesPerUnit &&
+                            `box of ${item.piecesPerUnit} (ordered ${item.orderedPiecesPerUnit}) `}
+                          {Math.abs(item.unitCost - item.orderedUnitCost) > 0.000001 &&
+                            `invoice ${currency.format(item.unitCost)} (ordered ${currency.format(item.orderedUnitCost)}) `}
+                          {item.differenceReason && `· ${item.differenceReason}`}
+                        </p>
+                      )}
                     </div>
                     <div className="min-w-0 text-sm">
                       <p className="text-xs text-slate-500">Inventory batch</p>
@@ -559,6 +575,18 @@ function ReceivingReports({
                 )
               })}
             </div>
+            {delivery.rejections.length > 0 && (
+              <div className="border-t border-slate-100 bg-rose-50/60 px-4 py-3 text-sm text-rose-900">
+                <p className="font-semibold">Rejected at delivery (not stocked, not owed)</p>
+                <ul className="mt-1 list-disc pl-5 text-xs">
+                  {delivery.rejections.map((rejection) => (
+                    <li key={rejection.id}>
+                      {rejection.productName}: {rejection.quantity} · {rejection.reason}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             {delivery.notes && (
               <p className="border-t border-slate-100 px-4 py-3 text-sm break-words text-slate-600">
                 {delivery.notes}
@@ -797,8 +825,9 @@ function InvoiceDialog({
         )}
         <FormField label="Purchase Order" required error={errors.purchaseOrderId}>
           <select
-            className="field"
+            className="field truncate pr-8"
             value={purchaseOrderId}
+            title={eligibleOrders.find((order) => order.id === purchaseOrderId)?.orderNumber}
             onChange={(event) => {
               const id = Number(event.target.value)
               setPurchaseOrderId(id)
@@ -1025,10 +1054,20 @@ function PaymentDialog({
               ))}
             </select>
           </FormField>
-          <FormField label="Purchase Order" required error={errors.purchaseOrderId}>
+          <FormField
+            label="Purchase Order"
+            required
+            error={errors.purchaseOrderId}
+            hint={
+              selectedSummary
+                ? `${currency.format(selectedSummary.outstandingAmount)} remaining on this order.`
+                : undefined
+            }
+          >
             <select
-              className="field"
+              className="field truncate pr-8"
               value={purchaseOrderId}
+              title={selectedSummary?.orderNumber}
               onChange={(event) => {
                 const id = Number(event.target.value)
                 const nextSummary = payableSummaries.find(
@@ -1043,7 +1082,7 @@ function PaymentDialog({
               <option value={0}>Select purchase order</option>
               {supplierSummaries.map((summary) => (
                 <option key={summary.purchaseOrderId} value={summary.purchaseOrderId}>
-                  {summary.orderNumber} · {currency.format(summary.outstandingAmount)} remaining
+                  {summary.orderNumber}
                 </option>
               ))}
             </select>

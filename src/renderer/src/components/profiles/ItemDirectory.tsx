@@ -10,12 +10,14 @@ import {
   FiAlertTriangle,
   FiArchive,
   FiChevronRight,
+  FiClipboard,
   FiLayers,
   FiPlus,
   FiRefreshCw,
   FiSearch
 } from 'react-icons/fi'
 import InventoryReport from './InventoryReport'
+import StockCount from './StockCount'
 import {
   matchesFilter,
   matchesSearch,
@@ -33,6 +35,7 @@ export default function ItemDirectory(): ReactElement {
   const loadError = useProfileStore((state) => state.error)
   const isLoading = useProfileStore((state) => state.isLoading)
   const [report, setReport] = useState(false)
+  const [counting, setCounting] = useState(false)
   const [message, setMessageState] = useState<{ text: string; tone: 'success' | 'error' } | null>(
     null
   )
@@ -134,6 +137,15 @@ export default function ItemDirectory(): ReactElement {
                   {exporting ? 'Exporting…' : 'Export CSV'}
                 </button>
               )}
+              {account?.role === 'master' && (
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => setCounting(true)}
+                >
+                  <FiClipboard aria-hidden="true" /> Stock Count
+                </button>
+              )}
               {(account?.role === 'master' || account?.role === 'staff') && (
                 <Link to="/items/$itemId" params={{ itemId: 'new' }} className="primary-button">
                   <FiPlus /> Add Product
@@ -152,6 +164,16 @@ export default function ItemDirectory(): ReactElement {
           </p>
         )}
         {report && !loadError && <InventoryReport items={items} />}
+        {counting && (
+          <StockCount
+            items={items}
+            close={() => setCounting(false)}
+            changed={async () => {
+              await loadItems(true)
+              setMessage('Stock count completed. Batch stock now matches the shelves.')
+            }}
+          />
+        )}
 
         <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_18rem]">
           <section className="panel min-w-0 overflow-hidden">

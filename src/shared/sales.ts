@@ -104,9 +104,41 @@ export const prescriptionSchema = z.strictObject({
     .trim()
     .max(60, 'Prescription number is too long.')
     .regex(/^([A-Za-z0-9][A-Za-z0-9 ./#_()-]*)?$/, 'Prescription number may use letters, numbers and - / . # _ ( ).')
+    .default(''),
+  // Note: Dangerous drugs register (DDB Board Regulation No. 1 s.2014, drugstore register 1-14):
+  // patient name, age and address, prescriber address and S2 license number. Required at checkout
+  // when the cart has a controlled medicine.
+  patientName: z
+    .string()
+    .trim()
+    .max(120, 'Name is too long.')
+    .regex(/^(\p{L}[\p{L} .,'-]*)?$/u, 'Use letters, spaces, periods, commas, apostrophes or hyphens.')
+    .default(''),
+  patientAge: z.number().int().min(0, 'Enter the age in years.').max(130, 'Check the age.').nullable().default(null),
+  patientAddress: z.string().trim().max(300, 'Address is too long.').default(''),
+  prescriberAddress: z.string().trim().max(300, 'Address is too long.').default(''),
+  prescriberS2License: z
+    .string()
+    .trim()
+    .max(40, 'License number is too long.')
+    .regex(/^([A-Za-z0-9][A-Za-z0-9 ./#_()-]*)?$/, 'S2 license may use letters, numbers and - / . # _ ( ).')
     .default('')
 })
 export type Prescription = z.input<typeof prescriptionSchema>
+/** Register fields still missing for a sale with a controlled medicine, as readable labels. */
+export function missingRegisterFields(
+  value: z.infer<typeof prescriptionSchema>,
+  hasPatientName: boolean
+): string[] {
+  return [
+    !value.prescriptionNumber && 'prescription (SPFDD) number',
+    !hasPatientName && !value.patientName && "patient's name",
+    value.patientAge === null && "patient's age",
+    value.patientAddress.length < 5 && "patient's address",
+    value.prescriberAddress.length < 5 && "doctor's address",
+    value.prescriberS2License.length < 3 && "doctor's S2 license number"
+  ].filter((item): item is string => !!item)
+}
 export const checkoutSchema = saleDraftSchema
   .safeExtend({
     requestId: z.string().uuid(),
@@ -215,6 +247,18 @@ export interface SaleRecord extends SaleTotals {
   prescriberName: string | null
   prescriberLicense: string | null
   prescriptionNumber: string | null
+  /** Dangerous drugs register details, recorded when the sale has a controlled medicine. */
+  patientAge: number | null
+  patientAddress: string | null
+  prescriberAddress: string | null
+  prescriberS2License: string | null
+  /** A voided sale stays on record but is left out of totals; its stock went back to its batches. */
+  status: 'completed' | 'voided'
+  voidedAt: string | null
+  voidedBy: number | null
+  voidedByName: string | null
+  voidApprovedByName: string | null
+  voidReason: string | null
   createdAt: string
   items: SaleLine[]
 }
@@ -225,6 +269,9 @@ export function receiptText(sale: SaleRecord): string {
   return [
     'MED PRIX',
     'Sales receipt',
+    ...(sale.status === 'voided'
+      ? [`*** VOID *** ${sale.voidedByName ?? ''}: ${sale.voidReason ?? ''}`]
+      : []),
     sale.reference,
     new Date(sale.createdAt).toLocaleString('en-PH'),
     `Cashier: ${sale.cashierName}`,

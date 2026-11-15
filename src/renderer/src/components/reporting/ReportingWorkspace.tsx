@@ -1,4 +1,5 @@
 import DashboardShell from '@renderer/components/dashboard/DashboardShell'
+import DrugRegisterPanel from '@renderer/components/reporting/DrugRegisterPanel'
 import { exportReport, exportReportPdf, getReport } from '@renderer/services/reporting'
 import { localDate } from '@shared/inventory'
 import {
@@ -366,6 +367,7 @@ export default function ReportingWorkspace(): ReactElement {
             )}
           </>
         )}
+        <DrugRegisterPanel />
         <section className="panel flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-start gap-3">
             <span className="bg-brand-50 text-brand-700 grid size-10 shrink-0 place-items-center rounded-lg">

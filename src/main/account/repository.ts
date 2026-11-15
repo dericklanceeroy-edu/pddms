@@ -1,3 +1,5 @@
+import { noteAudit } from '@main/audit/repository'
+import { auditChanges } from '@shared/security'
 import { db } from '@main/db'
 import type { Account, AccountUpdate, NewAccount } from '@shared/types'
 import { sql } from 'kysely'
@@ -72,6 +74,23 @@ export async function countAll(): Promise<number> {
 }
 
 export async function updateOneById(id: number, data: AccountUpdate): Promise<void> {
+  const before = await db.selectFrom('accounts').selectAll().where('id', '=', id).executeTakeFirst()
+  if (before)
+    noteAudit({
+      summary: `Account ${before.username}`,
+      // Note: Password changes are noted without their values.
+      changes: [
+        ...auditChanges(before, data, {
+          username: 'Username',
+          fullName: 'Full name',
+          role: 'Role',
+          email: 'Email',
+          phone: 'Mobile',
+          isVerified: 'Verified'
+        }),
+        ...(data.password ? [{ field: 'Password', from: '(hidden)', to: '(changed)' }] : [])
+      ]
+    })
   // prettier-ignore
   await db
     .updateTable('accounts')
@@ -81,6 +100,7 @@ export async function updateOneById(id: number, data: AccountUpdate): Promise<vo
 }
 
 export async function setBlockedById(id: number, blocked: boolean): Promise<void> {
+  noteAudit({ changes: [{ field: 'Blocked', from: !blocked, to: blocked }] })
   await db
     .updateTable('accounts')
     .set({ isArchived: blocked ? 1 : 0 })

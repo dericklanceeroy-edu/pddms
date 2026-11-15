@@ -34,6 +34,7 @@ export const ipcMain = {
                 .slice(0, 80)
             : ''
         state.denied = false
+        state.auditDetails = undefined
         // Note: Logging failures must never prevent session termination.
         if (channel === channels.auth.signOut || signIn) state.session = undefined
         let logId: number | undefined
@@ -51,7 +52,7 @@ export const ipcMain = {
             state.session = { account: current }
           }
           const mutation =
-            /\.(create|update|remove|upload|record|setBlocked|checkout|deliver|cancel|schedule|pay|signIn|signOut)/.test(
+            /\.(create|update|remove|upload|record|setBlocked|checkout|deliver|cancel|schedule|pay|signIn|signOut|void|archive|restore|merge|apply|start|complete)/.test(
               channel
             ) ||
             channel === channels.administration.backup ||
@@ -97,6 +98,10 @@ export const ipcMain = {
                       ? 'cancelled'
                       : 'success',
                 ...(Number.isInteger(targetId) ? { targetId } : {}),
+                // Note: Old and new values (and a reason) noted by the handler, saved as JSON.
+                ...(state.auditDetails && result?.success !== false
+                  ? { details: JSON.stringify(state.auditDetails) }
+                  : {}),
                 ...(signedIn
                   ? { actorId: signedIn.id, actorName: signedIn.username }
                   : signIn && attempted

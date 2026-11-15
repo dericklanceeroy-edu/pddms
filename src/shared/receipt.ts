@@ -67,6 +67,8 @@ export interface ReceiptLine {
   amount: string
 }
 export interface ReceiptModel {
+  /** Set when the sale was voided: who voided it, when and why. The receipt is marked VOID. */
+  voidNote: string | null
   number: string
   reference: string
   date: string
@@ -125,6 +127,10 @@ export function receiptModel(sale: SaleRecord): ReceiptModel {
   const created = new Date(sale.createdAt)
   const discounted = sale.discountType !== 'none'
   return {
+    voidNote:
+      sale.status === 'voided'
+        ? `VOID ${sale.voidedAt ? new Date(sale.voidedAt).toLocaleString('en-PH') : ''} by ${sale.voidedByName ?? '—'}${sale.voidApprovedByName && sale.voidApprovedByName !== sale.voidedByName ? `, approved by ${sale.voidApprovedByName}` : ''}. Reason: ${sale.voidReason ?? '—'}`
+        : null,
     number: receiptNumber(sale),
     reference: sale.reference,
     date: created.toLocaleDateString('en-PH', {
@@ -200,6 +206,7 @@ export function receiptPlainText(sale: SaleRecord): string {
     center(businessContact),
     center(businessTin),
     center('SALES RECEIPT'),
+    ...(model.voidNote ? [dashed, center('*** VOID ***'), wrap(model.voidNote)] : []),
     dashed,
     pad(`DATE: ${model.date}`, `TIME: ${model.time}`),
     `RECEIPT NO: ${model.number}`,
@@ -266,6 +273,7 @@ export function receiptHtml(sale: SaleRecord): string {
 ${receiptCss}
 </style></head><body>
 <div class="center"><div class="logo">+</div><div class="name">${escapeHtml(business.name)}</div><div>${escapeHtml(business.address)}</div><div>${escapeHtml(businessContact)}</div><div>${escapeHtml(businessTin)}</div><div><b>SALES RECEIPT</b></div></div>
+${model.voidNote ? `<div class="rule"></div><div class="center total">*** VOID ***</div><div class="wrap">${escapeHtml(model.voidNote)}</div>` : ''}
 <div class="rule"></div>
 ${row(`DATE: ${model.date}`, `TIME: ${model.time}`)}
 <div>RECEIPT NO: ${escapeHtml(model.number)}</div>

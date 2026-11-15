@@ -113,6 +113,7 @@ async function countSalesToday(cashierId: number): Promise<number> {
     .selectFrom('sales')
     .select(({ fn }) => fn.count<number>('id').as('count'))
     .where('cashierId', '=', cashierId)
+    .where('status', '=', 'completed')
     .where('createdAt', '>=', start)
     .where('createdAt', '<', end)
     .executeTakeFirstOrThrow()
@@ -225,6 +226,7 @@ export async function getAdminDashboard(cashierId?: number): Promise<AdminDashbo
   const dailySales = await db
     .selectFrom('sales')
     .select(({ fn }) => fn.sum<number>('totalCents').as('total'))
+    .where('status', '=', 'completed')
     .where('createdAt', '>=', start)
     .where('createdAt', '<', end)
     .$if(cashierId !== undefined, (query) => query.where('cashierId', '=', cashierId!))
@@ -237,6 +239,7 @@ export async function getAdminDashboard(cashierId?: number): Promise<AdminDashbo
     )
     .where('sales.createdAt', '>=', start)
     .where('sales.createdAt', '<', end)
+    .where('sales.status', '=', 'completed')
     .$if(cashierId !== undefined, (query) => query.where('sales.cashierId', '=', cashierId!))
     .executeTakeFirstOrThrow()
   const recentSales = await db

@@ -34,6 +34,132 @@ export interface Database {
   supplierPayments: SupplierPaymentsTable
   suppliers: SuppliersTable
   supplierProductCosts: SupplierProductCostsTable
+  supplierPacks: SupplierPacksTable
+  supplierPackPrices: SupplierPackPricesTable
+  supplierDeliveryRejections: SupplierDeliveryRejectionsTable
+  supplierReturns: SupplierReturnsTable
+  supplierCreditNotes: SupplierCreditNotesTable
+  stockCounts: StockCountsTable
+  stockCountLines: StockCountLinesTable
+  stockAdjustments: StockAdjustmentsTable
+  cashCounts: CashCountsTable
+}
+
+type Generated<T> = ColumnType<T, T | undefined, never>
+
+/** A pack a supplier sells: one product in boxes of a fixed size. Prices live in their own table. */
+export interface SupplierPacksTable {
+  id: Generated<Id>
+  supplierId: Id
+  drugId: Id
+  piecesPerBox: number
+  isArchived: ColumnType<ZeroOrOne, ZeroOrOne | undefined, ZeroOrOne>
+  createdAt: Generated<string>
+}
+
+/** Agreed cost per box from a supplier quotation; the latest one in effect on a date applies. */
+export interface SupplierPackPricesTable {
+  id: Generated<Id>
+  packId: Id
+  unitCost: number
+  effectiveFrom: string
+  quotationReference: string | null
+  recordedBy: Id | null
+  createdAt: Generated<string>
+}
+
+export interface SupplierDeliveryRejectionsTable {
+  id: Generated<Id>
+  deliveryId: Id
+  purchaseOrderItemId: Id
+  drugId: Id
+  quantity: number
+  reason: string
+}
+
+export const supplierReturnReasons = {
+  near_expiry: 'Near expiry',
+  expired: 'Expired',
+  damaged: 'Damaged',
+  wrong_item: 'Wrong item delivered',
+  recalled: 'Recalled',
+  other: 'Other'
+} as const
+export type SupplierReturnReason = keyof typeof supplierReturnReasons
+
+export interface SupplierReturnsTable {
+  id: Generated<Id>
+  supplierId: Id
+  batchId: Id
+  stockOutId: Id
+  quantity: number
+  reasonCode: SupplierReturnReason
+  notes: string | null
+  returnedAt: string
+  creditNoteId: ColumnType<Id | null, Id | null | undefined, Id | null>
+  recordedBy: Id
+  createdAt: Generated<string>
+}
+
+export interface SupplierCreditNotesTable {
+  id: Generated<Id>
+  supplierId: Id
+  creditNoteNumber: string
+  issuedAt: string
+  amount: number
+  purchaseOrderId: ColumnType<Id | null, Id | null | undefined, Id | null>
+  appliedAt: ColumnType<string | null, string | null | undefined, string | null>
+  notes: string | null
+  recordedBy: Id
+  createdAt: Generated<string>
+}
+
+export interface StockCountsTable {
+  id: Generated<Id>
+  status: ColumnType<'open' | 'completed' | 'cancelled', 'open' | undefined, 'completed' | 'cancelled'>
+  drugId: Id | null
+  notes: string | null
+  startedBy: Id
+  startedAt: string
+  closedBy: ColumnType<Id | null, Id | null | undefined, Id | null>
+  closedAt: ColumnType<string | null, string | null | undefined, string | null>
+}
+
+export interface StockCountLinesTable {
+  id: Generated<Id>
+  countId: Id
+  batchId: Id
+  expected: number
+  counted: ColumnType<number | null, number | null | undefined, number | null>
+  reason: ColumnType<string | null, string | null | undefined, string | null>
+}
+
+export interface StockAdjustmentsTable {
+  id: Generated<Id>
+  batchId: Id
+  change: number
+  reason: string
+  countId: Id | null
+  recordedBy: Id
+  createdAt: string
+}
+
+export interface CashCountsTable {
+  id: Generated<Id>
+  cashierId: Id
+  cashierName: string
+  businessDate: string
+  openingFloatCents: number
+  cashSalesCents: number
+  cashSalesCount: number
+  expectedCents: number
+  countedCents: number
+  differenceCents: number
+  /** JSON object of peso denomination → pieces counted. */
+  denominations: string
+  notes: string | null
+  countedByName: string
+  createdAt: string
 }
 
 /** Last agreed cost per box for a supplier and product; prefilled on new orders. */
@@ -44,11 +170,24 @@ export interface SupplierProductCostsTable {
   updatedAt: ColumnType<string, string | undefined, string>
 }
 
+export const writeOffReasons = {
+  expired: 'Expired',
+  damaged: 'Damaged or broken',
+  lost: 'Lost or missing',
+  recalled: 'Recalled by FDA or manufacturer',
+  other: 'Other'
+} as const
+export type WriteOffReason = keyof typeof writeOffReasons
+export type StockOutKind = 'sale' | 'wholesale' | 'write_off' | 'supplier_return'
+
 export interface StockOutsTable {
   id: ColumnType<number, number | undefined, never>
   batchId: number
   quantity: number
+  /** Notes: the sale or order reference, or what happened for a write-off. */
   reason: string
+  kind: ColumnType<StockOutKind, StockOutKind | undefined, never>
+  reasonCode: ColumnType<WriteOffReason | null, WriteOffReason | null | undefined, never>
   recordedBy: number
   createdAt: ColumnType<string, string | undefined, never>
 }
@@ -93,6 +232,8 @@ export interface BatchesTable {
   boxSellPrice: ColumnType<number | null, number | null | undefined, number | null>
   /** Wholesale price of one box; NULL means the retail box price is used. */
   wholesaleBoxPrice: ColumnType<number | null, number | null | undefined, number | null>
+  /** Pieces in one box of this batch, as it arrived from the supplier. */
+  piecesPerBox: ColumnType<number, number | undefined, never>
   initialStock: number
   currentStock: number
   expiresAt: ColumnType<Date, string, string>
@@ -129,6 +270,11 @@ export interface CustomersTable {
   discountType: 'none' | 'senior' | 'pwd'
   discountId: string | null
   discountExpiresAt: string | null
+  /** Pharmacy client's tax identification number. */
+  tin: ColumnType<string | null, string | null | undefined, string | null>
+  isArchived: ColumnType<ZeroOrOne, ZeroOrOne | undefined, ZeroOrOne>
+  /** Set when this record was merged into another one; it stays archived. */
+  mergedInto: ColumnType<Id | null, Id | null | undefined, Id | null>
   createdAt: ColumnType<string, string | undefined, never>
   updatedAt: ColumnType<string, string | undefined, never>
 }
@@ -145,6 +291,8 @@ export interface SuppliersTable {
   country: string
   province: string
   postalCode: string
+  /** PDEA license or local permit number, for the dangerous drugs register. */
+  pdeaLicense: ColumnType<string | null, string | null | undefined, string | null>
 }
 
 export type PurchaseOrderStatus =
@@ -179,6 +327,8 @@ export interface PurchaseOrderItemsTable {
   receivedQuantity: number
   unit: ColumnType<StockUnit, StockUnit | undefined, StockUnit>
   piecesPerUnit: ColumnType<number, number | undefined, number>
+  /** Supplier pack the line was ordered from; NULL for lines saved before the price list. */
+  packId: ColumnType<Id | null, Id | null | undefined, Id | null>
 }
 
 export interface SupplierDeliveriesTable {
@@ -204,6 +354,12 @@ export interface SupplierDeliveryItemsTable {
   drugId: Id
   batchId: Id
   quantity: number
+  /** Cost per box on the supplier's invoice for this delivery. */
+  unitCost: number
+  /** Pieces per box that actually arrived. */
+  piecesPerUnit: number
+  /** Why the invoice cost or box size differs from the order. */
+  differenceReason: string | null
 }
 
 export type SupplierInvoiceStatus = 'unpaid' | 'partially_paid' | 'paid'
@@ -283,9 +439,6 @@ export interface ProductUpdate {
   isPrescribed?: boolean
   isControlled?: boolean
   reorderLevel?: number
-  piecesPerBox?: number
-  /** Set when the user confirmed changing pieces per box on a product with stock on hand. */
-  confirmPiecesChange?: boolean
 }
 
 export type Supplier = Selectable<SuppliersTable>
@@ -329,8 +482,13 @@ export interface SupplierDeliveryWithDetails extends Omit<
     orderedQuantity: number
     unit: StockUnit
     piecesPerUnit: number
+    orderedPiecesPerUnit: number
+    unitCost: number
+    orderedUnitCost: number
+    differenceReason: string | null
     expiresAt: string
   }>
+  rejections: Array<{ id: Id; productName: string; quantity: number; reason: string }>
 }
 
 export interface SupplierInvoiceWithDetails extends SupplierInvoice {
@@ -356,6 +514,8 @@ export interface PurchaseOrderPaymentSummary {
   supplierName: string
   totalAmount: number
   paidAmount: number
+  /** Supplier credit notes applied to this order. */
+  creditAmount: number
   outstandingAmount: number
   status: SupplierInvoiceStatus
 }

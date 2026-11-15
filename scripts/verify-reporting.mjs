@@ -42,6 +42,7 @@ if (!process.env.REPORT_TEST_PHASE) {
   }
 } else {
   const { db } = await import('../src/main/db.ts')
+  const { packLines } = await import('./test-packs.mjs')
   const { initializeDatabase } = await import('../src/main/migrations.ts')
   const { state } = await import('../src/main/api/index.ts')
   const { channels } = await import('../src/shared/constants.ts')
@@ -173,11 +174,15 @@ if (!process.env.REPORT_TEST_PHASE) {
       const po = (
         await ok(channels.purchaseOrder.createOne, {
           supplierId: supplier.id,
-          items: products.slice(0, 2).map((product, index) => ({
-            drugId: product.id,
-            quantity: 20,
-            unitCost: index ? 40 : 80
-          }))
+          items: await packLines(
+            db,
+            supplier.id,
+            products.slice(0, 2).map((product, index) => ({
+              drugId: product.id,
+              quantity: 20,
+              unitCost: index ? 40 : 80
+            }))
+          )
         })
       ).order
       await ok(channels.purchaseOrder.updateStatusById, po.id, { status: 'submitted' })
@@ -231,7 +236,12 @@ if (!process.env.REPORT_TEST_PHASE) {
             prescription: {
               prescriberName: 'Dr. Report Prescriber',
               prescriberLicense: 'PRC-1234567',
-              prescriptionNumber: 'RX-REPORT-1'
+              prescriptionNumber: 'RX-REPORT-1',
+              patientName: 'Report Patient',
+              patientAge: 60,
+              patientAddress: '5 Mabini St, Manila',
+              prescriberAddress: 'Clinic 1, Taft Ave, Manila',
+              prescriberS2License: 'S2-REPORT-1'
             }
           })
         ).sale

@@ -143,6 +143,70 @@ async function upgradeSnapshot(path: string): Promise<void> {
   } finally {
     await upgrade.destroy()
   }
+  matchCurrentLayout(path)
+}
+
+/**
+ * After an upgrade, a table can hold the right columns in a different order than a database made
+ * by this version (a column added back by a later step lands at the end). Such tables are copied
+ * once into the current layout, column by column by name, so the exact schema check that follows
+ * still applies. Tables that already match are left alone.
+ */
+function matchCurrentLayout(path: string): void {
+  const connection = new SQLite(path, { fileMustExist: true })
+  try {
+    const definitions = (target: SQLite.Database, type: string): Map<string, string> =>
+      new Map(
+        (
+          target
+            .prepare(
+              "SELECT name, sql FROM sqlite_master WHERE type = ? AND sql IS NOT NULL AND name NOT LIKE 'sqlite_%' AND name NOT IN ('kysely_migration', 'kysely_migration_lock')"
+            )
+            .all(type) as { name: string; sql: string }[]
+        ).map((row) => [row.name, row.sql])
+      )
+    const current = definitions(database, 'table')
+    const staged = definitions(connection, 'table')
+    const quote = (value: string): string => `"${value.replaceAll('"', '""')}"`
+    const columns = (table: string): string[] =>
+      (connection.prepare(`PRAGMA table_info(${quote(table)})`).all() as { name: string }[]).map(
+        (column) => column.name
+      )
+    const indexes = (
+      database
+        .prepare(
+          "SELECT name, tbl_name AS tableName, sql FROM sqlite_master WHERE type = 'index' AND sql IS NOT NULL"
+        )
+        .all() as { name: string; tableName: string; sql: string }[]
+    )
+    connection.pragma('foreign_keys = OFF')
+    connection.exec('BEGIN IMMEDIATE')
+    try {
+      for (const [table, definition] of staged) {
+        const target = current.get(table)
+        if (!target || target === definition) continue
+        const names = columns(table).map(quote).join(', ')
+        const old = `${table}__before_upgrade`
+        // Note: The legacy rename leaves other tables' references alone, and the table is then
+        // created again from this version's exact definition.
+        connection.pragma('legacy_alter_table = ON')
+        connection.exec(`ALTER TABLE ${quote(table)} RENAME TO ${quote(old)}`)
+        connection.pragma('legacy_alter_table = OFF')
+        connection.exec(target)
+        connection.exec(`INSERT INTO ${quote(table)} (${names}) SELECT ${names} FROM ${quote(old)}`)
+        connection.exec(`DROP TABLE ${quote(old)}`)
+        for (const index of indexes.filter((item) => item.tableName === table))
+          connection.exec(index.sql)
+      }
+      connection.exec('COMMIT')
+    } catch (error) {
+      connection.exec('ROLLBACK')
+      throw error
+    }
+  } finally {
+    connection.pragma('foreign_keys = ON')
+    connection.close()
+  }
 }
 
 /**
@@ -308,7 +372,7 @@ export async function restoreBackup(source: string): Promise<{ safety: BackupInf
       database.exec(`INSERT INTO main.${quote(table)} SELECT * FROM recovery.${quote(table)}`)
     }
     database.exec(
-      'INSERT OR IGNORE INTO main.audit_logs (event_id, actor_id, actor_name, action, resource, target_id, result, created_at) SELECT event_id, actor_id, actor_name, action, resource, target_id, result, created_at FROM recovery.audit_logs'
+      'INSERT OR IGNORE INTO main.audit_logs (event_id, actor_id, actor_name, action, resource, target_id, result, created_at, details) SELECT event_id, actor_id, actor_name, action, resource, target_id, result, created_at, details FROM recovery.audit_logs'
     )
     if (
       (database.pragma('foreign_key_check') as unknown[]).length ||

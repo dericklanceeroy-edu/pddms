@@ -1,4 +1,6 @@
+import { noteAudit } from '@main/audit/repository'
 import { db } from '@main/db'
+import { auditChanges } from '@shared/security'
 import { compactKey } from '@shared/duplicates'
 import type { NewSupplier, Supplier, SupplierUpdate } from '@shared/types'
 
@@ -22,16 +24,41 @@ export async function insertOne(data: NewSupplier): Promise<Supplier> {
 
 export async function updateOneById(id: number, data: SupplierUpdate): Promise<Supplier> {
   if (data.organization !== undefined) await rejectDuplicate(data.organization, id)
-  return await db
+  const before = await db.selectFrom('suppliers').selectAll().where('id', '=', id).executeTakeFirst()
+  const supplier = await db
     .updateTable('suppliers')
     .set(data)
     .where('id', '=', id)
     .returningAll()
     .executeTakeFirstOrThrow()
+  if (before)
+    noteAudit({
+      summary: before.organization,
+      changes: auditChanges(before, data, {
+        organization: 'Organization',
+        person: 'Contact person',
+        phone: 'Mobile',
+        telephone: 'Telephone',
+        email: 'Email',
+        street: 'Street',
+        city: 'City',
+        province: 'Province',
+        country: 'Country',
+        postalCode: 'Postal code',
+        pdeaLicense: 'PDEA license'
+      })
+    })
+  return supplier
 }
 
+/** Deletes a supplier with no orders or stock; its price list entries go with it. */
 export async function removeOneById(id: number): Promise<void> {
-  await db.deleteFrom('suppliers').where('id', '=', id).executeTakeFirstOrThrow()
+  await db.transaction().execute(async (transaction) => {
+    const packs = transaction.selectFrom('supplierPacks').select('id').where('supplierId', '=', id)
+    await transaction.deleteFrom('supplierPackPrices').where('packId', 'in', packs).execute()
+    await transaction.deleteFrom('supplierPacks').where('supplierId', '=', id).execute()
+    await transaction.deleteFrom('suppliers').where('id', '=', id).executeTakeFirstOrThrow()
+  })
 }
 
 export async function countOrdersBySupplier(id: number): Promise<number> {

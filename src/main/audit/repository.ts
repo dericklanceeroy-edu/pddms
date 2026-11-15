@@ -1,5 +1,6 @@
+import { state } from '@main/api'
 import { db } from '@main/db'
-import type { AuditRecord } from '@shared/security'
+import type { AuditDetails, AuditRecord } from '@shared/security'
 import type { Account } from '@shared/types'
 import { randomUUID } from 'node:crypto'
 
@@ -19,7 +20,8 @@ export async function audit(
       resource: action.split('.')[0],
       targetId,
       result,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      details: null
     })
     .returning('id')
     .executeTakeFirstOrThrow()
@@ -54,7 +56,8 @@ export async function listAudit(filter: AuditFilter): Promise<AuditRecord[]> {
       eb.or([
         eb('actorName', 'like', `%${search}%`),
         eb('action', 'like', `%${search}%`),
-        eb('result', 'like', `%${search}%`)
+        eb('result', 'like', `%${search}%`),
+        eb('details', 'like', `%${search}%`)
       ])
     )
   return query.execute()
@@ -69,4 +72,18 @@ export async function auditResources(): Promise<string[]> {
     .orderBy('resource')
     .execute()
   return rows.map((row) => row.resource)
+}
+
+/**
+ * Adds old and new values (and a reason) to the audit entry of the request being handled. Calls
+ * within one request are combined.
+ */
+export function noteAudit(details: AuditDetails): void {
+  const current = state.auditDetails ?? {}
+  state.auditDetails = {
+    ...current,
+    ...details,
+    changes: [...(current.changes ?? []), ...(details.changes ?? [])]
+  }
+  if (!state.auditDetails.changes?.length) delete state.auditDetails.changes
 }

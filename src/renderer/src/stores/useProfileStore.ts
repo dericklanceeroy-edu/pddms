@@ -13,6 +13,7 @@ import {
   saveCustomer as requestSaveCustomer,
   updateProduct
 } from '@renderer/services/profiles'
+import { archiveRecord } from '@renderer/services/controls'
 import { create } from 'zustand'
 
 interface ProfileStore {
@@ -29,8 +30,14 @@ interface ProfileStore {
   addItem: (item: ItemDraft) => Promise<ItemProfile>
   updateItem: (id: number, item: ItemDraft) => Promise<ItemProfile>
   removeItem: (id: number) => Promise<void>
-  saveCustomer: (customer: CustomerDraft, id?: number) => Promise<CustomerProfile>
+  saveCustomer: (
+    customer: CustomerDraft,
+    id?: number,
+    confirmDuplicate?: boolean
+  ) => Promise<CustomerProfile>
   removeCustomer: (id: number) => Promise<void>
+  /** Hides a record with history from new sales and orders; it stays on old receipts. */
+  archive: (kind: 'customer' | 'product', id: number) => Promise<void>
   reset: () => void
 }
 
@@ -113,8 +120,8 @@ export const useProfileStore = create<ProfileStore>((set, get) => ({
     await removeProduct(id)
     set((state) => ({ items: state.items.filter((item) => item.id !== id) }))
   },
-  saveCustomer: async (draft, id) => {
-    const customer = await requestSaveCustomer(draft, id)
+  saveCustomer: async (draft, id, confirmDuplicate = false) => {
+    const customer = await requestSaveCustomer(draft, id, confirmDuplicate)
     customer.transactions =
       get().customers.find((value) => value.id === customer.id)?.transactions ?? []
     set((state) => ({
@@ -127,6 +134,11 @@ export const useProfileStore = create<ProfileStore>((set, get) => ({
   removeCustomer: async (id) => {
     await requestRemoveCustomer(id)
     set((state) => ({ customers: state.customers.filter((value) => value.id !== id) }))
+  },
+  archive: async (kind, id) => {
+    await archiveRecord(kind, id)
+    if (kind === 'product') set((state) => ({ items: state.items.filter((item) => item.id !== id) }))
+    else set((state) => ({ customers: state.customers.filter((value) => value.id !== id) }))
   },
   reset: () => {
     itemRequest += 1
