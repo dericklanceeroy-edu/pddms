@@ -23,10 +23,19 @@ export const ipcMain = {
           trustedSenders.get(event.sender) !== event.senderFrame.url.split('#')[0]
         )
           return { success: false, error: 'Untrusted application window.' }
-        const actor = state.session?.account
+        const signIn = channel === channels.auth.signIn
+        // Note: A sign-in attempt is logged under the username that was typed, not the account
+        // that happened to be signed in before it.
+        const actor = signIn ? undefined : state.session?.account
+        const attempted =
+          signIn && args[0] && typeof args[0] === 'object' && 'username' in args[0]
+            ? String((args[0] as { username: unknown }).username)
+                .trim()
+                .slice(0, 80)
+            : ''
+        state.denied = false
         // Note: Logging failures must never prevent session termination.
-        if (channel === channels.auth.signOut || channel === channels.auth.signIn)
-          state.session = undefined
+        if (channel === channels.auth.signOut || signIn) state.session = undefined
         let logId: number | undefined
         try {
           if (!publicChannels.includes(channel)) {
@@ -65,6 +74,9 @@ export const ipcMain = {
               typeof args[0] === 'number' ? args[0] : null
             )
           const result = await listener(event, ...args)
+          // Note: A refused permission check is logged as "denied", including refused views.
+          const denied = (state.denied as boolean | undefined) === true && result?.success === false
+          if (denied && !logId) await audit(channel, 'denied', actor)
           if (logId) {
             const target =
               result?.account ?? result?.order ?? result?.sale ?? result?.payment ?? result?.invoice
@@ -77,27 +89,35 @@ export const ipcMain = {
             await db
               .updateTable('auditLogs')
               .set({
-                result:
-                  result?.success === false
+                result: denied
+                  ? 'denied'
+                  : result?.success === false
                     ? 'failed'
                     : result?.cancelled
                       ? 'cancelled'
                       : 'success',
                 ...(Number.isInteger(targetId) ? { targetId } : {}),
-                ...(signedIn ? { actorId: signedIn.id, actorName: signedIn.username } : {})
+                ...(signedIn
+                  ? { actorId: signedIn.id, actorName: signedIn.username }
+                  : signIn && attempted
+                    ? { actorName: attempted }
+                    : {})
               })
               .where('id', '=', logId)
               .execute()
           }
           return result
         } catch {
+          const refused = (state.denied as boolean | undefined) === true
           if (logId)
             await db
               .updateTable('auditLogs')
-              .set({ result: 'failed' })
+              .set({ result: refused ? 'denied' : 'failed' })
               .where('id', '=', logId)
               .execute()
               .catch(() => undefined)
+          else if (refused) await audit(channel, 'denied', actor).catch(() => undefined)
+          if (refused) return { success: false, error: 'You do not have permission to do this.' }
           if (channel === channels.auth.signOut) return { success: true }
           return {
             success: false,

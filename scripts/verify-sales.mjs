@@ -80,7 +80,7 @@ if (!process.env.SALES_TEST_PHASE) {
           .executeTakeFirstOrThrow()
       }
       const records = (await ok(channels.sales.history)).records
-      assert.equal(records.length, 4)
+      assert.equal(records.length, 8)
       const sale = (await ok(channels.sales.getOne, records.at(-1).id)).sale
       assert.equal(sale.totalCents, 24000)
       assert.equal(receiptText(sale), await readFile(process.env.INVENTORY_TEST_EXPORT, 'utf8'))
@@ -226,7 +226,7 @@ if (!process.env.SALES_TEST_PHASE) {
       for (const quantity of [0, -1, 1.5, 21])
         assert.throws(() => setCartQuantity(cart, { ...line, quantity }, 20))
       const beforeCart = await snapshot()
-      const removed = removeCartItem(cart, line.batchId)
+      const removed = removeCartItem(cart, `${line.batchId}:${line.unit ?? 'piece'}`)
       assert.equal(removed.length, 1)
       assert.equal(calculateSale(removed, 'none').totalCents, 11200)
       const cancelled = []
@@ -404,6 +404,124 @@ if (!process.env.SALES_TEST_PHASE) {
       await db.updateTable('accounts').set({ isArchived: 1 }).where('id', '=', cashier.id).execute()
       await bad(channels.sales.history)
       await bad(channels.sales.checkout, { ...exact, requestId: randomUUID() })
+      state.session = { account: admin }
+      const beta = { batchId: batches[1].id, quantity: 1, unit: 'piece', unitPriceCents: 11200 }
+      const wallet = {
+        requestId: randomUUID(),
+        customerId: regular.id,
+        items: [beta],
+        expectedTotalCents: 11200,
+        cashCents: 11200,
+        paymentMethod: 'GCash',
+        paymentReference: 'GC 1234 5678'
+      }
+      for (const values of [
+        { paymentReference: null },
+        { paymentReference: '' },
+        { cashCents: 12000 },
+        { cashCents: 11000 },
+        { paymentMethod: 'Card' }
+      ])
+        await bad(channels.sales.checkout, { ...wallet, ...values })
+      const walletSale = (await ok(channels.sales.checkout, wallet)).sale
+      assert.equal(walletSale.paymentMethod, 'GCash')
+      assert.equal(walletSale.paymentReference, 'GC 1234 5678')
+      assert.equal(walletSale.changeCents, 0)
+      assert.equal((await ok(channels.sales.checkout, wallet)).sale.id, walletSale.id)
+      await bad(channels.sales.checkout, { ...wallet, requestId: randomUUID() })
+      const walletText = receiptText(walletSale)
+      for (const text of ['GCash', 'GC 1234 5678', 'VATable Sales', 'VAT Amount (12%)'])
+        assert.ok(walletText.toUpperCase().includes(text.toUpperCase()), `e-wallet receipt shows ${text}`)
+      const seniorText = receiptText(sale)
+      for (const text of ['VAT-Exempt Sales', 'signature'])
+        assert.ok(seniorText.toUpperCase().includes(text.toUpperCase()), `discount receipt shows ${text}`)
+      await db.updateTable('drugs').set({ isPrescribed: 1 }).where('id', '=', products[1].id).execute()
+      const rx = {
+        requestId: randomUUID(),
+        customerId: regular.id,
+        items: [beta],
+        expectedTotalCents: 11200,
+        cashCents: 11200
+      }
+      const doctor = { prescriberName: 'Dr. Ana Cruz', prescriberLicense: 'PRC-0123456' }
+      for (const prescription of [
+        null,
+        { ...doctor, prescriberName: 'D' },
+        { ...doctor, prescriberLicense: '12' },
+        { ...doctor, prescriberName: '<script>' }
+      ])
+        await bad(channels.sales.checkout, { ...rx, prescription })
+      const rxSale = (await ok(channels.sales.checkout, { ...rx, prescription: doctor })).sale
+      assert.equal(rxSale.prescriberName, 'Dr. Ana Cruz')
+      assert.equal(rxSale.prescriberLicense, 'PRC-0123456')
+      await db.updateTable('drugs').set({ isControlled: 1 }).where('id', '=', products[1].id).execute()
+      const controlled = { ...rx, requestId: randomUUID(), prescription: doctor }
+      await bad(channels.sales.checkout, controlled)
+      const controlledSale = (
+        await ok(channels.sales.checkout, {
+          ...controlled,
+          prescription: { ...doctor, prescriptionNumber: 'S2-2026-001' }
+        })
+      ).sale
+      assert.equal(controlledSale.prescriptionNumber, 'S2-2026-001')
+      await db
+        .updateTable('drugs')
+        .set({ isPrescribed: 0, isControlled: 0, piecesPerBox: 10 })
+        .where('id', '=', products[1].id)
+        .execute()
+      const stockBefore = (
+        await db
+          .selectFrom('batches')
+          .select('currentStock')
+          .where('id', '=', beta.batchId)
+          .executeTakeFirstOrThrow()
+      ).currentStock
+      const mixed = (
+        await ok(channels.sales.checkout, {
+          requestId: randomUUID(),
+          customerId: null,
+          items: [{ ...beta, unit: 'box', unitPriceCents: 112000 }, beta],
+          expectedTotalCents: 123200,
+          cashCents: 123200
+        })
+      ).sale
+      assert.equal(mixed.items.length, 2)
+      assert.equal(
+        (
+          await db
+            .selectFrom('batches')
+            .select('currentStock')
+            .where('id', '=', beta.batchId)
+            .executeTakeFirstOrThrow()
+        ).currentStock,
+        stockBefore - 11
+      )
+      await bad(channels.sales.checkout, {
+        requestId: randomUUID(),
+        customerId: null,
+        items: [
+          { ...beta, unit: 'box', quantity: 1, unitPriceCents: 112000 },
+          { ...beta, quantity: stockBefore - 11 - 9 }
+        ],
+        expectedTotalCents: 112000 + (stockBefore - 20) * 11200,
+        cashCents: 112000 + (stockBefore - 20) * 11200
+      })
+      await db.updateTable('drugs').set({ piecesPerBox: 1 }).where('id', '=', products[1].id).execute()
+      const pharmacy = await db
+        .insertInto('customers')
+        .values({
+          fullName: 'Client Pharmacy',
+          phone: '09171234569',
+          email: null,
+          address: null,
+          discountType: 'none',
+          discountId: null,
+          discountExpiresAt: null,
+          clientType: 'pharmacy'
+        })
+        .returningAll()
+        .executeTakeFirstOrThrow()
+      await bad(channels.sales.checkout, { ...exact, requestId: randomUUID(), customerId: pharmacy.id })
       const { createElement } = await import('react')
       const { renderToStaticMarkup } = await import('react-dom/server')
       const { ReceiptSlip } = await import('../src/renderer/src/components/sales/Receipt.tsx')
@@ -418,7 +536,7 @@ if (!process.env.SALES_TEST_PHASE) {
       assert.ok(receiptMarkup.includes(receiptNumber(sale)))
       assert.ok(receiptMarkup.includes(`Barcode ${receiptNumber(sale)}`))
       console.log(
-        'PASS: login, cart edits/cancel, Senior/PWD math, invalid checkout, atomic rollback, receipt/export failure, idempotency, concurrent oversell, history authorization, blocked session, receipt rendering'
+        'PASS: login, cart edits/cancel, Senior/PWD math, invalid checkout, atomic rollback, receipt/export failure, idempotency, concurrent oversell, history authorization, blocked session, receipt rendering, GCash/Maya payments, prescription details, BIR VAT lines, box + pieces of one batch, pharmacy clients kept off the POS'
       )
     }
   } finally {

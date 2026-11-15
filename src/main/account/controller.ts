@@ -9,6 +9,7 @@ import { isId } from '@shared/validators'
 import { hash, verify } from 'argon2'
 import {
   findAll,
+  findOneByEmail,
   findOneById,
   findOneByUsername,
   insertOne,
@@ -29,6 +30,9 @@ ipcMain.handle(channels.account.createOne, async (_, payload: unknown) => {
     }
     if (await findOneByUsername(data.username)) {
       return { success: false, error: 'That username is already in use.' }
+    }
+    if (await findOneByEmail(data.email)) {
+      return { success: false, error: 'That email is already used by another account.' }
     }
     const newAccount = await insertOne({
       ...data,
@@ -136,6 +140,12 @@ ipcMain.handle(channels.account.updateOneById, async (_, id: unknown, payload: u
         return { success: false, error: 'That username is already in use.' }
       }
     }
+    if (data.email) {
+      const existing = await findOneByEmail(data.email)
+      if (existing && existing.id !== id) {
+        return { success: false, error: 'That email is already used by another account.' }
+      }
+    }
 
     await updateOneById(id, {
       ...data,
@@ -171,6 +181,7 @@ ipcMain.handle(channels.account.updateProfile, async (_, payload: unknown) => {
     await updateOneById(id, {
       fullName: data.fullName,
       username: data.username,
+      ...(data.phone !== undefined ? { phone: data.phone } : {}),
       ...(data.password ? { password: await hash(data.password) } : {})
     })
     state.session = undefined

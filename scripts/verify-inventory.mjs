@@ -430,7 +430,7 @@ if (!process.env.INVENTORY_TEST_DATABASE) {
             amount: 1,
             paidAt: offsetDate(-30),
             method: 'Bank transfer',
-            referenceNumber: null,
+            referenceNumber: 'PAY-EARLY',
             notes: null
           })
         ).error,

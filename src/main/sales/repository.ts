@@ -30,6 +30,8 @@ async function prepare(
   customerName: string
   discountId: string | null
   discountExpiresAt: string | null
+  /** Prescription (Rx) and controlled medicines in the cart, by product name. */
+  prescription: { required: string[]; controlled: string[] }
 }> {
   const customer =
     draft.customerId === null
@@ -41,6 +43,8 @@ async function prepare(
           .executeTakeFirst()
   if (draft.customerId !== null && !customer)
     throw new SalesError('Customer not found. Select a current customer.')
+  if (customer?.clientType === 'pharmacy')
+    throw new SalesError('Pharmacy clients buy through Wholesale & Deliveries, not at the counter.')
   const walkIn = draft.walkInDiscount
   const discount = saleDiscount(customer ?? null, walkIn)
   const batches = await database
@@ -59,7 +63,9 @@ async function prepare(
       'drugs.formulation',
       'drugs.category',
       'drugs.piecesPerBox',
-      'drugs.isArchived'
+      'drugs.isArchived',
+      'drugs.isPrescribed',
+      'drugs.isControlled'
     ])
     .where(
       'batches.id',
@@ -67,6 +73,9 @@ async function prepare(
       draft.items.map((item) => item.batchId)
     )
     .execute()
+  // Note: A box and loose pieces of one batch share its stock, so check the combined pieces.
+  const piecesByBatch = new Map<number, number>()
+  const prescription = { required: new Set<string>(), controlled: new Set<string>() }
   const items = draft.items.map((item): SaleLine => {
     const batch = batches.find((value) => value.id === item.batchId)
     if (!batch || batch.isArchived)
@@ -82,8 +91,12 @@ async function prepare(
       if (error instanceof UnitError) throw new SalesError(`${batch.brandName}: ${error.message}`)
       throw error
     }
-    if (item.quantity * pieces > batch.currentStock)
+    const pieceTotal = (piecesByBatch.get(batch.id) ?? 0) + item.quantity * pieces
+    piecesByBatch.set(batch.id, pieceTotal)
+    if (pieceTotal > batch.currentStock)
       throw new SalesError(`${batch.brandName}: insufficient batch stock.`)
+    if (batch.isPrescribed || batch.isControlled) prescription.required.add(batch.brandName)
+    if (batch.isControlled) prescription.controlled.add(batch.brandName)
     const unitPriceCents = priceToCents(unitPrice)
     if (item.unitPriceCents !== unitPriceCents)
       throw new SalesError('A price changed. Refresh the catalog and re-add the item.')
@@ -104,7 +117,11 @@ async function prepare(
     customerName: walkIn?.holderName ?? customer?.fullName ?? 'Walk-in customer',
     discountId: discount === 'none' ? null : walkIn ? walkIn.discountId : customer!.discountId,
     discountExpiresAt:
-      discount === 'none' ? null : walkIn ? walkIn.discountExpiresAt : customer!.discountExpiresAt
+      discount === 'none' ? null : walkIn ? walkIn.discountExpiresAt : customer!.discountExpiresAt,
+    prescription: {
+      required: [...prescription.required],
+      controlled: [...prescription.controlled]
+    }
   }
 }
 
@@ -167,6 +184,7 @@ export async function checkout(input: Checkout, accountId: number): Promise<Sale
             existing.customerName !== data.walkInDiscount.holderName.trim()
           : existing.customerId === null && existing.discountType !== 'none') ||
         existing.cashCents !== data.cashCents ||
+        existing.paymentMethod !== data.paymentMethod ||
         existing.totalCents !== data.expectedTotalCents ||
         lines.length !== data.items.length ||
         !lines.every((line) =>
@@ -193,6 +211,31 @@ export async function checkout(input: Checkout, accountId: number): Promise<Sale
       )
     if (data.cashCents < prepared.totals.totalCents)
       throw new SalesError('Cash received is less than the total due.')
+    // Note: An e-wallet transfer is for the exact amount, so it gives no change.
+    if (data.paymentMethod !== 'Cash' && data.cashCents !== prepared.totals.totalCents)
+      throw new SalesError(`${data.paymentMethod} payments must be for the exact total due.`)
+    if (data.paymentMethod !== 'Cash') {
+      const duplicate = await transaction
+        .selectFrom('sales')
+        .select('id')
+        .where('paymentMethod', '=', data.paymentMethod)
+        .where('paymentReference', '=', data.paymentReference)
+        .executeTakeFirst()
+      if (duplicate)
+        throw new SalesError(`That ${data.paymentMethod} reference has already been recorded.`)
+    }
+    const rx = prepared.prescription
+    if (rx.required.length) {
+      if (!data.prescription)
+        throw new SalesError(
+          `Enter the prescription details for ${rx.required.join(', ')} (prescription required).`
+        )
+      if (rx.controlled.length && !data.prescription.prescriptionNumber)
+        throw new SalesError(
+          `Enter the prescription number for controlled medicine: ${rx.controlled.join(', ')}.`
+        )
+    }
+    const prescription = rx.required.length ? data.prescription : null
     const reference = `SALE-${randomUUID().toUpperCase()}`
     const sale = await transaction
       .insertInto('sales')
@@ -208,6 +251,11 @@ export async function checkout(input: Checkout, accountId: number): Promise<Sale
         ...prepared.totals,
         cashCents: data.cashCents,
         changeCents: data.cashCents - prepared.totals.totalCents,
+        paymentMethod: data.paymentMethod,
+        paymentReference: data.paymentMethod === 'Cash' ? null : data.paymentReference,
+        prescriberName: prescription?.prescriberName ?? null,
+        prescriberLicense: prescription?.prescriberLicense ?? null,
+        prescriptionNumber: prescription?.prescriptionNumber || null,
         createdAt: new Date().toISOString()
       })
       .returning('id')

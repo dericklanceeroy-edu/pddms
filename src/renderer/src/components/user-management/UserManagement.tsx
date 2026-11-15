@@ -1,8 +1,9 @@
 import DashboardShell from '@renderer/components/dashboard/DashboardShell'
 import { useConfirm } from '@renderer/components/ui/ConfirmDialog'
+import { splitErrors, type FieldErrors } from '@renderer/components/ui/fieldErrors'
 import FilteredInput from '@renderer/components/ui/FilteredInput'
 import { RequiredNote } from '@renderer/components/ui/FormField'
-import { splitErrors, type FieldErrors } from '@renderer/components/ui/fieldErrors'
+import Modal from '@renderer/components/ui/Modal'
 import {
   roleLabels,
   type ManagedUser,
@@ -12,7 +13,7 @@ import {
 } from '@renderer/data/userManagement'
 import { useUserManagement } from '@renderer/hooks/useUserManagement'
 import { cloneElement, useId, useMemo, useState, type FormEvent, type ReactElement } from 'react'
-import { FiEdit2, FiPlus, FiSearch, FiShield, FiTrash2, FiUsers, FiX } from 'react-icons/fi'
+import { FiEdit2, FiPlus, FiSearch, FiShield, FiTrash2, FiUsers } from 'react-icons/fi'
 import AdministrationTools from './AdministrationTools'
 
 const date = new Intl.DateTimeFormat('en-PH', { dateStyle: 'medium' })
@@ -49,7 +50,7 @@ export default function UserManagement(): ReactElement {
           <div className="page-intro-content flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
             <div>
               <p className="eyebrow">Account & admin</p>
-              <h2 className="page-title mt-0.5">User Management</h2>
+              <h1 className="page-title mt-0.5">User Management</h1>
               <p className="page-subtitle">
                 Create staff and cashier accounts, and block access for anyone who should no longer
                 sign in.
@@ -127,25 +128,21 @@ export default function UserManagement(): ReactElement {
               </thead>
               <tbody className="divide-y divide-slate-100/90">
                 {filtered.map((user) => (
-                  <tr
-                    key={user.id}
-                    tabIndex={0}
-                    role="button"
-                    aria-label={`View ${user.fullName}`}
-                    onClick={() => setSelected(user)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter' || event.key === ' ') {
-                        event.preventDefault()
-                        setSelected(user)
-                      }
-                    }}
-                    className="hover:bg-brand-50/50 focus-visible:bg-brand-50/50 focus-visible:ring-brand-500 cursor-pointer transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset"
-                  >
+                  <tr key={user.id} className="hover:bg-brand-50/50 transition-colors">
                     <td className="px-5 py-4">
-                      <p className="font-semibold">{user.fullName}</p>
-                      <p className="text-xs text-slate-500">
+                      {/* Note: The name opens the details, so the row holds no nested buttons. */}
+                      <button
+                        type="button"
+                        className="hover:text-brand-700 text-left font-semibold underline-offset-2 hover:underline"
+                        aria-label={`View details for ${user.fullName}`}
+                        onClick={() => setSelected(user)}
+                      >
+                        {user.fullName}
+                      </button>
+                      <p className="text-xs text-slate-600">
                         @{user.username}
                         {user.email ? ` · ${user.email}` : ''}
+                        {user.phone ? ` · ${user.phone}` : ''}
                       </p>
                     </td>
                     <td className="px-5 py-4">
@@ -178,23 +175,19 @@ export default function UserManagement(): ReactElement {
                       <div className="flex justify-end gap-2">
                         <button
                           disabled={user.role === 'master'}
-                          onClick={(event) => {
-                            event.stopPropagation()
+                          onClick={() => {
                             setEditing(user)
                           }}
-                          onKeyDown={(event) => event.stopPropagation()}
                           className={'icon-button text-brand-700 disabled:opacity-40'}
-                          aria-label={'Edit user'}
+                          aria-label={`Edit ${user.fullName}`}
                         >
                           <FiEdit2 />
                         </button>
                         <button
                           disabled={user.role === 'master'}
-                          onClick={(event) => {
-                            event.stopPropagation()
+                          onClick={() => {
                             setDeleteUser(user)
                           }}
-                          onKeyDown={(event) => event.stopPropagation()}
                           className={'icon-button text-rose-700 disabled:opacity-40'}
                           aria-label={`Delete ${user.fullName}`}
                         >
@@ -202,15 +195,14 @@ export default function UserManagement(): ReactElement {
                         </button>
                         <button
                           disabled={user.role === 'master'}
-                          onClick={async (event) => {
-                            event.stopPropagation()
+                          onClick={async () => {
                             const blocking = user.status !== 'blocked'
                             const accepted = await confirm({
                               title: `${blocking ? 'Block' : 'Unblock'} ${user.fullName}?`,
                               message: blocking
                                 ? 'The user will be signed out and cannot sign in until unblocked.'
                                 : 'The user will be able to sign in again.',
-                              confirmLabel: blocking ? 'Block user' : 'Unblock user',
+                              confirmLabel: blocking ? 'Block User' : 'Unblock User',
                               tone: blocking ? 'danger' : 'default'
                             })
                             if (!accepted) return
@@ -231,7 +223,6 @@ export default function UserManagement(): ReactElement {
                                 )
                               )
                           }}
-                          onKeyDown={(event) => event.stopPropagation()}
                           className="secondary-button text-xs disabled:opacity-40"
                         >
                           {user.status !== 'blocked' ? 'Block' : 'Unblock'}
@@ -304,6 +295,7 @@ function CreateUserDialog({
     fullName: '',
     username: '',
     email: '',
+    phone: '',
     role: 'staff',
     password: ''
   })
@@ -354,6 +346,18 @@ function CreateUserDialog({
             placeholder={'e.g. juan@example.com'}
             value={values.email}
             onValueChange={(email) => setValues({ ...values, email })}
+          />
+        </Field>
+        <Field label="Mobile Number" required error={fieldErrors.phone}>
+          <FilteredInput
+            rule="phone"
+            required
+            inputMode="numeric"
+            maxLength={11}
+            autoComplete="tel"
+            placeholder={'e.g. 09171234567'}
+            value={values.phone}
+            onValueChange={(phone) => setValues({ ...values, phone })}
           />
         </Field>
         <Field label="Username" required error={fieldErrors.username}>
@@ -430,6 +434,7 @@ function EditUserDialog({
     fullName: user.fullName,
     username: user.username,
     email: user.email,
+    phone: user.phone,
     role: user.role,
     password: ''
   })
@@ -486,6 +491,22 @@ function EditUserDialog({
             placeholder={'e.g. juan@example.com'}
             value={values.email}
             onValueChange={(email) => setValues({ ...values, email })}
+          />
+        </Field>
+        <Field
+          label="Mobile Number"
+          required={!!user.phone}
+          error={fieldErrors.phone}
+          hint={user.phone ? undefined : 'This account has no mobile number yet. Add one now.'}
+        >
+          <FilteredInput
+            rule="phone"
+            inputMode="numeric"
+            maxLength={11}
+            autoComplete="tel"
+            placeholder={'e.g. 09171234567'}
+            value={values.phone}
+            onValueChange={(phone) => setValues({ ...values, phone })}
           />
         </Field>
         <Field label={'Username'} required error={fieldErrors.username}>
@@ -569,7 +590,7 @@ function DeleteUserDialog({
   }
 
   return (
-    <Dialog title="Delete staff account?" close={close}>
+    <Dialog title="Delete Staff Account?" close={close}>
       <div>
         <p className="text-sm leading-6 text-slate-600">
           {user.fullName} will permanently lose access and be removed from the user list.
@@ -605,6 +626,7 @@ function UserDetails({ user, close }: { user: ManagedUser; close: VoidFunction }
       <dl className="grid gap-4 sm:grid-cols-2">
         <Detail label="Username" value={`@${user.username}`} />
         <Detail label="Email" value={user.email || 'Not recorded'} />
+        <Detail label="Mobile Number" value={user.phone || 'Not recorded'} />
         <Detail label="Role" value={roleLabels[user.role]} />
         <Detail
           label="Status"
@@ -623,6 +645,7 @@ function UserDetails({ user, close }: { user: ManagedUser; close: VoidFunction }
   )
 }
 
+/** User Management dialogs use the shared Modal: Escape closes, focus moves in and returns. */
 function Dialog({
   title,
   close,
@@ -633,24 +656,9 @@ function Dialog({
   children: ReactElement
 }): ReactElement {
   return (
-    <div className="bg-sidebar-950/55 fixed inset-0 z-[70] grid place-items-center overflow-y-auto p-4">
-      <button className="absolute inset-0" aria-label="Close dialog" onClick={close} />
-      <section
-        role="dialog"
-        aria-modal="true"
-        className="glass-surface relative z-10 max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-x-hidden overflow-y-auto rounded-lg border-slate-200 p-5 sm:p-6"
-      >
-        <div className="relative mb-5 flex items-start justify-between gap-3">
-          <h2 className="min-w-0 text-xl font-semibold tracking-tight break-words text-slate-950">
-            {title}
-          </h2>
-          <button onClick={close} className="icon-button" aria-label="Close dialog">
-            <FiX />
-          </button>
-        </div>
-        <div className="relative">{children}</div>
-      </section>
-    </div>
+    <Modal title={title} close={close} size="sm">
+      {children}
+    </Modal>
   )
 }
 
@@ -677,7 +685,7 @@ function Field({
             *
           </span>
         ) : (
-          <span className="ml-1 text-xs font-normal text-slate-400">(optional)</span>
+          <span className="ml-1 text-xs font-normal text-slate-600">(optional)</span>
         )}
         <span className="mt-1.5 block font-normal">
           {cloneElement(children as ReactElement<Record<string, unknown>>, {

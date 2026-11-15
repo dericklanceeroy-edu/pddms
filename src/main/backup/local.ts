@@ -23,7 +23,9 @@ const manifestSchema = z.strictObject({
   format: z.literal('pddms-backup-v1'),
   createdAt: z.string().datetime(),
   database: z.string().regex(/^[a-f0-9]{64}$/),
-  invoices: z.array(fileSchema)
+  invoices: z.array(fileSchema),
+  // Note: Invoice files that were already missing when the backup was made; their records are kept.
+  missingInvoices: z.array(safeName).default([])
 })
 async function digest(path: string): Promise<string> {
   const details = await lstat(path)
@@ -53,6 +55,24 @@ function invoiceNames(connection: SQLite.Database): string[] {
     )
   ]
 }
+/** "INV-001 (Supplier name)" for each stored invoice file, so a missing file can be found. */
+function invoiceLabels(connection: SQLite.Database): Map<string, string> {
+  const rows = connection
+    .prepare(
+      `SELECT i.stored_filename AS name, i.invoice_number AS number, s.organization AS supplier
+       FROM supplier_invoices i LEFT JOIN suppliers s ON s.id = i.supplier_id`
+    )
+    .all() as Array<{ name: string; number: string; supplier: string | null }>
+  return new Map(rows.map((row) => [row.name, `${row.number} (${row.supplier ?? 'unknown supplier'})`]))
+}
+const isMissing = async (path: string): Promise<boolean> => {
+  try {
+    return !(await lstat(path)).isFile()
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return true
+    throw error
+  }
+}
 export async function createBackup(parent = backupDirectory()): Promise<BackupInfo> {
   await mkdir(parent, { recursive: true })
   const directory = await mkdtemp(join(parent, 'pddms-backup-'))
@@ -60,15 +80,24 @@ export async function createBackup(parent = backupDirectory()): Promise<BackupIn
   await database.backup(target)
   const snapshot = new SQLite(target, { readonly: true, fileMustExist: true })
   let names: string[]
+  let labels: Map<string, string>
   try {
     names = invoiceNames(snapshot)
+    labels = invoiceLabels(snapshot)
   } finally {
     snapshot.close()
   }
   await mkdir(join(directory, 'invoices'))
   const invoices: Array<{ name: string; sha256: string }> = []
+  // Note: One missing invoice file must not block every backup. The data is still backed up and
+  // the missing files are named so they can be attached again.
+  const missing: string[] = []
   for (const name of names) {
     const source = join(invoiceDirectory(), name)
+    if (await isMissing(source)) {
+      missing.push(name)
+      continue
+    }
     const sha256 = await digest(source)
     await copyFile(source, join(directory, 'invoices', name))
     if ((await digest(join(directory, 'invoices', name))) !== sha256)
@@ -79,13 +108,24 @@ export async function createBackup(parent = backupDirectory()): Promise<BackupIn
   await writeFile(
     join(directory, 'manifest.json'),
     JSON.stringify(
-      { format: 'pddms-backup-v1', createdAt, database: await digest(target), invoices },
+      {
+        format: 'pddms-backup-v1',
+        createdAt,
+        database: await digest(target),
+        invoices,
+        missingInvoices: missing
+      },
       null,
       2
     ),
     { flag: 'wx' }
   )
-  return { directory, createdAt, invoiceCount: invoices.length }
+  return {
+    directory,
+    createdAt,
+    invoiceCount: invoices.length,
+    missingInvoices: missing.map((name) => labels.get(name) ?? name)
+  }
 }
 /**
  * Upgrades a copied backup database to the current schema in place. Backups made before a later
@@ -146,7 +186,12 @@ export async function validateBackup(
       .get()
     if (!master) throw new Error('Backup must contain an active verified master account.')
     const names = invoiceNames(snapshot).sort()
-    if (JSON.stringify(names) !== JSON.stringify(manifest.invoices.map((item) => item.name).sort()))
+    if (
+      JSON.stringify(names) !==
+      JSON.stringify(
+        [...manifest.invoices.map((item) => item.name), ...manifest.missingInvoices].sort()
+      )
+    )
       throw new Error('Backup invoice references do not match.')
     if ((await lstat(join(directory, 'invoices'))).isSymbolicLink())
       throw new Error('Unsafe invoice directory.')

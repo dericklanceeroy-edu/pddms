@@ -5,7 +5,11 @@ import { customerUpdateSchema, newCustomerSchema } from '@shared/schemas'
 import { formatValidationError } from '@shared/validation'
 import { isId } from '@shared/validators'
 import { ipcMain } from '@main/api/ipc'
-import { findAll, insertOne, removeOneById, updateOneById } from './repository'
+import { findAll, findOneById, insertOne, removeOneById, updateOneById } from './repository'
+
+// Note: Cashiers serve retail customers only; pharmacy clients belong to Wholesale & Deliveries.
+const cashier = (): boolean => state.session?.account.role === 'cashier'
+const pharmacyOnlyMessage = 'Pharmacy clients are managed in Wholesale & Deliveries.'
 
 ipcMain.handle(channels.customer.getAll, async () => {
   try {
@@ -13,7 +17,8 @@ ipcMain.handle(channels.customer.getAll, async () => {
     return {
       success: true,
       customers: await findAll(
-        state.session!.account.role === 'master' ? undefined : state.session!.account.id
+        state.session!.account.role === 'master' ? undefined : state.session!.account.id,
+        cashier()
       )
     }
   } catch (error) {
@@ -24,7 +29,9 @@ ipcMain.handle(channels.customer.getAll, async () => {
 ipcMain.handle(channels.customer.createOne, async (_, payload: unknown) => {
   try {
     authorize((session) => accessControl.can(session.account.role).createAny(resources.customer))
-    const customer = await insertOne(newCustomerSchema.parse(payload))
+    const data = newCustomerSchema.parse(payload)
+    if (cashier() && data.clientType === 'pharmacy') return { success: false, error: pharmacyOnlyMessage }
+    const customer = await insertOne(data)
     state.database.stale = true
     return { success: true, customer }
   } catch (error) {
@@ -36,7 +43,13 @@ ipcMain.handle(channels.customer.updateOneById, async (_, id: unknown, payload: 
   try {
     authorize((session) => accessControl.can(session.account.role).updateAny(resources.customer))
     if (!isId(id)) return { success: false, error: 'Invalid customer.' }
-    const customer = await updateOneById(id, customerUpdateSchema.parse(payload))
+    const data = customerUpdateSchema.parse(payload)
+    if (cashier()) {
+      const current = await findOneById(id)
+      if (current?.clientType === 'pharmacy' || data.clientType === 'pharmacy')
+        return { success: false, error: pharmacyOnlyMessage }
+    }
+    const customer = await updateOneById(id, data)
     state.database.stale = true
     return { success: true, customer }
   } catch (error) {

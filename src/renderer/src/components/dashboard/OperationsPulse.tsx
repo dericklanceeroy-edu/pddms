@@ -92,7 +92,7 @@ export default function OperationsPulse({
                     <Icon className="size-4" aria-hidden="true" />
                   </div>
                   <span
-                    className={`rounded-full px-2 py-1 text-[0.65rem] font-semibold ring-1 ${statusStyles[item.status]}`}
+                    className={`rounded-full px-2 py-1 text-xs font-semibold ring-1 ${statusStyles[item.status]}`}
                   >
                     {statusLabels[item.status]}
                   </span>

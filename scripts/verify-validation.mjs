@@ -131,6 +131,7 @@ if (!process.env.VALIDATION_TEST_PHASE) {
     role: 'cashier',
     fullName: 'Juan Dela Cruz',
     email: 'juan@example.com',
+    phone: '09171234567',
     username: 'juan',
     password: 'Pass#2026'
   }
@@ -206,7 +207,8 @@ if (!process.env.VALIDATION_TEST_PHASE) {
     username: 'admin',
     password: 'password123',
     fullName: 'Admin',
-    email: 'admin@example.com'
+    email: 'admin@example.com',
+    phone: '09171234567'
   })
 
   // 12. Pharmacy clients: business names may use catalog punctuation and never get discounts.

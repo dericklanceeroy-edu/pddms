@@ -10,6 +10,8 @@ export interface State {
   session?: {
     account: Account
   }
+  /** Set when a permission check refused the current request, so it is logged as "denied". */
+  denied?: boolean
 }
 
 export const state: State = {

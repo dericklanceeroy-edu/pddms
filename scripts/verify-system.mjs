@@ -246,6 +246,7 @@ if (!process.env.SYSTEM_TEST_PHASE) {
       await ok(channels.setup.createMaster, {
         fullName: 'System Admin',
         email: 'system.admin@example.com',
+        phone: '09170000601',
         username: 'system-admin',
         password: 'DisposableTest123'
       })

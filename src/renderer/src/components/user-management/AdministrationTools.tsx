@@ -58,21 +58,30 @@ const logPayload = (filter: LogFilter, beforeId?: number): Record<string, unknow
   ...(filter.resource ? { resource: filter.resource } : {}),
   ...(beforeId ? { beforeId } : {})
 })
-/** "View · Create · Edit (own only)" for one role and area. */
-function grantedActions(actions: Record<string, string[]> | undefined): string[] {
+/** "View (own) · Edit (own)" for one role and area. */
+function grantedActions(actions: Record<string, unknown> | undefined): string[] {
   if (!actions) return []
   const result = new Map<string, boolean>()
-  for (const key of Object.keys(actions)) {
-    const [action, possession] = key.split(':')
-    const own = possession === 'own'
+  for (const [key, value] of Object.entries(actions)) {
+    // Note: accesscontrol lists grants as { read: [{ possession: 'own' }] }; older builds used
+    // "read:own" keys. An action counts as own-only when no grant for it covers any record.
+    const [action, keyPossession] = key.split(':')
+    const possessions = Array.isArray(value)
+      ? value.map((grant) =>
+          grant && typeof grant === 'object' && 'possession' in grant
+            ? String((grant as { possession: unknown }).possession)
+            : (keyPossession ?? 'any')
+        )
+      : [keyPossession ?? 'any']
+    const own = possessions.every((possession) => possession === 'own')
     result.set(action, (result.get(action) ?? true) && own)
   }
   return Object.keys(actionLabels)
     .filter((action) => result.has(action))
-    .map((action) => `${actionLabels[action]}${result.get(action) ? ' (own)' : ''}`)
+    .map((action) => `${actionLabels[action]}${result.get(action) ? ' (Own)' : ''}`)
 }
 
-type Grants = Record<string, Record<string, Record<string, string[]>>>
+type Grants = Record<string, Record<string, Record<string, unknown>>>
 interface Result {
   success: boolean
   error?: string
@@ -198,7 +207,12 @@ export default function AdministrationTools(): ReactElement {
             another role. The Master role is created during setup and cannot be assigned.
           </p>
         </div>
-        <div className="overflow-x-auto rounded-lg border border-slate-200">
+        <div
+          className="overflow-x-auto rounded-lg border border-slate-200"
+          tabIndex={0}
+          role="region"
+          aria-label="Role permissions table"
+        >
           <table className="data-table w-full min-w-[640px] text-left text-sm">
             <thead>
               <tr>
@@ -247,7 +261,8 @@ export default function AdministrationTools(): ReactElement {
           </table>
         </div>
         <p className="text-xs text-slate-500">
-          “Own” means the role sees only its own records, for example a cashier’s own sales.
+          “(Own)” means the role can use only its own records, for example a cashier’s own sales or
+          their own account.
         </p>
       </section>
       <section className="panel space-y-4 p-5 sm:p-6">
@@ -268,7 +283,12 @@ export default function AdministrationTools(): ReactElement {
               void run(async () => {
                 const result = await request(channels.administration.backup)
                 if (result.backup) {
-                  setMessage(`Backup saved: ${result.backup.directory}`)
+                  const missing: string[] = result.backup.missingInvoices ?? []
+                  setMessage(
+                    missing.length
+                      ? `Backup saved: ${result.backup.directory}. ${missing.length} invoice file(s) were missing and are not in this backup: ${missing.join(', ')}. Upload those invoice documents again in Suppliers → Invoices & Payments.`
+                      : `Backup saved: ${result.backup.directory}`
+                  )
                   setBackups([result.backup, ...backups])
                 }
               })

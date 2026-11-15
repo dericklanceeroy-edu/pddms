@@ -1,11 +1,11 @@
 import { accessControl, authorize } from '@main/access-control'
 import { state } from '@main/api'
 import { channels, resources } from '@shared/constants'
-import { newDrugSchema, productUpdateSchema } from '@shared/schemas'
+import { batchWholesalePriceSchema, newDrugSchema, productUpdateSchema } from '@shared/schemas'
 import { formatValidationError } from '@shared/validation'
 import { isId } from '@shared/validators'
 import { ipcMain } from '@main/api/ipc'
-import { findAll, insertOne, removeOneById, updateOneById } from './repository'
+import { findAll, insertOne, removeOneById, setWholesalePrice, updateOneById } from './repository'
 
 ipcMain.handle(channels.product.getAll, async () => {
   try {
@@ -44,6 +44,18 @@ ipcMain.handle(channels.product.removeOneById, async (_, id: unknown) => {
     authorize((session) => accessControl.can(session.account.role).deleteAny(resources.product))
     if (!isId(id)) return { success: false, error: 'Invalid product.' }
     await removeOneById(id)
+    state.database.stale = true
+    return { success: true }
+  } catch (error) {
+    return { success: false, error: formatValidationError(error) }
+  }
+})
+
+ipcMain.handle(channels.product.setWholesalePrice, async (_, payload: unknown) => {
+  try {
+    authorize((session) => accessControl.can(session.account.role).updateAny(resources.product))
+    const { batchId, wholesaleBoxPrice } = batchWholesalePriceSchema.parse(payload)
+    await setWholesalePrice(batchId, wholesaleBoxPrice)
     state.database.stale = true
     return { success: true }
   } catch (error) {

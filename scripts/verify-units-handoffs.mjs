@@ -461,6 +461,8 @@ if (!process.env.UNITS_TEST_PHASE) {
         ...request,
         walkInDiscount: { ...walkIn, holderName: 'Maria Clara' }
       })
+      // Note: ID expiry dates more than 10 years away are rejected as typing mistakes.
+      const pwdExpiry = `${new Date().getFullYear() + 5}-12-31`
       const pwd = (
         await ok(
           channels.sales.checkout,
@@ -469,12 +471,12 @@ if (!process.env.UNITS_TEST_PHASE) {
               discountType: 'pwd',
               holderName: 'Maria Clara',
               discountId: 'PWD-0042',
-              discountExpiresAt: '2099-12-31'
+              discountExpiresAt: pwdExpiry
             }
           })
         )
       ).sale
-      assert.equal(pwd.discountExpiresAt, '2099-12-31')
+      assert.equal(pwd.discountExpiresAt, pwdExpiry)
       assert.equal(await stock(boxBatch.id), 8)
 
       // Wholesale: a box line deducts its pieces on delivery and records every hand-off.

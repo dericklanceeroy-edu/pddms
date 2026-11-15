@@ -6,7 +6,7 @@ import { useMemo, useState, type ReactElement } from 'react'
 import { FiDownload } from 'react-icons/fi'
 
 /** Code 128 barcode drawn with SVG rectangles. */
-function Barcode({ value }: { value: string }): ReactElement {
+export function Barcode({ value }: { value: string }): ReactElement {
   const { bars, width } = useMemo(() => code128(value), [value])
   return (
     <svg
@@ -133,6 +133,11 @@ export function ReceiptSlip({ sale }: { sale: SaleRecord }): ReactElement {
         <Row key={row.label} left={row.label.toUpperCase()} right={row.amount} />
       ))}
       <Rule />
+      {model.vat.map((row) => (
+        <Row key={row.label} left={row.label.toUpperCase()} right={row.amount} />
+      ))}
+      {model.signature && <p className="mt-3 break-words">{model.signature}</p>}
+      <Rule />
       <div className="text-center">
         <Barcode value={model.number} />
         <p className="mt-0.5 tracking-widest">{model.number}</p>
@@ -142,11 +147,11 @@ export function ReceiptSlip({ sale }: { sale: SaleRecord }): ReactElement {
   )
 }
 
-function Rule(): ReactElement {
+export function Rule(): ReactElement {
   return <div className="my-2 border-t border-dashed border-black" aria-hidden="true" />
 }
 
-function Row({
+export function Row({
   left,
   right,
   className = ''

@@ -1,5 +1,5 @@
 import { money, type SaleLine, type SaleRecord } from './sales'
-import { quantityLabel, unitWord } from './units'
+import { quantityLabel } from './units'
 
 /**
  * Business details printed at the top of every receipt.
@@ -77,6 +77,34 @@ export interface ReceiptModel {
   lines: ReceiptLine[]
   totals: Array<{ label: string; amount: string; strong?: boolean }>
   payment: Array<{ label: string; amount: string }>
+  /** BIR breakdown: VATable sales, VAT, VAT-exempt sales and zero-rated sales. */
+  vat: Array<{ label: string; amount: string }>
+  /** Signature line for a Senior Citizen or PWD sale, as the discount law requires. */
+  signature: string | null
+}
+
+/**
+ * VAT breakdown of a retail sale in cents. Prices include 12% VAT, so a regular sale splits its
+ * total into VATable sales and VAT. A Senior/PWD sale is VAT-exempt: its exempt sales are the
+ * price net of VAT, before the 20% discount.
+ */
+export function vatBreakdown(
+  sale: Pick<SaleRecord, 'discountType' | 'subtotalCents' | 'vatExemptionCents' | 'totalCents'>
+): { vatableCents: number; vatCents: number; exemptCents: number; zeroRatedCents: number } {
+  if (sale.discountType !== 'none')
+    return {
+      vatableCents: 0,
+      vatCents: 0,
+      exemptCents: sale.subtotalCents - sale.vatExemptionCents,
+      zeroRatedCents: 0
+    }
+  const vatableCents = Math.round((sale.totalCents * 100) / 112)
+  return {
+    vatableCents,
+    vatCents: sale.totalCents - vatableCents,
+    exemptCents: 0,
+    zeroRatedCents: 0
+  }
 }
 
 const discountName = (sale: SaleRecord): string =>
@@ -85,7 +113,8 @@ const discountName = (sale: SaleRecord): string =>
 export function receiptLine(item: SaleLine): ReceiptLine {
   return {
     name: item.productName,
-    quantity: `${quantityLabel(item.quantity, item.unit, item.piecesPerUnit)} × ${money(item.unitPriceCents)}/${unitWord(item.unit, item.piecesPerUnit)}`,
+    // Note: The quantity already shows the box size, so the price is simply per box or per piece.
+    quantity: `${quantityLabel(item.quantity, item.unit, item.piecesPerUnit)} × ${money(item.unitPriceCents)}/${item.unit === 'box' ? 'box' : 'pc'}`,
     meta: `Lot ${item.batchNumber} · Exp ${item.expiresAt}`,
     amount: money(item.quantity * item.unitPriceCents)
   }
@@ -124,18 +153,31 @@ export function receiptModel(sale: SaleRecord): ReceiptModel {
       { label: 'TOTAL', amount: money(sale.totalCents), strong: true }
     ],
     payment: [
-      { label: 'Cash', amount: money(sale.cashCents) },
+      { label: sale.paymentMethod ?? 'Cash', amount: money(sale.cashCents) },
+      ...(sale.paymentReference ? [{ label: 'Ref No.', amount: sale.paymentReference }] : []),
       { label: 'Change', amount: money(sale.changeCents) }
-    ]
+    ],
+    vat: (() => {
+      const vat = vatBreakdown(sale)
+      return [
+        { label: 'VATable Sales', amount: money(vat.vatableCents) },
+        { label: 'VAT Amount (12%)', amount: money(vat.vatCents) },
+        { label: 'VAT-Exempt Sales', amount: money(vat.exemptCents) },
+        { label: 'Zero-Rated Sales', amount: money(vat.zeroRatedCents) }
+      ]
+    })(),
+    signature: discounted ? `${discountName(sale)} signature: ____________________` : null
   }
 }
 
-const WIDTH = 40
-const pad = (left: string, right: string): string =>
+/** Characters per line of a text receipt (80 mm paper). */
+export const WIDTH = 40
+/** One text-receipt line with the right part flush right; wraps when both do not fit. */
+export const pad = (left: string, right: string): string =>
   left.length + right.length + 1 > WIDTH
     ? `${left}\n${right.padStart(WIDTH)}`
     : `${left}${' '.repeat(WIDTH - left.length - right.length)}${right}`
-const center = (text: string): string =>
+export const center = (text: string): string =>
   text
     .match(new RegExp(`.{1,${WIDTH}}(\\s|$)`, 'g'))!
     .map((line) => {
@@ -143,7 +185,7 @@ const center = (text: string): string =>
       return ' '.repeat(Math.max(0, Math.floor((WIDTH - value.length) / 2))) + value
     })
     .join('\n')
-const wrap = (text: string): string =>
+export const wrap = (text: string): string =>
   (text.match(new RegExp(`.{1,${WIDTH}}(\\s|$)|\\S+`, 'g')) ?? [text])
     .map((line) => line.trimEnd())
     .join('\n')
@@ -179,6 +221,9 @@ export function receiptPlainText(sale: SaleRecord): string {
     ),
     ...model.payment.map((row) => pad(row.label.toUpperCase(), row.amount)),
     dashed,
+    ...model.vat.map((row) => pad(row.label.toUpperCase(), row.amount)),
+    ...(model.signature ? ['', wrap(model.signature)] : []),
+    dashed,
     center(`*${model.number}*`),
     center('Thank you for your purchase!')
   ].join('\n')
@@ -192,14 +237,8 @@ export const escapeHtml = (value: unknown): string =>
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#39;')
 
-/** Print-ready 80 mm receipt for PDF export; same content and order as the on-screen receipt. */
-export function receiptHtml(sale: SaleRecord): string {
-  const model = receiptModel(sale)
-  const row = (label: string, amount: string, className = ''): string =>
-    `<div class="row ${className}"><span>${escapeHtml(label)}</span><span>${escapeHtml(amount)}</span></div>`
-  return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(model.number)}</title>
-<style>
-  @page { size: 80mm auto; margin: 4mm; }
+/** Styles shared by the 80 mm sales and delivery receipts. */
+export const receiptCss = `  @page { size: 80mm auto; margin: 4mm; }
   * { box-sizing: border-box; }
   body { margin: 0; font-family: 'Consolas', 'Courier New', monospace; font-size: 11px; color: #000; }
   .center { text-align: center; }
@@ -214,6 +253,17 @@ export function receiptHtml(sale: SaleRecord): string {
   .muted { font-size: 10px; }
   .total { font-weight: 700; font-size: 14px; }
   .wrap { word-break: break-all; }
+  .sign { margin-top: 18px; }
+  .sign .line { border-top: 1px solid #000; margin-top: 22px; padding-top: 2px; }`
+
+/** Print-ready 80 mm receipt for PDF export; same content and order as the on-screen receipt. */
+export function receiptHtml(sale: SaleRecord): string {
+  const model = receiptModel(sale)
+  const row = (label: string, amount: string, className = ''): string =>
+    `<div class="row ${className}"><span>${escapeHtml(label)}</span><span>${escapeHtml(amount)}</span></div>`
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(model.number)}</title>
+<style>
+${receiptCss}
 </style></head><body>
 <div class="center"><div class="logo">+</div><div class="name">${escapeHtml(business.name)}</div><div>${escapeHtml(business.address)}</div><div>${escapeHtml(businessContact)}</div><div>${escapeHtml(businessTin)}</div><div><b>SALES RECEIPT</b></div></div>
 <div class="rule"></div>
@@ -233,6 +283,9 @@ ${model.lines
 <div class="rule"></div>
 ${model.totals.map((item) => (item.strong ? `<div class="solid"></div>${row(item.label, item.amount, 'total')}` : row(item.label.toUpperCase(), item.amount))).join('')}
 ${model.payment.map((item) => row(item.label.toUpperCase(), item.amount)).join('')}
+<div class="rule"></div>
+${model.vat.map((item) => row(item.label.toUpperCase(), item.amount)).join('')}
+${model.signature ? `<div style="margin-top:10px">${escapeHtml(model.signature)}</div>` : ''}
 <div class="rule"></div>
 <div class="center">${barcodeSvg(model.number, 44)}<div>${escapeHtml(model.number)}</div><div style="margin-top:6px">Thank you for your purchase!</div></div>
 </body></html>`

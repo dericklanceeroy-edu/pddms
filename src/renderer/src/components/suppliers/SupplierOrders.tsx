@@ -23,12 +23,21 @@ import {
 } from '@renderer/data/supplierOrders'
 import { useAccount } from '@renderer/hooks/useAccount'
 import { useSupplierOrders } from '@renderer/hooks/useSupplierOrders'
+import { getSupplierCosts, type SupplierCost } from '@renderer/services/supplierOrders'
 import { filterInput, type InputRule } from '@shared/inputRules'
 import { EXPIRY_WARNING_DAYS, getExpiryStatus, localDate } from '@shared/inventory'
 import type { Supplier } from '@shared/types'
 import type { StockUnit } from '@shared/units'
 import { Link } from '@tanstack/react-router'
-import { useMemo, useRef, useState, type FormEvent, type ReactElement, type ReactNode } from 'react'
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactElement,
+  type ReactNode
+} from 'react'
 import {
   FiArchive,
   FiCheck,
@@ -431,8 +440,8 @@ export default function SupplierOrders({
                       ? 'Search suppliers'
                       : tab === 'orders'
                         ? 'Search order number or supplier'
-                        : tab === 'receiving'
-                          ? 'Search order, product or batch'
+                        : tab === 'receiving' || tab === 'history'
+                          ? 'Search PO, batch, supplier or product'
                           : 'Search procurement records'
                   }
                 />
@@ -632,7 +641,7 @@ function SupplierTable({
       {!isLoading && suppliers.length === 0 && (
         <EmptyState
           title="No suppliers to show."
-          description="Clear the search, or add a supplier with Add supplier above. Suppliers are needed before you can create a purchase order."
+          description="Clear the search, or add a supplier with Add Supplier above. Suppliers are needed before you can create a purchase order."
         />
       )}
       {isLoading && suppliers.length === 0 && <EmptyState title="Loading suppliers…" />}
@@ -691,7 +700,7 @@ function OrderTable({
             return (
               <tr key={order.id} className="hover:bg-brand-50/50 align-top transition-colors">
                 <td className="min-w-0 px-4 py-4">
-                  <p className="truncate font-semibold text-slate-900" title={order.orderNumber}>
+                  <p className="font-semibold break-all text-slate-900" title={order.orderNumber}>
                     {order.orderNumber}
                   </p>
                   <p className="text-xs text-slate-500">
@@ -777,7 +786,7 @@ function OrderTable({
                     {canReceive(order) && (
                       <button
                         type="button"
-                        className="primary-button h-10 text-xs"
+                        className="primary-button h-10 text-xs whitespace-nowrap"
                         onClick={() => receive(order)}
                       >
                         <FiTruck /> Receive Products
@@ -787,7 +796,7 @@ function OrderTable({
                       <>
                         <button
                           type="button"
-                          className="primary-button h-10 text-xs"
+                          className="primary-button h-10 text-xs whitespace-nowrap"
                           onClick={() => submit(order)}
                         >
                           <FiSend /> Submit Order
@@ -804,7 +813,7 @@ function OrderTable({
                     {cancellable && (
                       <button
                         type="button"
-                        className="secondary-button text-xs text-rose-700"
+                        className="secondary-button text-xs whitespace-nowrap text-rose-700"
                         onClick={() => cancel(order)}
                       >
                         <FiSlash /> Cancel Order
@@ -836,7 +845,7 @@ function OrderTable({
       {!isLoading && orders.length === 0 && (
         <EmptyState
           title="No purchase orders to show."
-          description="Clear the search or status filter, or use Create purchase order to order stock from a supplier."
+          description="Clear the search or status filter, or use Create Purchase Order to order stock from a supplier."
         />
       )}
       {isLoading && orders.length === 0 && <EmptyState title="Loading purchase orders…" />}
@@ -867,7 +876,7 @@ function AwaitingDelivery({
             className="flex min-w-0 items-start justify-between gap-3 rounded-md border border-slate-200 bg-white p-4"
           >
             <div className="min-w-0">
-              <p className="truncate font-semibold">{order.orderNumber}</p>
+              <p className="font-semibold break-all">{order.orderNumber}</p>
               <p className="truncate text-sm text-slate-600">{order.supplierName}</p>
               <p className="mt-1 text-xs text-slate-500">
                 {order.items.filter((item) => remaining(item) > 0).length} line(s) still to receive
@@ -878,7 +887,7 @@ function AwaitingDelivery({
               <StatusBadge status={order.status} />
               <button
                 type="button"
-                className="primary-button h-9 text-xs"
+                className="primary-button h-9 text-xs whitespace-nowrap"
                 onClick={() => receive(order)}
               >
                 <FiTruck /> Receive Products
@@ -967,7 +976,7 @@ function SupplierDialog({
   }
   return (
     <Modal
-      title={initial ? `Supplier: ${initial.organization}` : 'Add supplier'}
+      title={initial ? `Supplier: ${initial.organization}` : 'Add Supplier'}
       description={initial ? 'Review or update the supplier details.' : undefined}
       close={close}
       busy={saving}
@@ -1043,7 +1052,7 @@ function SupplierDialog({
         <DialogActions
           close={close}
           saving={saving}
-          label={initial ? 'Save changes' : 'Add supplier'}
+          label={initial ? 'Save Changes' : 'Add Supplier'}
         />
       </form>
     </Modal>
@@ -1057,6 +1066,8 @@ interface OrderLineDraft {
   quantity: string
   unitCost: string
   unit: StockUnit
+  /** True while the cost is the supplier's last agreed price, so a supplier change refills it. */
+  agreed?: boolean
 }
 
 function OrderDialog({
@@ -1115,6 +1126,24 @@ function OrderDialog({
   const [saving, setSaving] = useState(false)
   const [errors, setErrors] = useState<FieldErrors>({})
   const [error, setError] = useState('')
+  const [costs, setCosts] = useState<SupplierCost[]>([])
+  useEffect(() => {
+    // Note: Prefilling is a convenience; the order can still be typed in if prices fail to load.
+    void getSupplierCosts()
+      .then(setCosts)
+      .catch(() => setCosts([]))
+  }, [])
+  const agreedCost = (supplier: number, drugId: string): SupplierCost | undefined =>
+    costs.find((cost) => cost.supplierId === supplier && String(cost.drugId) === drugId)
+  /** Fills the cost of lines left empty or still on an agreed price from the given supplier. */
+  const prefill = (current: OrderLineDraft[], supplier: number): OrderLineDraft[] =>
+    current.map((line) => {
+      if (!line.drugId || (line.unitCost && !line.agreed)) return line
+      const cost = agreedCost(supplier, line.drugId)
+      return cost
+        ? { ...line, unitCost: String(cost.unitCost), agreed: true }
+        : { ...line, unitCost: line.agreed ? '' : line.unitCost, agreed: false }
+    })
   const minimumDate = initial ? initial.orderedAt.slice(0, 10) : localDate()
   const total = lines.reduce((sum, line) => {
     const value = Number(line.quantity) * Number(line.unitCost)
@@ -1126,9 +1155,14 @@ function OrderDialog({
     field: keyof Omit<OrderLineDraft, 'key'>,
     value: string
   ): void => {
-    setLines((current) =>
-      current.map((item, itemIndex) => (itemIndex === index ? { ...item, [field]: value } : item))
-    )
+    setLines((current) => {
+      const next = current.map((item, itemIndex) =>
+        itemIndex === index
+          ? { ...item, [field]: value, ...(field === 'unitCost' ? { agreed: false } : {}) }
+          : item
+      )
+      return field === 'drugId' ? prefill(next, supplierId) : next
+    })
     setErrors((current) => ({ ...current, [`items.${index}.${field}`]: '' }))
     setError('')
   }
@@ -1167,7 +1201,7 @@ function OrderDialog({
 
   return (
     <Modal
-      title={initial ? `Edit ${initial.orderNumber}` : 'Create purchase order'}
+      title={initial ? `Edit ${initial.orderNumber}` : 'Create Purchase Order'}
       description={
         initial
           ? 'Draft orders can be changed until they are submitted to the supplier.'
@@ -1195,6 +1229,7 @@ function OrderDialog({
               value={supplierId}
               onChange={(event) => {
                 setSupplierId(Number(event.target.value))
+                setLines((current) => prefill(current, Number(event.target.value)))
                 setErrors((current) => ({ ...current, supplierId: '' }))
               }}
             >
@@ -1330,7 +1365,7 @@ function OrderDialog({
                       {line.drugId ? `${Math.max(1, piecesPerBox)} pcs/box` : '—'}
                     </span>
                     <input
-                      min="0"
+                      min="0.01"
                       step="0.01"
                       type="number"
                       inputMode="decimal"
@@ -1356,6 +1391,13 @@ function OrderDialog({
                       <FiX />
                     </button>
                   </div>
+                  {line.drugId && agreedCost(supplierId, line.drugId) && (
+                    <p className="mt-1 px-1 text-xs text-slate-600">
+                      Last agreed price with this supplier:{' '}
+                      {currency.format(agreedCost(supplierId, line.drugId)!.unitCost)} per box
+                      {line.agreed ? ' (filled in; change it if the price changed)' : ''}.
+                    </p>
+                  )}
                   {lineError && (
                     <p className="mt-1 px-1 text-xs font-medium text-rose-700">{lineError}</p>
                   )}
@@ -1380,7 +1422,7 @@ function OrderDialog({
         <DialogActions
           close={close}
           saving={saving}
-          label={initial ? 'Save changes' : 'Create purchase order'}
+          label={initial ? 'Save Changes' : 'Create Purchase Order'}
           disabled={suppliers.length === 0 || products.length === 0}
         />
       </form>
@@ -1393,6 +1435,7 @@ interface ReceiveLine {
   batchNumber: string
   sellPrice: string
   boxSellPrice: string
+  wholesaleBoxPrice: string
   expiresAt: string
 }
 
@@ -1423,10 +1466,12 @@ function ReceiveDialog({
         // Note: Suggest the product's current selling price; staff confirm it per delivery.
         const latest = products
           .find((product) => product.id === item.drugId)
-          ?.batches.reduce<{ id: number; sellPrice: number; boxSellPrice: number | null } | null>(
-            (best, batch) => (!best || batch.id > best.id ? batch : best),
-            null
-          )
+          ?.batches.reduce<{
+            id: number
+            sellPrice: number
+            boxSellPrice: number | null
+            wholesaleBoxPrice: number | null
+          } | null>((best, batch) => (!best || batch.id > best.id ? batch : best), null)
         return [
           item.id,
           {
@@ -1434,6 +1479,8 @@ function ReceiveDialog({
             batchNumber: '',
             sellPrice: latest ? String(latest.sellPrice) : '',
             boxSellPrice: latest?.boxSellPrice != null ? String(latest.boxSellPrice) : '',
+            wholesaleBoxPrice:
+              latest?.wholesaleBoxPrice != null ? String(latest.wholesaleBoxPrice) : '',
             expiresAt: ''
           }
         ]
@@ -1467,7 +1514,8 @@ function ReceiveDialog({
         ...current[item.id],
         expiresAt: match.expiresAt.slice(0, 10),
         sellPrice: String(match.sellPrice),
-        boxSellPrice: match.boxSellPrice != null ? String(match.boxSellPrice) : ''
+        boxSellPrice: match.boxSellPrice != null ? String(match.boxSellPrice) : '',
+        wholesaleBoxPrice: match.wholesaleBoxPrice != null ? String(match.wholesaleBoxPrice) : ''
       }
     }))
     setErrors((current) => ({
@@ -1538,6 +1586,9 @@ function ReceiveDialog({
           boxSellPrice: lines[item.id].boxSellPrice.trim()
             ? toNumber(lines[item.id].boxSellPrice)
             : null,
+          wholesaleBoxPrice: lines[item.id].wholesaleBoxPrice.trim()
+            ? toNumber(lines[item.id].wholesaleBoxPrice)
+            : null,
           expiresAt: lines[item.id].expiresAt
         }))
       })
@@ -1577,7 +1628,7 @@ function ReceiveDialog({
 
   return (
     <Modal
-      title={`Receive products for ${order.orderNumber}`}
+      title={`Receive Products for ${order.orderNumber}`}
       description={`${order.supplierName}. Enter only what physically arrived. Inventory, batches and the order status are updated together when you save.`}
       close={close}
       size="xl"
@@ -1668,6 +1719,7 @@ function ReceiveDialog({
                   Price per piece (₱)<span className="text-rose-600">*</span>
                 </th>
                 <th className="w-32 px-2 py-2">Price per Box (₱)</th>
+                <th className="w-32 px-2 py-2">Wholesale per Box (₱)</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -1802,6 +1854,24 @@ function ReceiveDialog({
                         }
                       />
                     )}
+                    {cell(
+                      item.id,
+                      'wholesaleBoxPrice',
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        inputMode="decimal"
+                        className="field mt-0"
+                        placeholder="Same as retail"
+                        aria-label={`Wholesale price per box for ${item.productName}`}
+                        aria-invalid={errors[`${item.id}.wholesaleBoxPrice`] ? true : undefined}
+                        value={line.wholesaleBoxPrice}
+                        onChange={(event) =>
+                          updateLine(item.id, 'wholesaleBoxPrice', event.target.value)
+                        }
+                      />
+                    )}
                   </tr>
                 )
               })}
@@ -1812,9 +1882,10 @@ function ReceiveDialog({
           Set “Received now” to 0 for products that did not arrive; they stay open for a later
           delivery. Batch number, expiry date and price per piece are required for every product you
           receive. Boxes received are added to stock as pieces. Leave the box price empty to sell a
-          box at the piece price × pieces per box. Picking an existing batch of this product fills
-          in its expiry date and price; stock is added to that batch only when product, supplier,
-          cost, price and expiry match.
+          box at the piece price × pieces per box. The wholesale price is what pharmacy clients pay
+          per box; leave it empty to charge them the retail box price. Picking an existing batch of
+          this product fills in its expiry date and price; stock is added to that batch only when
+          product, supplier, cost, price and expiry match.
         </p>
         <FormError message={error} />
         <DialogActions close={close} saving={saving} label="Receive Products" />

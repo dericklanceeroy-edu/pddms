@@ -226,3 +226,19 @@ export async function createSupplierPayment(values: SupplierPaymentValues): Prom
   }
   return result.payment
 }
+
+export interface SupplierCost {
+  supplierId: number
+  drugId: number
+  unitCost: number
+  updatedAt: string
+}
+
+/** Last agreed cost per box for every supplier and product, prefilled on new orders. */
+export async function getSupplierCosts(): Promise<SupplierCost[]> {
+  const result = (await window.electron.ipcRenderer.invoke(
+    channels.purchaseOrder.getSupplierCosts
+  )) as { success: boolean; costs?: SupplierCost[]; error?: string }
+  if (!result.success) throw new Error(result.error ?? 'Unable to load supplier prices.')
+  return result.costs ?? []
+}

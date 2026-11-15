@@ -33,7 +33,7 @@ export default function FormField({
           </span>
         ) : (
           showOptional && (
-            <span className="ml-1 text-xs font-normal text-slate-400">(optional)</span>
+            <span className="ml-1 text-xs font-normal text-slate-600">(optional)</span>
           )
         )}
       </label>

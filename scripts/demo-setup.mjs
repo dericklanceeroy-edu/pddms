@@ -34,6 +34,7 @@ export const demoAccounts = [
     role: 'master',
     fullName: 'Demo Admin',
     email: 'demo.admin@example.com',
+    phone: '09170000301',
     username: 'demo.admin',
     password: 'DemoAdmin#2026'
   },
@@ -41,6 +42,7 @@ export const demoAccounts = [
     role: 'staff',
     fullName: 'Demo Staff',
     email: 'demo.staff@example.com',
+    phone: '09170000302',
     username: 'demo.staff',
     password: 'DemoStaff#2026'
   },
@@ -48,6 +50,7 @@ export const demoAccounts = [
     role: 'cashier',
     fullName: 'Demo Cashier',
     email: 'demo.cashier@example.com',
+    phone: '09170000303',
     username: 'demo.cashier',
     password: 'DemoCashier#2026'
   }
@@ -197,6 +200,7 @@ async function seed() {
     await call(channels.setup.createMaster, {
       fullName: admin.fullName,
       email: admin.email,
+      phone: admin.phone,
       username: admin.username,
       password: admin.password
     })
@@ -207,6 +211,7 @@ async function seed() {
         role: 'staff',
         fullName: 'Demo Blocked User',
         email: 'demo.blocked@example.com',
+        phone: '09170000304',
         username: 'demo.blocked',
         password: randomUUID()
       }
@@ -453,20 +458,27 @@ async function seed() {
     // Retail sales by the cashier, including Senior Citizen and PWD discounts.
     await call(channels.auth.signOut)
     await signIn(cashier)
-    const sell = async (customerId, items) => {
+    // Prescription (Rx) medicines need the prescribing doctor's details at checkout.
+    const rx = (prescriptionNumber) => ({
+      prescriberName: 'Dr. Demo Prescriber',
+      prescriberLicense: 'PRC-0000000',
+      prescriptionNumber
+    })
+    const sell = async (customerId, items, prescription = null) => {
       const { totals } = await call(channels.sales.quote, { customerId, items })
       await call(channels.sales.checkout, {
         requestId: randomUUID(),
         customerId,
         items,
         expectedTotalCents: totals.totalCents,
-        cashCents: Math.ceil(totals.totalCents / 10000) * 10000
+        cashCents: Math.ceil(totals.totalCents / 10000) * 10000,
+        prescription
       })
     }
     await sell(null, [line('FVX-2401', 10), line('VTC-2402', 5)])
-    await sell(customers.senior.id, [line('LSD-2408', 30), line('GLD-2409', 14)])
-    await sell(customers.pwd.id, [line('AMX-2409', 21)])
-    await sell(customers.walkIn.id, [line('BRX-2410', 1)])
+    await sell(customers.senior.id, [line('LSD-2408', 30), line('GLD-2409', 14)], rx('RX-DEMO-0001'))
+    await sell(customers.pwd.id, [line('AMX-2409', 21)], rx('RX-DEMO-0002'))
+    await sell(customers.walkIn.id, [line('BRX-2410', 1)], rx(''))
 
     // Receivable payments are recorded by the Admin (staff cannot view balances).
     await call(channels.auth.signOut)

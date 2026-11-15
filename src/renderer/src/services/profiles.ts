@@ -6,6 +6,7 @@ import type {
 } from '@renderer/data/profiles'
 import { channels } from '@shared/constants'
 import {
+  batchWholesalePriceSchema,
   customerUpdateSchema,
   newCustomerSchema,
   newDrugSchema,
@@ -61,6 +62,7 @@ const mapProduct = (
   batches: product.batches.map((batch) => ({
     ...batch,
     boxSellPrice: batch.boxSellPrice ?? null,
+    wholesaleBoxPrice: batch.wholesaleBoxPrice ?? null,
     expiresAt: String(batch.expiresAt)
   }))
 })
@@ -143,7 +145,8 @@ export async function updateProduct(id: number, product: ItemDraft): Promise<Ite
     isPrescribed: product.prescriptionRequired,
     isControlled: product.controlled,
     reorderLevel: product.reorderLevel,
-    piecesPerBox: product.piecesPerBox
+    piecesPerBox: product.piecesPerBox,
+    ...(product.confirmPiecesChange ? { confirmPiecesChange: true } : {})
   })
   const result = (await window.electron.ipcRenderer.invoke(channels.product.updateOneById, id, {
     ...payload
@@ -160,4 +163,14 @@ export async function removeProduct(id: number): Promise<void> {
     id
   )) as Result<never>
   if (!result.success) throw new Error(result.error ?? 'Unable to remove the product.')
+}
+
+/** Sets or clears the price of one box for pharmacy clients on one batch. */
+export async function setWholesalePrice(batchId: number, price: number | null): Promise<void> {
+  const payload = validate(batchWholesalePriceSchema, { batchId, wholesaleBoxPrice: price })
+  const result = (await window.electron.ipcRenderer.invoke(
+    channels.product.setWholesalePrice,
+    payload
+  )) as Result<never>
+  if (!result.success) throw new Error(result.error ?? 'Unable to save the wholesale price.')
 }

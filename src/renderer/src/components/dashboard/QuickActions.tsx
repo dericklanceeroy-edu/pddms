@@ -126,7 +126,7 @@ export default function QuickActions({ view }: { view: DashboardView }): ReactEl
           <span className="min-w-0">
             <span className="block text-sm font-semibold">{label}</span>
             <span
-              className={`block text-xs leading-5 ${index === 0 ? 'text-brand-50' : 'text-slate-500'}`}
+              className={`block text-xs leading-5 ${index === 0 ? 'text-white' : 'text-slate-600'}`}
             >
               {description}
             </span>

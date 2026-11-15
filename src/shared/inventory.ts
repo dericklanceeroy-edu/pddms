@@ -4,6 +4,10 @@ export type ExpiryStatus = 'expired' | 'near-expiry' | 'valid' | 'unknown'
 export const localDate = (value = new Date()): string =>
   `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`
 
+/** Local date the given number of years from today, used to cap dates typed far in the future. */
+export const yearsFromToday = (years: number, today = new Date()): string =>
+  localDate(new Date(today.getFullYear() + years, today.getMonth(), today.getDate()))
+
 export function getExpiryStatus(expiresAt: string, now = new Date()): ExpiryStatus {
   const value = expiresAt.slice(0, 10)
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return 'unknown'

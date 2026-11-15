@@ -95,6 +95,7 @@ if (!process.versions.electron) {
           await invoke(channels.setup.createMaster, {
             fullName: 'Desktop Admin',
             email: 'desktop.admin@example.com',
+            phone: '09170000701',
             username: 'desktop-admin',
             password: 'DisposableTest123'
           })
@@ -109,6 +110,7 @@ if (!process.versions.electron) {
           await invoke(channels.account.createOne, {
             fullName: 'Desktop Staff',
             email: 'desktop.staff@example.com',
+            phone: '09170000702',
             username: 'desktop-staff',
             password: 'DisposableTest123',
             role: 'staff'

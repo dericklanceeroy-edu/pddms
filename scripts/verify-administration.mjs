@@ -111,6 +111,7 @@ if (!process.env.ADMIN_TEST_PHASE) {
       const master = {
         fullName: 'Audit Admin',
         email: 'audit.admin@example.com',
+        phone: '09170000501',
         username: 'audit-admin',
         password: 'SecurePass123'
       }
@@ -123,23 +124,33 @@ if (!process.env.ADMIN_TEST_PHASE) {
       await bad(channels.setup.createMaster, {
         fullName: 'Second Admin',
         email: 'second.admin@example.com',
+        phone: '09170000502',
         username: 'other-admin',
         password: 'SecurePass123'
       })
       const input = {
         fullName: 'Audit Staff',
         email: 'audit.staff@example.com',
+        phone: '09170000503',
         username: 'audit-staff',
         password: 'SecurePass123',
         role: 'staff'
       }
       await bad(channels.account.createOne, { ...input, email: undefined })
       await bad(channels.account.createOne, { ...input, email: 'audit staff@example' })
+      await bad(channels.account.createOne, { ...input, phone: undefined })
+      await bad(channels.account.createOne, { ...input, password: 'aaaaaaaa' })
       const staff = (await ok(channels.account.createOne, input)).account
       safe(staff)
       assert.equal(staff.email, input.email)
       assert.ok(await verify((await account(input.username)).password, input.password))
       await bad(channels.account.createOne, input)
+      // Two accounts cannot share one email address, whatever the letter case.
+      await bad(channels.account.createOne, {
+        ...input,
+        username: 'other-staff',
+        email: 'AUDIT.STAFF@example.com'
+      })
       await bad(channels.account.createOne, { ...input, username: 'different', role: 'superuser' })
       await bad(channels.account.createOne, { ...input, username: '', password: 'short' })
       await bad(channels.account.createOne, { ...input, username: 'newmaster', role: 'master' })
@@ -250,7 +261,11 @@ if (!process.env.ADMIN_TEST_PHASE) {
       assert.equal(state.session, undefined)
       await login()
       const disposable = (
-        await ok(channels.account.createOne, { ...input, username: 'delete-user' })
+        await ok(channels.account.createOne, {
+          ...input,
+          username: 'delete-user',
+          email: 'delete.user@example.com'
+        })
       ).account
       await ok(channels.account.removeOneById, disposable.id)
       assert.ok(
@@ -346,7 +361,11 @@ if (!process.env.ADMIN_TEST_PHASE) {
         .where('id', '=', admin.id)
         .execute()
       await writeFile(join(invoiceDirectory(), 'backup-test.pdf'), 'modified invoice')
-      await ok(channels.account.createOne, { ...input, username: 'after-backup' })
+      await ok(channels.account.createOne, {
+        ...input,
+        username: 'after-backup',
+        email: 'after.backup@example.com'
+      })
       const afterEvent = await db
         .selectFrom('auditLogs')
         .selectAll()
@@ -428,14 +447,19 @@ if (!process.env.ADMIN_TEST_PHASE) {
       safety.close()
       await login()
       await ok(channels.procurement.openInvoice, invoice.id)
-      await ok(channels.account.createOne, { ...input, username: 'post-restore' })
-      // A backup made before account emails and pharmacy clients existed is upgraded on restore,
-      // keeping its records; the backup folder itself is left unchanged.
+      await ok(channels.account.createOne, {
+        ...input,
+        username: 'post-restore',
+        email: 'post.restore@example.com'
+      })
+      // A backup made before account emails, phones and pharmacy clients existed is upgraded on
+      // restore, keeping its records; the backup folder itself is left unchanged.
       const older = join(root, 'older-version-backup')
       await cp(backup.directory, older, { recursive: true })
       const olderDatabase = new SQLite(join(older, 'database.sqlite'))
       olderDatabase.exec(
-        'ALTER TABLE accounts DROP COLUMN email; ALTER TABLE customers DROP COLUMN contact_person; ALTER TABLE customers DROP COLUMN client_type'
+        'ALTER TABLE accounts DROP COLUMN phone; ALTER TABLE accounts DROP COLUMN email; ' +
+          'ALTER TABLE customers DROP COLUMN contact_person; ALTER TABLE customers DROP COLUMN client_type'
       )
       olderDatabase.close()
       const olderManifest = JSON.parse(await readFile(join(older, 'manifest.json'), 'utf8'))

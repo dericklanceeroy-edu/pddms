@@ -67,7 +67,7 @@ export default function SalesCategoryChart({
             <div className="absolute inset-0 rounded-full" style={{ background: gradient }} />
             <div className="absolute inset-5 grid place-items-center rounded-full border border-slate-200 bg-white text-center shadow-inner">
               <div>
-                <p className="text-[0.65rem] font-medium tracking-wide text-slate-400 uppercase">
+                <p className="text-xs font-medium tracking-wide text-slate-600 uppercase">
                   Total sales
                 </p>
                 <p className="mt-1 text-lg font-semibold tracking-tight text-slate-950">
@@ -93,7 +93,7 @@ export default function SalesCategoryChart({
                 <span className="font-semibold whitespace-nowrap text-slate-800 tabular-nums">
                   {currencyFormatter.format(category.salesAmount)}
                 </span>
-                <span className="w-8 text-right text-slate-400 tabular-nums">
+                <span className="w-8 text-right text-slate-600 tabular-nums">
                   {category.sharePercentage}%
                 </span>
               </div>

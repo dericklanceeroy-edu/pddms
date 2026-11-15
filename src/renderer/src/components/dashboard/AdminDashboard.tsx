@@ -116,7 +116,7 @@ export default function AdminDashboard(): ReactElement {
           <section id="overview" className="scroll-mt-28">
             <div className="page-intro">
               <div className="page-intro-content">
-                <h2 className="page-title">{views[view].title}</h2>
+                <h1 className="page-title">{views[view].title}</h1>
                 <p className="page-subtitle">{views[view].subtitle}</p>
               </div>
             </div>

@@ -3,11 +3,11 @@ import { findOneById } from '@main/account/repository'
 import { state } from '@main/api'
 import { windowDialog } from '@main/api/dialogs'
 import { ipcMain } from '@main/api/ipc'
+import { receiptPdf } from '@main/api/receipt-pdf'
 import { channels, resources } from '@shared/constants'
 import { receiptHtml, receiptNumber, receiptPlainText } from '@shared/receipt'
 import { checkoutSchema, saleDraftSchema, SalesError } from '@shared/sales'
 import { describeIssue } from '@shared/validation'
-import { BrowserWindow } from 'electron'
 import { writeFile } from 'node:fs/promises'
 import z from 'zod'
 import { checkout, getSale, history, quote } from './repository'
@@ -82,24 +82,6 @@ ipcMain.handle(channels.sales.getOne, async (_, id: unknown) => {
     return failure(error)
   }
 })
-/** Renders the 80 mm receipt to PDF in a hidden window with scripts disabled. */
-async function receiptPdf(html: string): Promise<Buffer> {
-  const renderer = new BrowserWindow({
-    show: false,
-    webPreferences: { javascript: false, sandbox: true, contextIsolation: true }
-  })
-  try {
-    await renderer.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`)
-    // Note: 80 mm paper; the page is tall enough for long carts and the printer trims the rest.
-    return await renderer.webContents.printToPDF({
-      pageSize: { width: 3.15, height: 11.69 },
-      margins: { marginType: 'none' },
-      printBackground: true
-    })
-  } finally {
-    renderer.destroy()
-  }
-}
 ipcMain.handle(channels.sales.exportReceipt, async (event, id: unknown) => {
   try {
     const account = await session(true)

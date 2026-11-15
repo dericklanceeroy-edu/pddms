@@ -226,7 +226,13 @@ if (!process.env.REPORT_TEST_PHASE) {
             items,
             customerId,
             expectedTotalCents: total,
-            cashCents: cash
+            cashCents: cash,
+            // Report Alpha is Rx and Report Beta is controlled, so each sale carries a prescription.
+            prescription: {
+              prescriberName: 'Dr. Report Prescriber',
+              prescriberLicense: 'PRC-1234567',
+              prescriptionNumber: 'RX-REPORT-1'
+            }
           })
         ).sale
       const sale = await checkout([line(0, 2), line(1, 1)], senior.id, 20000, 25000)

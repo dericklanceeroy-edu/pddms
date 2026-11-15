@@ -61,7 +61,8 @@ export const channels = {
     getAll: 'product.getAll',
     createOne: 'product.createOne',
     updateOneById: 'product.updateOneById',
-    removeOneById: 'product.removeOneById'
+    removeOneById: 'product.removeOneById',
+    setWholesalePrice: 'product.setWholesalePrice'
   },
   supplier: {
     getAll: 'supplier.getAll',
@@ -75,7 +76,8 @@ export const channels = {
     updateOneById: 'purchaseOrder.updateOneById',
     updateStatusById: 'purchaseOrder.updateStatusById',
     recordDeliveryById: 'purchaseOrder.recordDeliveryById',
-    removeOneById: 'purchaseOrder.removeOneById'
+    removeOneById: 'purchaseOrder.removeOneById',
+    getSupplierCosts: 'purchaseOrder.getSupplierCosts'
   },
   procurement: {
     getRecords: 'procurement.getRecords',

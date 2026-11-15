@@ -50,9 +50,10 @@ function definition(filter: ReportFilter): Definition {
   const period = sql`s.created_at >= ${start} AND s.created_at < ${end}`
   const retail = sql`SELECT s.id, s.reference, s.created_at, s.customer_name, s.cashier_name,
     s.subtotal_cents, s.vat_exemption_cents, s.discount_cents, s.discount_type, s.total_cents, s.cash_cents, s.change_cents,
+    s.payment_method, s.payment_reference,
     COALESCE((SELECT SUM(quantity * pieces_per_unit) FROM sale_items WHERE sale_id = s.id), 0) AS quantity,
     (SELECT GROUP_CONCAT(product_name || ' [batch ' || batch_number || '] × ' || quantity || CASE WHEN unit = 'box' THEN ' box(es) of ' || pieces_per_unit ELSE ' pc(s)' END || ' @ PHP ' || printf('%.2f', unit_price_cents / 100.0), '; ') FROM sale_items WHERE sale_id = s.id) AS products,
-    s.reference || ' ' || s.customer_name || ' ' || s.cashier_name AS search_text
+    s.reference || ' ' || s.customer_name || ' ' || s.cashier_name || ' ' || s.payment_method || ' ' || COALESCE(s.payment_reference, '') AS search_text
     FROM sales s WHERE ${period}`
   if (filter.kind === 'sales' || filter.kind === 'discounts')
     return {
@@ -72,11 +73,13 @@ function definition(filter: ReportFilter): Definition {
         c('vatExemptionCents', 'VAT exemption', 'money'),
         c('discountCents', 'Discount', 'money'),
         c('totalCents', 'Final total', 'money'),
-        c('cashCents', 'Cash tendered', 'money'),
+        c('paymentMethod', 'Payment method'),
+        c('paymentReference', 'Payment reference'),
+        c('cashCents', 'Amount received', 'money'),
         c('changeCents', 'Change', 'money')
       ],
       notes: [
-        'Completed retail sales only. Cash tendered includes change; revenue is the saved final total. Discount/VAT amounts are saved sale snapshots.'
+        'Completed retail sales only. Amount received is cash tendered (including change) or the exact GCash/Maya transfer; revenue is the saved final total. Discount/VAT amounts are saved sale snapshots.'
       ],
       sums: [
         { key: 'totalCents', label: 'Retail revenue', format: 'money' },
@@ -198,10 +201,11 @@ function definition(filter: ReportFilter): Definition {
       base: sql`SELECT s.id, s.reference, s.created_at AS occurred_at, s.customer_name, 'Retail' AS channel,
       i.drug_id AS product_id, i.product_name AS product, i.batch_number, i.quantity * i.pieces_per_unit AS quantity,
       d.is_prescribed, d.is_controlled, i.quantity * i.unit_price_cents AS gross_cents,
+      s.prescriber_name, s.prescriber_license, s.prescription_number,
       s.reference || ' ' || s.customer_name || ' ' || i.product_name AS search_text
       FROM sale_items i JOIN sales s ON s.id = i.sale_id JOIN drugs d ON d.id = i.drug_id WHERE ${period} AND (d.is_prescribed = 1 OR d.is_controlled = 1)
       UNION ALL SELECT w.id, w.reference, w.delivered_at, w.customer_name, 'Wholesale', i.drug_id, i.product_name, i.batch_number, i.quantity * i.pieces_per_unit,
-      d.is_prescribed, d.is_controlled, i.quantity * i.unit_price_cents, w.reference || ' ' || w.customer_name || ' ' || i.product_name
+      d.is_prescribed, d.is_controlled, i.quantity * i.unit_price_cents, NULL, NULL, NULL, w.reference || ' ' || w.customer_name || ' ' || i.product_name
       FROM wholesale_order_items i JOIN wholesale_orders w ON w.id = i.order_id JOIN drugs d ON d.id = i.drug_id WHERE w.status = 'delivered' AND w.delivered_at >= ${start} AND w.delivered_at < ${end} AND (d.is_prescribed = 1 OR d.is_controlled = 1)`,
       columns: [
         c('channel', 'Channel'),
@@ -213,10 +217,13 @@ function definition(filter: ReportFilter): Definition {
         c('quantity', 'Pieces'),
         c('isPrescribed', 'Prescription flag (current)'),
         c('isControlled', 'Controlled flag (current)'),
-        c('grossCents', 'Before-discount line value', 'money')
+        c('grossCents', 'Before-discount line value', 'money'),
+        c('prescriberName', 'Prescribing doctor'),
+        c('prescriberLicense', 'PRC license'),
+        c('prescriptionNumber', 'Prescription no.')
       ],
       notes: [
-        'Uses current persisted prescription/controlled flags. Historical classification snapshots and prescription documents are not stored; this is not a regulatory compliance certification. Line amounts are before sale-level discounts.'
+        'Uses current persisted prescription/controlled flags. Retail sales record the prescribing doctor, PRC license and prescription number from checkout (sales before this was added show none). This is not a regulatory compliance certification. Line amounts are before sale-level discounts.'
       ],
       sums: [{ key: 'quantity', label: 'Pieces' }],
       sort: sql`occurred_at DESC, channel, id DESC, product_id, batch_number`

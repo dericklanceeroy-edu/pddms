@@ -32,6 +32,17 @@ export async function findOneByUsername(username: string): Promise<Account | nul
   )
 }
 
+/** Another account already using this email, ignoring letter case. */
+export async function findOneByEmail(email: string): Promise<Account | null> {
+  return (
+    (await db
+      .selectFrom('accounts')
+      .selectAll()
+      .where(sql`lower(email)`, '=', email.toLowerCase())
+      .executeTakeFirst()) ?? null
+  )
+}
+
 export async function insertMasterIfEmpty(data: NewAccount): Promise<Account | null> {
   return await db.transaction().execute(async (transaction) => {
     const result = await transaction
