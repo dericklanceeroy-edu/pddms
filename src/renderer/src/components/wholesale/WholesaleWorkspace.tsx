@@ -21,7 +21,7 @@ import {
 import { useProfileStore } from '@renderer/stores/useProfileStore'
 import { getExpiryStatus, isBatchSellable, localDate } from '@shared/inventory'
 import { calculateSale, money, priceToCents, type CartLine } from '@shared/sales'
-import { paymentMethods } from '@shared/schemas'
+import { paymentMethodLabel, paymentMethods } from '@shared/schemas'
 import { availableUnits, quantityLabel, unitSellPrice, unitWord } from '@shared/units'
 import { FieldValidationError } from '@shared/validation'
 import {
@@ -41,7 +41,7 @@ import {
   type ReactElement,
   type ReactNode
 } from 'react'
-import { FiCheckCircle, FiPlus, FiSearch, FiTrash2 } from 'react-icons/fi'
+import { FiCheckCircle, FiChevronRight, FiPlus, FiSearch, FiTrash2 } from 'react-icons/fi'
 
 /** Wholesale lines are always whole boxes. */
 type BoxLine = CartLine & { unit: 'box' }
@@ -223,6 +223,13 @@ export default function WholesaleWorkspace(): ReactElement {
             >
               Refresh
             </button>
+            <Link
+              to="/wholesale/clients/$clientId"
+              params={{ clientId: 'new' }}
+              className="secondary-button"
+            >
+              <FiPlus aria-hidden="true" /> Add Pharmacy Client
+            </Link>
             <button className="primary-button" disabled={busy} onClick={() => setCreating(true)}>
               <FiPlus aria-hidden="true" /> New Wholesale Order
             </button>
@@ -424,6 +431,7 @@ export default function WholesaleWorkspace(): ReactElement {
             </button>
           )}
         </section>
+        <PharmacyClients clients={clients} />
       </div>
       {creating && (
         <OrderForm
@@ -683,9 +691,8 @@ function OrderForm({
               No pharmacy clients yet. Wholesale orders are for other pharmacies, not retail
               customers.{' '}
               <Link
-                to="/customers/$customerId"
-                params={{ customerId: 'new' }}
-                search={{ type: 'pharmacy' }}
+                to="/wholesale/clients/$clientId"
+                params={{ clientId: 'new' }}
                 className="font-semibold underline"
               >
                 Add a Pharmacy Client
@@ -716,6 +723,19 @@ function OrderForm({
                 ))}
               </select>
               {fields.error('customerId')}
+              {clients.length > 0 && (
+                <span className="mt-1 block text-xs font-normal text-slate-500">
+                  Not listed?{' '}
+                  <Link
+                    to="/wholesale/clients/$clientId"
+                    params={{ clientId: 'new' }}
+                    className="text-brand-700 font-semibold underline"
+                  >
+                    Add a Pharmacy Client
+                  </Link>{' '}
+                  first, then start the order.
+                </span>
+              )}
             </Label>
             <Label text="Delivery Address" required>
               <input
@@ -1404,7 +1424,7 @@ function OrderDetails({
                       <option value="">Select a method</option>
                       {paymentMethods.map((value) => (
                         <option key={value} value={value}>
-                          {value}
+                          {paymentMethodLabel(value)}
                         </option>
                       ))}
                     </select>
@@ -1465,7 +1485,7 @@ function OrderDetails({
                     <tr key={item.id}>
                       <td className="px-3 py-2.5">{item.paidAt}</td>
                       <td className="max-w-52 px-3 py-2.5 break-all">{item.reference}</td>
-                      <td className="px-3 py-2.5">{item.method}</td>
+                      <td className="px-3 py-2.5">{paymentMethodLabel(item.method)}</td>
                       <td className="px-3 py-2.5 tabular-nums">{money(item.amountCents)}</td>
                       <td className="max-w-64 px-3 py-2.5 break-words">{item.notes}</td>
                       <td className="px-3 py-2.5">
@@ -1547,5 +1567,89 @@ function HandledBy({ order }: { order: WholesaleDetails }): ReactElement {
         </div>
       ))}
     </dl>
+  )
+}
+
+/**
+ * Pharmacy clients are other pharmacies that buy by the box. They are kept apart from retail
+ * customers, so they are added and edited here rather than under Customers.
+ */
+function PharmacyClients({ clients }: { clients: CustomerProfile[] }): ReactElement {
+  const [query, setQuery] = useState('')
+  const shown = useMemo(() => {
+    const search = query.trim().toLowerCase()
+    return clients.filter(
+      (client) =>
+        !search ||
+        `${client.fullName} ${client.contactPerson} ${client.phone} ${client.address}`
+          .toLowerCase()
+          .includes(search)
+    )
+  }, [clients, query])
+  return (
+    <section className="panel space-y-4 p-5 sm:p-6">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h3 className="section-title">Pharmacy Clients ({clients.length})</h3>
+          <p className="section-subtitle">
+            Other pharmacies that order by the box. Open one to edit its contact person, phone or
+            delivery address.
+          </p>
+        </div>
+        <Link
+          to="/wholesale/clients/$clientId"
+          params={{ clientId: 'new' }}
+          className="secondary-button"
+        >
+          <FiPlus aria-hidden="true" /> Add Pharmacy Client
+        </Link>
+      </div>
+      {clients.length > 0 && (
+        <label className="field-label block max-w-xl">
+          Find a Client
+          <span className="relative mt-1.5 block font-normal">
+            <FiSearch
+              aria-hidden="true"
+              className="absolute top-1/2 left-3.5 -translate-y-1/2 text-slate-400"
+            />
+            <input
+              className="field pl-10"
+              maxLength={100}
+              value={query}
+              placeholder="Pharmacy name, contact person or phone"
+              onChange={(event) => setQuery(event.target.value)}
+            />
+          </span>
+        </label>
+      )}
+      <div className="divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200">
+        {shown.map((client) => (
+          <Link
+            key={client.id}
+            to="/wholesale/clients/$clientId"
+            params={{ clientId: String(client.id) }}
+            className="group flex items-center gap-4 bg-white px-4 py-3 transition hover:bg-slate-50"
+          >
+            <div className="min-w-0 flex-1">
+              <p className="truncate font-semibold text-slate-900">{client.fullName}</p>
+              <p className="truncate text-sm text-slate-500">
+                {[client.contactPerson, client.phone, client.address].filter(Boolean).join(' · ')}
+              </p>
+            </div>
+            <FiChevronRight
+              aria-hidden="true"
+              className="group-hover:text-brand-700 shrink-0 text-slate-400"
+            />
+          </Link>
+        ))}
+        {shown.length === 0 && (
+          <p className="bg-white p-6 text-center text-sm text-slate-500">
+            {clients.length
+              ? 'No pharmacy clients match this search.'
+              : 'No pharmacy clients yet. Add one before placing a wholesale order.'}
+          </p>
+        )}
+      </div>
+    </section>
   )
 }

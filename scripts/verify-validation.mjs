@@ -236,7 +236,9 @@ if (!process.env.VALIDATION_TEST_PHASE) {
     'unit'
   )
   const paymentMethod = (method) => schemas.paymentMethodSchema.safeParse(method).success
-  assert.equal(paymentMethod('Bank transfer'), true)
+  for (const method of ['Cash', 'GCash', 'Maya', 'Bank transfer', 'Check', 'E-wallet', 'Other'])
+    assert.equal(paymentMethod(method), true, method)
+  assert.equal(paymentMethod('gcash'), false)
   assert.equal(paymentMethod('Cash under the table'), false)
 
   // 14. Characters blocked while typing match the rules checked on save.

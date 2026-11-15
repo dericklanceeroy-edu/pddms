@@ -1,6 +1,6 @@
 import Modal from '@renderer/components/ui/Modal'
 import { exportReceipt } from '@renderer/services/sales'
-import { business, code128, receiptModel } from '@shared/receipt'
+import { business, businessContact, businessTin, code128, receiptModel } from '@shared/receipt'
 import type { SaleRecord } from '@shared/sales'
 import { useMemo, useState, type ReactElement } from 'react'
 import { FiDownload } from 'react-icons/fi'
@@ -97,6 +97,8 @@ export function ReceiptSlip({ sale }: { sale: SaleRecord }): ReactElement {
         </div>
         <p className="text-[13px] font-bold tracking-wide uppercase">{business.name}</p>
         <p>{business.address}</p>
+        <p>{businessContact}</p>
+        <p>{businessTin}</p>
         <p className="mt-1 font-bold">SALES RECEIPT</p>
       </header>
       <Rule />

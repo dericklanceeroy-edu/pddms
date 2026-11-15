@@ -410,6 +410,11 @@ if (!process.env.SALES_TEST_PHASE) {
       const { receiptNumber } = await import('../src/shared/receipt.ts')
       const receiptMarkup = renderToStaticMarkup(createElement(ReceiptSlip, { sale }))
       assert.ok(receiptMarkup.includes('Med Prix Distributor and Pharmacy'))
+      const { business, receiptPlainText, receiptHtml } = await import('../src/shared/receipt.ts')
+      for (const output of [receiptMarkup, receiptPlainText(sale), receiptHtml(sale)]) {
+        assert.ok(output.includes(business.phone), 'receipt shows the store phone')
+        assert.ok(output.includes(`TIN ${business.tin}`), 'receipt shows the store TIN')
+      }
       assert.ok(receiptMarkup.includes(receiptNumber(sale)))
       assert.ok(receiptMarkup.includes(`Barcode ${receiptNumber(sale)}`))
       console.log(

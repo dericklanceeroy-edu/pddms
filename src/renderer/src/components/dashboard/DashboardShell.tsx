@@ -168,7 +168,8 @@ function Sidebar({
                         (!tab && !['receiving', 'invoices'].includes(activeTab ?? '')))
                     : activePath === to ||
                       (to === '/inventory' && activePath.startsWith('/items/')) ||
-                      (to === '/customers' && activePath.startsWith('/customers/'))
+                      (to === '/customers' && activePath.startsWith('/customers/')) ||
+                      (to === '/wholesale' && activePath.startsWith('/wholesale/'))
 
                 return (
                   <Link

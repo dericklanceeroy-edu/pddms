@@ -1,11 +1,22 @@
 import { money, type SaleLine, type SaleRecord } from './sales'
 import { quantityLabel, unitWord } from './units'
 
-/** Business details printed at the top of every receipt. */
+/**
+ * Business details printed at the top of every receipt.
+ *
+ * Note: `phone` and `tin` are EXAMPLE placeholders until the store's real numbers are supplied.
+ * Replace them here; the on-screen receipt, the PDF and the text file all read from this object.
+ */
 export const business = {
   name: 'Med Prix Distributor and Pharmacy',
-  address: 'G Mesa St, General Santos City (Dadiangas), South Cotabato'
+  address: 'G Mesa St, General Santos City (Dadiangas), South Cotabato',
+  phone: '+63 917 000 0000',
+  tin: '000-000-000-000'
 }
+/** Contact line under the address, e.g. "Contact No. +63 917 000 0000". */
+export const businessContact = `Contact No. ${business.phone}`
+/** Tax line, e.g. "TIN 000-000-000-000". */
+export const businessTin = `TIN ${business.tin}`
 
 /** Short, scannable receipt number, e.g. MP00000012. The full sale reference is printed too. */
 export const receiptNumber = (sale: Pick<SaleRecord, 'id'>): string =>
@@ -144,6 +155,8 @@ export function receiptPlainText(sale: SaleRecord): string {
   return [
     center(business.name.toUpperCase()),
     center(business.address),
+    center(businessContact),
+    center(businessTin),
     center('SALES RECEIPT'),
     dashed,
     pad(`DATE: ${model.date}`, `TIME: ${model.time}`),
@@ -202,7 +215,7 @@ export function receiptHtml(sale: SaleRecord): string {
   .total { font-weight: 700; font-size: 14px; }
   .wrap { word-break: break-all; }
 </style></head><body>
-<div class="center"><div class="logo">+</div><div class="name">${escapeHtml(business.name)}</div><div>${escapeHtml(business.address)}</div><div><b>SALES RECEIPT</b></div></div>
+<div class="center"><div class="logo">+</div><div class="name">${escapeHtml(business.name)}</div><div>${escapeHtml(business.address)}</div><div>${escapeHtml(businessContact)}</div><div>${escapeHtml(businessTin)}</div><div><b>SALES RECEIPT</b></div></div>
 <div class="rule"></div>
 ${row(`DATE: ${model.date}`, `TIME: ${model.time}`)}
 <div>RECEIPT NO: ${escapeHtml(model.number)}</div>

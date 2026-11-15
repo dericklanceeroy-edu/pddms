@@ -45,18 +45,21 @@ const emptyCustomer: CustomerProfile = {
 
 export default function CustomerProfileView({
   customer,
-  initialType = 'retail'
+  clientType
 }: {
   customer: CustomerProfile | null
-  /** Client type for a new profile, e.g. when opened from the wholesale order form. */
-  initialType?: ClientType
+  /**
+   * Retail customers live under Customers; pharmacy clients (wholesale buyers) live under
+   * Wholesale & Deliveries. The type is fixed by where the profile is opened.
+   */
+  clientType: ClientType
 }): ReactElement {
   const saveCustomer = useProfileStore((state) => state.saveCustomer)
   const removeCustomer = useProfileStore((state) => state.removeCustomer)
   const navigate = useNavigate()
   const isNew = customer === null
 
-  const [draft, setDraft] = useState(customer ?? { ...emptyCustomer, clientType: initialType })
+  const [draft, setDraft] = useState(customer ?? { ...emptyCustomer, clientType })
   const [editing, setEditing] = useState(isNew)
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
@@ -65,7 +68,8 @@ export default function CustomerProfileView({
   const [confirmRemove, setConfirmRemove] = useState(false)
   const [isRemoving, setIsRemoving] = useState(false)
   const [touched, setTouched] = useState<Record<string, boolean>>({})
-  const pharmacy = draft.clientType === 'pharmacy'
+  const pharmacy = clientType === 'pharmacy'
+  const home = pharmacy ? '/wholesale' : '/customers'
   // Note: Problems show as soon as a field is left (or changed after that), not only on Save.
   const liveErrors = useMemo(() => {
     const result = newCustomerSchema.safeParse({
@@ -147,10 +151,9 @@ export default function CustomerProfileView({
             : 'Customer information updated.'
       )
       if (isNew) {
-        await navigate({
-          to: '/customers/$customerId',
-          params: { customerId: String(saved.id) }
-        })
+        await (pharmacy
+          ? navigate({ to: '/wholesale/clients/$clientId', params: { clientId: String(saved.id) } })
+          : navigate({ to: '/customers/$customerId', params: { customerId: String(saved.id) } }))
       }
     } catch (cause) {
       const { fields, form } = splitErrors(cause, 'Unable to save the customer.')
@@ -165,7 +168,7 @@ export default function CustomerProfileView({
     setIsRemoving(true)
     try {
       await removeCustomer(draft.id)
-      await navigate({ to: '/customers' })
+      await navigate({ to: home })
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Unable to remove the customer.')
       setConfirmRemove(false)
@@ -187,10 +190,10 @@ export default function CustomerProfileView({
     >
       <div className="space-y-5 sm:space-y-6">
         <Link
-          to="/customers"
+          to={home}
           className="hover:text-brand-700 inline-flex items-center gap-2 rounded-lg px-1 text-sm font-medium text-slate-500 transition"
         >
-          <FiArrowLeft /> Back to Customers
+          <FiArrowLeft /> {pharmacy ? 'Back to Wholesale & Deliveries' : 'Back to Customers'}
         </Link>
 
         {success && (
@@ -219,39 +222,13 @@ export default function CustomerProfileView({
                 </h2>
                 <p className="section-subtitle">
                   {pharmacy
-                    ? 'Pharmacies that buy from Med Prix by the box. They appear as clients in Wholesale & Deliveries.'
+                    ? 'Another pharmacy that buys from Med Prix by the box. Pharmacy clients are kept separate from retail customers and appear only in Wholesale & Deliveries.'
                     : 'Keep contact and eligibility information accurate for a smoother dispensing workflow.'}
                 </p>
               </div>
               <RequiredNote />
 
               <div className="grid gap-5 sm:grid-cols-2">
-                <FormField
-                  label="Client Type"
-                  required
-                  hint={
-                    pharmacy
-                      ? 'Another pharmacy that places wholesale orders.'
-                      : 'A person who buys at the counter.'
-                  }
-                >
-                  <select
-                    className="field"
-                    value={draft.clientType}
-                    onChange={(event) => {
-                      const clientType = event.target.value as ClientType
-                      change({
-                        clientType,
-                        ...(clientType === 'pharmacy'
-                          ? { discountType: 'none', discountId: '', discountExpiresAt: null }
-                          : { contactPerson: '' })
-                      })
-                    }}
-                  >
-                    <option value="retail">Retail Customer</option>
-                    <option value="pharmacy">Pharmacy Client (Wholesale)</option>
-                  </select>
-                </FormField>
                 <FormField
                   label={pharmacy ? 'Pharmacy Name' : 'Full Name'}
                   required
@@ -263,7 +240,6 @@ export default function CustomerProfileView({
                   }
                 >
                   <FilteredInput
-                    key={draft.clientType}
                     rule={pharmacy ? 'catalogText' : 'personName'}
                     required
                     maxLength={120}
@@ -400,7 +376,7 @@ export default function CustomerProfileView({
                   <button
                     type="button"
                     onClick={() => {
-                      setDraft(customer ?? emptyCustomer)
+                      setDraft(customer ?? { ...emptyCustomer, clientType })
                       setError('')
                       setFieldErrors({})
                       setTouched({})
@@ -425,8 +401,9 @@ export default function CustomerProfileView({
                   </div>
                   <p className="card-title mt-5">Profile Setup</p>
                   <p className="mt-2 text-sm leading-6 text-slate-500">
-                    Capture the customer’s preferred contact details first, then record discount
-                    eligibility when applicable.
+                    {pharmacy
+                      ? 'Record who to call about orders and where deliveries go. The address fills in new wholesale orders.'
+                      : 'Capture the customer’s preferred contact details first, then record discount eligibility when applicable.'}
                   </p>
                 </div>
               </section>
@@ -434,10 +411,13 @@ export default function CustomerProfileView({
                 <div className="bg-brand-50/80 text-brand-700 grid size-11 place-items-center rounded-lg">
                   <FiShield />
                 </div>
-                <p className="card-title mt-5">Eligibility Details</p>
+                <p className="card-title mt-5">
+                  {pharmacy ? 'Wholesale Pricing' : 'Eligibility Details'}
+                </p>
                 <p className="mt-2 text-sm leading-6 text-slate-500">
-                  Senior Citizen and PWD profiles require a valid discount ID before checkout
-                  discounts can be applied.
+                  {pharmacy
+                    ? 'Pharmacy clients order by the box and never receive Senior Citizen or PWD discounts.'
+                    : 'Senior Citizen and PWD profiles require a valid discount ID before checkout discounts can be applied.'}
                 </p>
               </section>
             </aside>
@@ -523,52 +503,52 @@ export default function CustomerProfileView({
               }
             />
 
-            <section className="panel min-w-0 overflow-hidden xl:col-span-12">
-              <header className="flex flex-col gap-3 border-b border-slate-200 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-                <div>
-                  <h3 className="section-title">Transaction History</h3>
-                  <p className="mt-1 text-sm text-slate-500">
-                    {pharmacy
-                      ? 'Counter purchases recorded for this client. Wholesale orders are listed in Wholesale & Deliveries.'
-                      : 'Recorded purchases associated with this customer.'}
-                  </p>
-                </div>
-                <span className="w-fit rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600">
-                  {draft.transactions.length} records
-                </span>
-              </header>
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[560px] text-sm">
-                  <thead className="surface-header text-left">
-                    <tr>
-                      <th className="px-5 py-3 sm:px-6">Receipt</th>
-                      <th className="px-5 py-3">Date</th>
-                      <th className="px-5 py-3">Items</th>
-                      <th className="px-5 py-3 text-right sm:px-6">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {draft.transactions.map((transaction) => (
-                      <tr key={transaction.id} className="transition hover:bg-white">
-                        <td className="px-5 py-4 font-medium sm:px-6">{transaction.id}</td>
-                        <td className="px-5 py-4 text-slate-500">
-                          {date.format(new Date(transaction.purchasedAt))}
-                        </td>
-                        <td className="px-5 py-4">{transaction.itemCount}</td>
-                        <td className="px-5 py-4 text-right font-medium sm:px-6">
-                          {currency.format(transaction.total)}
-                        </td>
+            {!pharmacy && (
+              <section className="panel min-w-0 overflow-hidden xl:col-span-12">
+                <header className="flex flex-col gap-3 border-b border-slate-200 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+                  <div>
+                    <h3 className="section-title">Transaction History</h3>
+                    <p className="mt-1 text-sm text-slate-500">
+                      Recorded purchases associated with this customer.
+                    </p>
+                  </div>
+                  <span className="w-fit rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600">
+                    {draft.transactions.length} records
+                  </span>
+                </header>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[560px] text-sm">
+                    <thead className="surface-header text-left">
+                      <tr>
+                        <th className="px-5 py-3 sm:px-6">Receipt</th>
+                        <th className="px-5 py-3">Date</th>
+                        <th className="px-5 py-3">Items</th>
+                        <th className="px-5 py-3 text-right sm:px-6">Total</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {draft.transactions.length === 0 && (
-                  <p className="p-12 text-center text-sm text-slate-500">
-                    No transactions recorded.
-                  </p>
-                )}
-              </div>
-            </section>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {draft.transactions.map((transaction) => (
+                        <tr key={transaction.id} className="transition hover:bg-white">
+                          <td className="px-5 py-4 font-medium sm:px-6">{transaction.id}</td>
+                          <td className="px-5 py-4 text-slate-500">
+                            {date.format(new Date(transaction.purchasedAt))}
+                          </td>
+                          <td className="px-5 py-4">{transaction.itemCount}</td>
+                          <td className="px-5 py-4 text-right font-medium sm:px-6">
+                            {currency.format(transaction.total)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {draft.transactions.length === 0 && (
+                    <p className="p-12 text-center text-sm text-slate-500">
+                      No transactions recorded.
+                    </p>
+                  )}
+                </div>
+              </section>
+            )}
           </div>
         )}
       </div>
@@ -590,8 +570,10 @@ export default function CustomerProfileView({
               {pharmacy ? 'Remove Pharmacy Client?' : 'Remove Customer?'}
             </h2>
             <p className="mt-2 text-sm leading-6 text-slate-500">
-              {draft.fullName} will be removed from the customer list. This action cannot be undone
-              from the database.
+              {draft.fullName} will be removed from the{' '}
+              {pharmacy ? 'pharmacy client list' : 'customer list'}. A{' '}
+              {pharmacy ? 'client with wholesale orders' : 'customer with recorded sales'} cannot be
+              removed. This cannot be undone.
             </p>
             <div className="mt-6 flex justify-end gap-2">
               <button

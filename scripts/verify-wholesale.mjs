@@ -223,6 +223,9 @@ if (!process.env.WHOLESALE_TEST_PHASE) {
       for (const channel of Object.values(channels.wholesale)) await bad(channel, draft)
       assert.equal(canAccessPath('cashier', '/wholesale'), false)
       assert.equal(canAccessPath('staff', '/wholesale'), true)
+      // Pharmacy clients are managed inside Wholesale & Deliveries, out of the cashier's reach.
+      assert.equal(canAccessPath('cashier', '/wholesale/clients/new'), false)
+      assert.equal(canAccessPath('staff', '/wholesale/clients/new'), true)
       state.session = { account: staff }
       const before = await stock()
       const retail = await db

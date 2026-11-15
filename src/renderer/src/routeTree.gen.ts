@@ -9,9 +9,14 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as IndexRouteImport } from './routes/index'
 import { Route as CustomersRouteImport } from './routes/customers'
+import { Route as CustomersCustomerIdRouteImport } from './routes/customers.$customerId'
+import { Route as IndexRouteImport } from './routes/index'
 import { Route as InventoryRouteImport } from './routes/inventory'
+import { Route as ItemsItemIdRouteImport } from './routes/items.$itemId'
+import { Route as NewCompletionRouteImport } from './routes/new/completion'
+import { Route as NewIndexRouteImport } from './routes/new/index'
+import { Route as NewMasterRouteImport } from './routes/new/master'
 import { Route as NewRouteRouteImport } from './routes/new/route'
 import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as ReportsRouteImport } from './routes/reports'
@@ -20,91 +25,92 @@ import { Route as SignInRouteImport } from './routes/signIn'
 import { Route as SuppliersRouteImport } from './routes/suppliers'
 import { Route as UsersRouteImport } from './routes/users'
 import { Route as WholesaleRouteImport } from './routes/wholesale'
-import { Route as CustomersCustomerIdRouteImport } from './routes/customers.$customerId'
-import { Route as ItemsItemIdRouteImport } from './routes/items.$itemId'
-import { Route as NewIndexRouteImport } from './routes/new/index'
-import { Route as NewCompletionRouteImport } from './routes/new/completion'
-import { Route as NewMasterRouteImport } from './routes/new/master'
+import { Route as WholesaleClientsClientIdRouteImport } from './routes/wholesale.clients.$clientId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => rootRouteImport
 } as any)
 const CustomersRoute = CustomersRouteImport.update({
   id: '/customers',
   path: '/customers',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => rootRouteImport
 } as any)
 const InventoryRoute = InventoryRouteImport.update({
   id: '/inventory',
   path: '/inventory',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => rootRouteImport
 } as any)
 const NewRouteRoute = NewRouteRouteImport.update({
   id: '/new',
   path: '/new',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => rootRouteImport
 } as any)
 const ProfileRoute = ProfileRouteImport.update({
   id: '/profile',
   path: '/profile',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => rootRouteImport
 } as any)
 const ReportsRoute = ReportsRouteImport.update({
   id: '/reports',
   path: '/reports',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => rootRouteImport
 } as any)
 const SalesRoute = SalesRouteImport.update({
   id: '/sales',
   path: '/sales',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => rootRouteImport
 } as any)
 const SignInRoute = SignInRouteImport.update({
   id: '/signIn',
   path: '/signIn',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => rootRouteImport
 } as any)
 const SuppliersRoute = SuppliersRouteImport.update({
   id: '/suppliers',
   path: '/suppliers',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => rootRouteImport
 } as any)
 const UsersRoute = UsersRouteImport.update({
   id: '/users',
   path: '/users',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => rootRouteImport
 } as any)
 const WholesaleRoute = WholesaleRouteImport.update({
   id: '/wholesale',
   path: '/wholesale',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => rootRouteImport
 } as any)
 const CustomersCustomerIdRoute = CustomersCustomerIdRouteImport.update({
   id: '/$customerId',
   path: '/$customerId',
-  getParentRoute: () => CustomersRoute,
+  getParentRoute: () => CustomersRoute
 } as any)
 const ItemsItemIdRoute = ItemsItemIdRouteImport.update({
   id: '/items/$itemId',
   path: '/items/$itemId',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => rootRouteImport
 } as any)
 const NewIndexRoute = NewIndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => NewRouteRoute,
+  getParentRoute: () => NewRouteRoute
 } as any)
 const NewCompletionRoute = NewCompletionRouteImport.update({
   id: '/completion',
   path: '/completion',
-  getParentRoute: () => NewRouteRoute,
+  getParentRoute: () => NewRouteRoute
 } as any)
 const NewMasterRoute = NewMasterRouteImport.update({
   id: '/master',
   path: '/master',
-  getParentRoute: () => NewRouteRoute,
+  getParentRoute: () => NewRouteRoute
+} as any)
+const WholesaleClientsClientIdRoute = WholesaleClientsClientIdRouteImport.update({
+  id: '/clients/$clientId',
+  path: '/clients/$clientId',
+  getParentRoute: () => WholesaleRoute
 } as any)
 
 export interface FileRoutesByFullPath {
@@ -118,12 +124,13 @@ export interface FileRoutesByFullPath {
   '/signIn': typeof SignInRoute
   '/suppliers': typeof SuppliersRoute
   '/users': typeof UsersRoute
-  '/wholesale': typeof WholesaleRoute
+  '/wholesale': typeof WholesaleRouteWithChildren
   '/customers/$customerId': typeof CustomersCustomerIdRoute
   '/items/$itemId': typeof ItemsItemIdRoute
   '/new/completion': typeof NewCompletionRoute
   '/new/master': typeof NewMasterRoute
   '/new/': typeof NewIndexRoute
+  '/wholesale/clients/$clientId': typeof WholesaleClientsClientIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -135,12 +142,13 @@ export interface FileRoutesByTo {
   '/signIn': typeof SignInRoute
   '/suppliers': typeof SuppliersRoute
   '/users': typeof UsersRoute
-  '/wholesale': typeof WholesaleRoute
+  '/wholesale': typeof WholesaleRouteWithChildren
   '/customers/$customerId': typeof CustomersCustomerIdRoute
   '/items/$itemId': typeof ItemsItemIdRoute
   '/new/completion': typeof NewCompletionRoute
   '/new/master': typeof NewMasterRoute
   '/new': typeof NewIndexRoute
+  '/wholesale/clients/$clientId': typeof WholesaleClientsClientIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -154,12 +162,13 @@ export interface FileRoutesById {
   '/signIn': typeof SignInRoute
   '/suppliers': typeof SuppliersRoute
   '/users': typeof UsersRoute
-  '/wholesale': typeof WholesaleRoute
+  '/wholesale': typeof WholesaleRouteWithChildren
   '/customers/$customerId': typeof CustomersCustomerIdRoute
   '/items/$itemId': typeof ItemsItemIdRoute
   '/new/completion': typeof NewCompletionRoute
   '/new/master': typeof NewMasterRoute
   '/new/': typeof NewIndexRoute
+  '/wholesale/clients/$clientId': typeof WholesaleClientsClientIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -180,6 +189,7 @@ export interface FileRouteTypes {
     | '/new/completion'
     | '/new/master'
     | '/new/'
+    | '/wholesale/clients/$clientId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -197,6 +207,7 @@ export interface FileRouteTypes {
     | '/new/completion'
     | '/new/master'
     | '/new'
+    | '/wholesale/clients/$clientId'
   id:
     | '__root__'
     | '/'
@@ -215,6 +226,7 @@ export interface FileRouteTypes {
     | '/new/completion'
     | '/new/master'
     | '/new/'
+    | '/wholesale/clients/$clientId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -228,7 +240,7 @@ export interface RootRouteChildren {
   SignInRoute: typeof SignInRoute
   SuppliersRoute: typeof SuppliersRoute
   UsersRoute: typeof UsersRoute
-  WholesaleRoute: typeof WholesaleRoute
+  WholesaleRoute: typeof WholesaleRouteWithChildren
   ItemsItemIdRoute: typeof ItemsItemIdRoute
 }
 
@@ -346,6 +358,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof NewMasterRouteImport
       parentRoute: typeof NewRouteRoute
     }
+    '/wholesale/clients/$clientId': {
+      id: '/wholesale/clients/$clientId'
+      path: '/clients/$clientId'
+      fullPath: '/wholesale/clients/$clientId'
+      preLoaderRoute: typeof WholesaleClientsClientIdRouteImport
+      parentRoute: typeof WholesaleRoute
+    }
   }
 }
 
@@ -358,24 +377,30 @@ interface NewRouteRouteChildren {
 const NewRouteRouteChildren: NewRouteRouteChildren = {
   NewCompletionRoute: NewCompletionRoute,
   NewMasterRoute: NewMasterRoute,
-  NewIndexRoute: NewIndexRoute,
+  NewIndexRoute: NewIndexRoute
 }
 
-const NewRouteRouteWithChildren = NewRouteRoute._addFileChildren(
-  NewRouteRouteChildren,
-)
+const NewRouteRouteWithChildren = NewRouteRoute._addFileChildren(NewRouteRouteChildren)
 
 interface CustomersRouteChildren {
   CustomersCustomerIdRoute: typeof CustomersCustomerIdRoute
 }
 
 const CustomersRouteChildren: CustomersRouteChildren = {
-  CustomersCustomerIdRoute: CustomersCustomerIdRoute,
+  CustomersCustomerIdRoute: CustomersCustomerIdRoute
 }
 
-const CustomersRouteWithChildren = CustomersRoute._addFileChildren(
-  CustomersRouteChildren,
-)
+const CustomersRouteWithChildren = CustomersRoute._addFileChildren(CustomersRouteChildren)
+
+interface WholesaleRouteChildren {
+  WholesaleClientsClientIdRoute: typeof WholesaleClientsClientIdRoute
+}
+
+const WholesaleRouteChildren: WholesaleRouteChildren = {
+  WholesaleClientsClientIdRoute: WholesaleClientsClientIdRoute
+}
+
+const WholesaleRouteWithChildren = WholesaleRoute._addFileChildren(WholesaleRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
@@ -388,8 +413,8 @@ const rootRouteChildren: RootRouteChildren = {
   SignInRoute: SignInRoute,
   SuppliersRoute: SuppliersRoute,
   UsersRoute: UsersRoute,
-  WholesaleRoute: WholesaleRoute,
-  ItemsItemIdRoute: ItemsItemIdRoute,
+  WholesaleRoute: WholesaleRouteWithChildren,
+  ItemsItemIdRoute: ItemsItemIdRoute
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

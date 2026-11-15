@@ -14,7 +14,7 @@ import type {
 import { deadlineLabels, deadlineTone, orderStatusLabels } from '@renderer/data/supplierOrders'
 import type { SupplierOrdersState } from '@renderer/hooks/useSupplierOrders'
 import { localDate } from '@shared/inventory'
-import { paymentMethods } from '@shared/schemas'
+import { paymentMethodLabel, paymentMethods } from '@shared/schemas'
 import { useMemo, useRef, useState, type FormEvent, type ReactElement } from 'react'
 import {
   FiAlertCircle,
@@ -519,7 +519,7 @@ function TransactionHistory({
         type: 'Payment',
         reference: payment.referenceNumber || `Payment #${payment.id}`,
         supplier: payment.supplierName,
-        details: `${payment.invoiceNumber ?? payment.orderNumber} · ${payment.method}`,
+        details: `${payment.invoiceNumber ?? payment.orderNumber} · ${paymentMethodLabel(payment.method)}`,
         handledBy: `Recorded by ${payment.recordedByName}`,
         amount: payment.amount,
         icon: <FiCreditCard />
@@ -998,7 +998,9 @@ function PaymentDialog({
               onChange={(event) => setMethod(event.target.value)}
             >
               {paymentMethods.map((value) => (
-                <option key={value}>{value}</option>
+                <option key={value} value={value}>
+                  {paymentMethodLabel(value)}
+                </option>
               ))}
             </select>
           </FormField>

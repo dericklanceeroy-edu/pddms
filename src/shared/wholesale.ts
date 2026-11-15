@@ -1,5 +1,6 @@
 import z from 'zod'
 import { localDate } from './inventory'
+import { business, businessContact, businessTin } from './receipt'
 import { cartLineSchema, centsSchema, lineText, money, type SaleLine } from './sales'
 import { isoDateSchema, paymentMethodSchema } from './schemas'
 import { boxOnlyUnitSchema } from './units'
@@ -166,8 +167,9 @@ export function deliveryReceiptText(order: WholesaleDetails): string {
   if (order.status !== 'delivered' || !order.deliveredAt)
     throw new WholesaleError('Record delivery before generating proof of delivery.')
   return [
-    'Med Prix Distributor and Pharmacy',
-    'G Mesa St, General Santos City (Dadiangas), South Cotabato',
+    business.name,
+    business.address,
+    `${businessContact} · ${businessTin}`,
     'DELIVERY RECEIPT',
     `DR-${order.reference}`,
     `Order: ${order.reference}`,

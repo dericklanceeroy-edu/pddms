@@ -50,7 +50,20 @@ const PASSWORD_MAX = 128
 const EMAIL_MAX = 254
 
 /** Payment methods offered for supplier payments and wholesale receivables. */
-export const paymentMethods = ['Cash', 'Bank transfer', 'Check', 'E-wallet', 'Other'] as const
+// Note: GCash and Maya are listed on their own; "E-wallet" stays for other wallets and for
+// payments already recorded with it.
+export const paymentMethods = [
+  'Cash',
+  'GCash',
+  'Maya',
+  'Bank transfer',
+  'Check',
+  'E-wallet',
+  'Other'
+] as const
+/** How a stored payment method reads in forms and tables. */
+export const paymentMethodLabel = (method: string): string =>
+  method === 'E-wallet' ? 'Other E-Wallet' : method === 'Bank transfer' ? 'Bank Transfer' : method
 export const paymentMethodSchema = z.enum(paymentMethods, {
   error: 'Select a payment method from the list.'
 })
