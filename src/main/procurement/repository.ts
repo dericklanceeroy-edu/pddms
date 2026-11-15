@@ -310,6 +310,27 @@ export async function insertInvoice(data: InvoiceFileInput): Promise<SupplierInv
       .where('invoiceNumber', '=', data.invoiceNumber)
       .executeTakeFirst()
     if (duplicate) throw new Error('That invoice number already exists for this supplier.')
+    // Note: Invoices cannot bill more than was ordered (or, on a cancelled order, received).
+    const lines = await transaction
+      .selectFrom('purchaseOrderItems')
+      .select(['quantity', 'receivedQuantity', 'unitCost'])
+      .where('purchaseOrderId', '=', data.purchaseOrderId)
+      .execute()
+    const orderValue = lines.reduce(
+      (sum, line) =>
+        sum + (order.status === 'cancelled' ? line.receivedQuantity : line.quantity) * line.unitCost,
+      0
+    )
+    const invoiced = await transaction
+      .selectFrom('supplierInvoices')
+      .select((eb) => eb.fn.sum<number>('amount').as('total'))
+      .where('purchaseOrderId', '=', data.purchaseOrderId)
+      .executeTakeFirstOrThrow()
+    const already = Number(invoiced.total ?? 0)
+    if (already + data.amount > orderValue + 0.005)
+      throw new Error(
+        `Invoices for this order cannot exceed the order value of ₱${orderValue.toFixed(2)}${already > 0 ? ` (₱${already.toFixed(2)} is already invoiced)` : ''}. Check the amount.`
+      )
 
     const invoice = await transaction
       .insertInto('supplierInvoices')

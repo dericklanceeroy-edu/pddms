@@ -3,7 +3,7 @@ import { deductBatchStock } from '@main/inventory/repository'
 import { isBatchSellable, localDate } from '@shared/inventory'
 import { calculateSale, priceToCents, type SaleLine } from '@shared/sales'
 import type { Database } from '@shared/types'
-import { piecesPerUnit, UnitError, unitSellPrice } from '@shared/units'
+import { piecesPerUnit, UnitError, wholesaleBoxPrice } from '@shared/units'
 import {
   receivable,
   wholesaleDeliverSchema,
@@ -172,6 +172,7 @@ export async function createOrder(input: WholesaleDraft, accountId: number): Pro
         'batches.currentStock',
         'batches.sellPrice',
         'batches.boxSellPrice',
+        'batches.wholesaleBoxPrice',
         'drugs.piecesPerBox',
         'drugs.brandName',
         'drugs.genericName',
@@ -185,6 +186,28 @@ export async function createOrder(input: WholesaleDraft, accountId: number): Pro
         data.items.map((item) => item.batchId)
       )
       .execute()
+    // Note: Stock leaves at delivery, so boxes on other open orders are already promised.
+    const promised = new Map(
+      (
+        await transaction
+          .selectFrom('wholesaleOrderItems')
+          .innerJoin('wholesaleOrders', 'wholesaleOrders.id', 'wholesaleOrderItems.orderId')
+          .select([
+            'wholesaleOrderItems.batchId',
+            sql<number>`SUM(wholesale_order_items.quantity * wholesale_order_items.pieces_per_unit)`.as(
+              'pieces'
+            )
+          ])
+          .where('wholesaleOrders.status', 'in', ['pending', 'scheduled'])
+          .where(
+            'wholesaleOrderItems.batchId',
+            'in',
+            data.items.map((item) => item.batchId)
+          )
+          .groupBy('wholesaleOrderItems.batchId')
+          .execute()
+      ).map((row) => [row.batchId, Number(row.pieces)])
+    )
     const items: SaleLine[] = data.items.map((item) => {
       const batch = batches.find((value) => value.id === item.batchId)
       if (
@@ -197,10 +220,10 @@ export async function createOrder(input: WholesaleDraft, accountId: number): Pro
       let unitPrice: number
       try {
         pieces = piecesPerUnit(item.unit, batch.piecesPerBox)
-        unitPrice = unitSellPrice(
-          item.unit,
+        unitPrice = wholesaleBoxPrice(
           batch.sellPrice,
           batch.boxSellPrice,
+          batch.wholesaleBoxPrice,
           batch.piecesPerBox
         )
       } catch (error) {
@@ -212,6 +235,13 @@ export async function createOrder(input: WholesaleDraft, accountId: number): Pro
         throw new WholesaleError(
           `${batch.brandName}: only ${batch.currentStock} piece(s) in stock for batch ${batch.physicalTag ?? batch.id}.`
         )
+      const onOtherOrders = promised.get(batch.id) ?? 0
+      if (item.quantity * pieces + onOtherOrders > batch.currentStock) {
+        const left = Math.max(0, Math.floor((batch.currentStock - onOtherOrders) / pieces))
+        throw new WholesaleError(
+          `${batch.brandName}: ${onOtherOrders} piece(s) of batch ${batch.physicalTag ?? batch.id} are already on other undelivered orders, so only ${left} box(es) can be ordered. Deliver or cancel those orders, or pick another batch.`
+        )
+      }
       if (priceToCents(unitPrice) !== item.unitPriceCents)
         throw new WholesaleError('Product price changed. Refresh and re-add the batch.')
       return {
@@ -251,7 +281,8 @@ export async function createOrder(input: WholesaleDraft, accountId: number): Pro
         driverName: data.driverName || null,
         receivedByName: null,
         cancelledByName: null,
-        cancelledAt: null
+        cancelledAt: null,
+        reviewNote: null
       })
       .returning('id')
       .executeTakeFirstOrThrow()

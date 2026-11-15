@@ -27,6 +27,7 @@ interface DeliveryInput {
   batchNumber: string
   sellPrice: number
   boxSellPrice?: number | null
+  wholesaleBoxPrice?: number | null
   expiresAt: string
 }
 
@@ -149,6 +150,35 @@ export async function findOneById(id: number): Promise<PurchaseOrderWithDetails 
   return (await findAll()).find((order) => order.id === id) ?? null
 }
 
+/** Remembers each line's cost per box as the supplier's agreed price, prefilled on the next order. */
+async function rememberAgreedCosts(
+  transaction: Transaction<Database>,
+  supplierId: number,
+  items: CreateOrderInput['items']
+): Promise<void> {
+  for (const item of items)
+    await transaction
+      .insertInto('supplierProductCosts')
+      .values({ supplierId, drugId: item.drugId, unitCost: item.unitCost })
+      .onConflict((conflict) =>
+        conflict.columns(['supplierId', 'drugId']).doUpdateSet({
+          unitCost: item.unitCost,
+          updatedAt: sql`CURRENT_TIMESTAMP`
+        })
+      )
+      .execute()
+}
+
+/** Last agreed cost per box for every supplier and product. */
+export async function findSupplierCosts(): Promise<
+  Array<{ supplierId: number; drugId: number; unitCost: number; updatedAt: string }>
+> {
+  return db
+    .selectFrom('supplierProductCosts')
+    .select(['supplierId', 'drugId', 'unitCost', 'updatedAt'])
+    .execute()
+}
+
 export async function insertOne(data: CreateOrderInput): Promise<PurchaseOrderWithDetails> {
   const orderId = await db.transaction().execute(async (transaction) => {
     const supplier = await transaction
@@ -183,6 +213,7 @@ export async function insertOne(data: CreateOrderInput): Promise<PurchaseOrderWi
       .insertInto('purchaseOrderItems')
       .values(await orderLines(transaction, order.id, data.items))
       .execute()
+    await rememberAgreedCosts(transaction, data.supplierId, data.items)
 
     return order.id
   })
@@ -220,6 +251,7 @@ export async function updateDraftById(
     // Note: Draft lines have never been received, so replacing them loses no stock history.
     await transaction.deleteFrom('purchaseOrderItems').where('purchaseOrderId', '=', id).execute()
     await transaction.insertInto('purchaseOrderItems').values(lines).execute()
+    await rememberAgreedCosts(transaction, data.supplierId, data.items)
     await transaction
       .updateTable('purchaseOrders')
       .set({
@@ -361,6 +393,13 @@ export async function recordDelivery(
           `Batch ${deliveredItem.batchNumber}: the box price cannot be lower than the cost of ₱${boxCost.toFixed(2)} per box.`
         )
       }
+      const wholesalePrice = deliveredItem.wholesaleBoxPrice ?? null
+      const wholesaleBoxCost = buyPrice * Math.max(1, drug.piecesPerBox)
+      if (wholesalePrice !== null && wholesalePrice < wholesaleBoxCost - PRICE_TOLERANCE) {
+        throw new Error(
+          `Batch ${deliveredItem.batchNumber}: the wholesale price cannot be lower than the cost of ₱${wholesaleBoxCost.toFixed(2)} per box.`
+        )
+      }
 
       const existingBatch = await transaction
         .selectFrom('batches')
@@ -375,6 +414,7 @@ export async function recordDelivery(
           Math.abs(existingBatch.buyPrice - buyPrice) > PRICE_TOLERANCE && 'unit cost',
           existingBatch.sellPrice !== deliveredItem.sellPrice && 'selling price',
           (existingBatch.boxSellPrice ?? null) !== boxSellPrice && 'box price',
+          (existingBatch.wholesaleBoxPrice ?? null) !== wholesalePrice && 'wholesale price',
           String(existingBatch.expiresAt) !== deliveredItem.expiresAt && 'expiry date'
         ].filter(Boolean)
         if (differences.length > 0)
@@ -400,6 +440,7 @@ export async function recordDelivery(
             buyPrice,
             sellPrice: deliveredItem.sellPrice,
             boxSellPrice,
+            wholesaleBoxPrice: wholesalePrice,
             initialStock: receivedPieces,
             currentStock: receivedPieces,
             expiresAt: deliveredItem.expiresAt

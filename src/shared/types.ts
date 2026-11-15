@@ -33,6 +33,15 @@ export interface Database {
   supplierInvoices: SupplierInvoicesTable
   supplierPayments: SupplierPaymentsTable
   suppliers: SuppliersTable
+  supplierProductCosts: SupplierProductCostsTable
+}
+
+/** Last agreed cost per box for a supplier and product; prefilled on new orders. */
+export interface SupplierProductCostsTable {
+  supplierId: Id
+  drugId: Id
+  unitCost: number
+  updatedAt: ColumnType<string, string | undefined, string>
 }
 
 export interface StockOutsTable {
@@ -64,6 +73,8 @@ export interface AccountsTable {
   fullName: string
   /** Contact email; accounts created before emails were collected have none. */
   email: ColumnType<string | null, string | null | undefined, string | null>
+  /** Mobile number (09XXXXXXXXX); optional for accounts created before it was collected. */
+  phone: ColumnType<string | null, string | null | undefined, string | null>
   password: string
   isArchived: ColumnType<ZeroOrOne, never, ZeroOrOne>
   isVerified: ColumnType<ZeroOrOne, ZeroOrOne | undefined, ZeroOrOne>
@@ -80,6 +91,8 @@ export interface BatchesTable {
   sellPrice: number
   /** Selling price of one box; NULL means piece price × pieces per box. */
   boxSellPrice: ColumnType<number | null, number | null | undefined, number | null>
+  /** Wholesale price of one box; NULL means the retail box price is used. */
+  wholesaleBoxPrice: ColumnType<number | null, number | null | undefined, number | null>
   initialStock: number
   currentStock: number
   expiresAt: ColumnType<Date, string, string>
@@ -271,6 +284,8 @@ export interface ProductUpdate {
   isControlled?: boolean
   reorderLevel?: number
   piecesPerBox?: number
+  /** Set when the user confirmed changing pieces per box on a product with stock on hand. */
+  confirmPiecesChange?: boolean
 }
 
 export type Supplier = Selectable<SuppliersTable>

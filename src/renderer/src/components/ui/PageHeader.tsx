@@ -19,7 +19,7 @@ export default function PageHeader({
     <header className="page-header">
       <div className="min-w-0">
         {section && <p className="eyebrow">{section}</p>}
-        <h2 className="page-title mt-0.5">{title}</h2>
+        <h1 className="page-title mt-0.5">{title}</h1>
         {description && <p className="page-subtitle max-w-3xl">{description}</p>}
       </div>
       {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}

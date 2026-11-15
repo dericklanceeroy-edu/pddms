@@ -191,7 +191,7 @@ export default function CustomerProfileView({
       <div className="space-y-5 sm:space-y-6">
         <Link
           to={home}
-          className="hover:text-brand-700 inline-flex items-center gap-2 rounded-lg px-1 text-sm font-medium text-slate-500 transition"
+          className="hover:text-brand-700 inline-flex items-center gap-2 rounded-lg px-1 text-sm font-medium text-slate-700 transition"
         >
           <FiArrowLeft /> {pharmacy ? 'Back to Wholesale & Deliveries' : 'Back to Customers'}
         </Link>
@@ -434,7 +434,7 @@ export default function CustomerProfileView({
                     {pharmacy ? 'Pharmacy client' : 'Customer'} since{' '}
                     {date.format(new Date(draft.createdAt))}
                   </p>
-                  <h2 className="page-title mt-2 truncate text-2xl">{draft.fullName}</h2>
+                  <h1 className="page-title mt-2 truncate text-2xl">{draft.fullName}</h1>
                   {pharmacy && draft.contactPerson && (
                     <p className="mt-1 text-sm font-medium text-slate-700">
                       Contact: {draft.contactPerson}

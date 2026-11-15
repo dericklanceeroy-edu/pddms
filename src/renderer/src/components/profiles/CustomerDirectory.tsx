@@ -1,4 +1,6 @@
 import DashboardShell from '@renderer/components/dashboard/DashboardShell'
+import { useAccount } from '@renderer/hooks/useAccount'
+import { canAccessPath } from '@renderer/navigation/access'
 import { useProfileStore } from '@renderer/stores/useProfileStore'
 import { Link } from '@tanstack/react-router'
 import { useEffect, useMemo, useState, type ReactElement } from 'react'
@@ -14,6 +16,8 @@ import {
 
 export default function CustomerDirectory(): ReactElement {
   const allProfiles = useProfileStore((state) => state.customers)
+  const { account } = useAccount()
+  const canOpenWholesale = !!account && canAccessPath(account.role, '/wholesale')
   // Note: Pharmacy clients (wholesale buyers) are managed in Wholesale & Deliveries.
   const customers = useMemo(
     () => allProfiles.filter((customer) => customer.clientType !== 'pharmacy'),
@@ -58,14 +62,22 @@ export default function CustomerDirectory(): ReactElement {
           <div className="page-intro-content flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
             <div className="max-w-2xl">
               <p className="eyebrow">Daily work</p>
-              <h2 className="page-title mt-0.5">Customers ({directoryMetrics.total})</h2>
+              <h1 className="page-title mt-0.5">Customers ({directoryMetrics.total})</h1>
               <p className="page-subtitle">
                 People who buy at the counter, with their Senior Citizen or PWD eligibility.
-                Pharmacy clients that buy wholesale are managed in{' '}
-                <Link to="/wholesale" className="text-brand-700 font-semibold underline">
-                  Wholesale &amp; Deliveries
-                </Link>
-                .
+                {/* Note: Cashiers cannot open Wholesale & Deliveries, so they get no link. */}
+                {canOpenWholesale ? (
+                  <>
+                    {' '}
+                    Pharmacy clients that buy wholesale are managed in{' '}
+                    <Link to="/wholesale" className="text-brand-700 font-semibold underline">
+                      Wholesale &amp; Deliveries
+                    </Link>
+                    .
+                  </>
+                ) : (
+                  ' Pharmacy clients that buy wholesale are handled by the staff and administrators.'
+                )}
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-3">

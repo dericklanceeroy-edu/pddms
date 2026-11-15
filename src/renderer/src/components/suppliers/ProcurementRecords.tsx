@@ -14,7 +14,7 @@ import type {
 import { deadlineLabels, deadlineTone, orderStatusLabels } from '@renderer/data/supplierOrders'
 import type { SupplierOrdersState } from '@renderer/hooks/useSupplierOrders'
 import { localDate } from '@shared/inventory'
-import { paymentMethodLabel, paymentMethods } from '@shared/schemas'
+import { paymentMethodLabel, paymentMethods, referenceRequired } from '@shared/schemas'
 import { useMemo, useRef, useState, type FormEvent, type ReactElement } from 'react'
 import {
   FiAlertCircle,
@@ -32,6 +32,94 @@ const currency = new Intl.NumberFormat('en-PH', { style: 'currency', currency: '
 const date = new Intl.DateTimeFormat('en-PH', { dateStyle: 'medium' })
 
 const today = (): string => localDate()
+
+/** Supplier, date-range and type filters for the Receiving and History tabs. */
+interface RecordFilter {
+  supplier: string
+  from: string
+  to: string
+  type: string
+}
+const emptyFilter: RecordFilter = { supplier: '', from: '', to: '', type: '' }
+const inRange = (value: string, filter: RecordFilter): boolean => {
+  const day = value.slice(0, 10)
+  return (!filter.from || day >= filter.from) && (!filter.to || day <= filter.to)
+}
+
+function FilterBar({
+  filter,
+  setFilter,
+  suppliers,
+  types
+}: {
+  filter: RecordFilter
+  setFilter: (filter: RecordFilter) => void
+  suppliers: string[]
+  types?: string[]
+}): ReactElement {
+  const active = Object.values(filter).some(Boolean)
+  return (
+    <div className="flex flex-wrap items-end gap-3 border-b border-slate-200 px-4 py-3 sm:px-5">
+      <label className="field-label min-w-48 flex-1 sm:max-w-64">
+        Supplier
+        <select
+          className="field mt-1.5 font-normal"
+          value={filter.supplier}
+          onChange={(event) => setFilter({ ...filter, supplier: event.target.value })}
+        >
+          <option value="">All Suppliers</option>
+          {suppliers.map((name) => (
+            <option key={name} value={name}>
+              {name}
+            </option>
+          ))}
+        </select>
+      </label>
+      {types && (
+        <label className="field-label min-w-40">
+          Type
+          <select
+            className="field mt-1.5 font-normal"
+            value={filter.type}
+            onChange={(event) => setFilter({ ...filter, type: event.target.value })}
+          >
+            <option value="">All Types</option>
+            {types.map((type) => (
+              <option key={type} value={type}>
+                {type}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      <label className="field-label">
+        From
+        <input
+          type="date"
+          className="field mt-1.5 font-normal"
+          max={filter.to || undefined}
+          value={filter.from}
+          onChange={(event) => setFilter({ ...filter, from: event.target.value })}
+        />
+      </label>
+      <label className="field-label">
+        To
+        <input
+          type="date"
+          className="field mt-1.5 font-normal"
+          min={filter.from || undefined}
+          value={filter.to}
+          onChange={(event) => setFilter({ ...filter, to: event.target.value })}
+        />
+      </label>
+      {active && (
+        <button type="button" className="secondary-button" onClick={() => setFilter(emptyFilter)}>
+          Clear Filters
+        </button>
+      )}
+    </div>
+  )
+}
 const toNumber = (value: string): number => (value.trim() === '' ? Number.NaN : Number(value))
 
 export default function ProcurementRecords({
@@ -51,6 +139,11 @@ export default function ProcurementRecords({
     invoice?: InvoiceRecord
   } | null>(null)
   const normalized = query.trim().toLowerCase()
+  const [filter, setFilter] = useState<RecordFilter>(emptyFilter)
+  const supplierNames = useMemo(
+    () => procurement.suppliers.map((supplier) => supplier.organization).sort(),
+    [procurement.suppliers]
+  )
   const invoices = procurement.invoices.filter((invoice) =>
     `${invoice.invoiceNumber} ${invoice.orderNumber} ${invoice.supplierName} ${invoice.status}`
       .toLowerCase()
@@ -58,10 +151,25 @@ export default function ProcurementRecords({
   )
 
   if (view === 'history') {
-    return <TransactionHistory procurement={procurement} query={normalized} />
+    return (
+      <>
+        <FilterBar
+          filter={filter}
+          setFilter={setFilter}
+          suppliers={supplierNames}
+          types={['Purchase order', 'Delivery', 'Invoice', 'Payment']}
+        />
+        <TransactionHistory procurement={procurement} query={normalized} filter={filter} />
+      </>
+    )
   }
   if (view === 'receiving') {
-    return <ReceivingReports procurement={procurement} query={normalized} />
+    return (
+      <>
+        <FilterBar filter={filter} setFilter={setFilter} suppliers={supplierNames} />
+        <ReceivingReports procurement={procurement} query={normalized} filter={filter} />
+      </>
+    )
   }
 
   const overdue = procurement.invoices.filter((invoice) => invoice.deadlineStatus === 'overdue')
@@ -319,7 +427,7 @@ export default function ProcurementRecords({
         {!procurement.isLoading && invoices.length === 0 && (
           <p className="p-10 text-center text-sm text-slate-500">
             {procurement.invoices.length === 0
-              ? 'No supplier invoices yet. Use Add supplier invoice once the supplier sends one.'
+              ? 'No supplier invoices yet. Use Add Supplier Invoice once the supplier sends one.'
               : 'No invoices match this search.'}
           </p>
         )}
@@ -356,17 +464,22 @@ export default function ProcurementRecords({
 
 function ReceivingReports({
   procurement,
-  query
+  query,
+  filter
 }: {
   procurement: SupplierOrdersState
   query: string
+  filter: RecordFilter
 }): ReactElement {
-  const deliveries = procurement.deliveries.filter((delivery) =>
-    `${delivery.orderNumber} ${delivery.supplierName} ${delivery.recordedByName} ${delivery.items
-      .map((item) => `${item.productName} ${item.batchNumber} ${item.expiresAt}`)
-      .join(' ')}`
-      .toLowerCase()
-      .includes(query)
+  const deliveries = procurement.deliveries.filter(
+    (delivery) =>
+      (!filter.supplier || delivery.supplierName === filter.supplier) &&
+      inRange(delivery.deliveredAt, filter) &&
+      `${delivery.orderNumber} ${delivery.supplierName} ${delivery.recordedByName} ${delivery.deliveredByName ?? ''} ${delivery.checkedByName ?? ''} ${delivery.items
+        .map((item) => `${item.productName} ${item.batchNumber} ${item.expiresAt}`)
+        .join(' ')}`
+        .toLowerCase()
+        .includes(query)
   )
 
   return (
@@ -386,10 +499,10 @@ function ReceivingReports({
           >
             <header className="flex flex-col gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0">
-                <p className="truncate font-semibold text-slate-900">
+                <p className="font-semibold break-all text-slate-900">
                   Receiving report #{delivery.id} · {delivery.orderNumber}
                 </p>
-                <p className="truncate text-sm text-slate-500">{delivery.supplierName}</p>
+                <p className="text-sm break-words text-slate-600">{delivery.supplierName}</p>
               </div>
               <div className="shrink-0 text-sm sm:text-right">
                 <p>{date.format(new Date(delivery.deliveredAt))}</p>
@@ -458,7 +571,7 @@ function ReceivingReports({
         <p className="py-10 text-center text-sm text-slate-500">
           {procurement.deliveries.length === 0
             ? 'No deliveries recorded yet. Receive products against a submitted purchase order above.'
-            : 'No receiving reports match this search.'}
+            : 'No receiving reports match this search and these filters.'}
         </p>
       )}
     </div>
@@ -467,10 +580,12 @@ function ReceivingReports({
 
 function TransactionHistory({
   procurement,
-  query
+  query,
+  filter
 }: {
   procurement: SupplierOrdersState
   query: string
+  filter: RecordFilter
 }): ReactElement {
   const transactions = useMemo(() => {
     const rows = [
@@ -481,6 +596,7 @@ function TransactionHistory({
         reference: order.orderNumber,
         supplier: order.supplierName,
         details: `${order.items.reduce((total, item) => total + item.quantity * item.piecesPerUnit, 0)} pcs · ${orderStatusLabels[order.status]}`,
+        products: order.items.map((item) => item.productName).join(' '),
         handledBy: [
           `Created by ${order.createdByName}`,
           order.submittedByName && `submitted by ${order.submittedByName}`,
@@ -498,6 +614,7 @@ function TransactionHistory({
         reference: delivery.orderNumber,
         supplier: delivery.supplierName,
         details: `${delivery.items.reduce((total, item) => total + item.quantity * item.piecesPerUnit, 0)} pcs · ${delivery.items.map((item) => item.batchNumber).join(', ')}`,
+        products: delivery.items.map((item) => item.productName).join(' '),
         handledBy: `Delivered by ${delivery.deliveredByName ?? 'not recorded'} · checked by ${delivery.checkedByName ?? 'not recorded'} · recorded by ${delivery.recordedByName}`,
         amount: null,
         icon: <FiTruck />
@@ -509,6 +626,7 @@ function TransactionHistory({
         reference: invoice.invoiceNumber,
         supplier: invoice.supplierName,
         details: `${invoice.orderNumber} · ${deadlineLabels[invoice.deadlineStatus]}`,
+        products: '',
         handledBy: `Uploaded by ${invoice.uploadedByName}`,
         amount: invoice.amount,
         icon: <FiFilePlus />
@@ -520,16 +638,21 @@ function TransactionHistory({
         reference: payment.referenceNumber || `Payment #${payment.id}`,
         supplier: payment.supplierName,
         details: `${payment.invoiceNumber ?? payment.orderNumber} · ${paymentMethodLabel(payment.method)}`,
+        products: '',
         handledBy: `Recorded by ${payment.recordedByName}`,
         amount: payment.amount,
         icon: <FiCreditCard />
       }))
     ]
     return rows
-      .filter((row) =>
-        `${row.type} ${row.reference} ${row.supplier} ${row.details} ${row.handledBy}`
-          .toLowerCase()
-          .includes(query)
+      .filter(
+        (row) =>
+          (!filter.supplier || row.supplier === filter.supplier) &&
+          (!filter.type || row.type === filter.type) &&
+          inRange(row.occurredAt, filter) &&
+          `${row.type} ${row.reference} ${row.supplier} ${row.details} ${row.products} ${row.handledBy}`
+            .toLowerCase()
+            .includes(query)
       )
       .sort((left, right) => right.occurredAt.localeCompare(left.occurredAt))
   }, [
@@ -537,7 +660,8 @@ function TransactionHistory({
     procurement.invoices,
     procurement.orders,
     procurement.payments,
-    query
+    query,
+    filter
   ])
 
   return (
@@ -579,7 +703,7 @@ function TransactionHistory({
       </table>
       {!procurement.isLoading && transactions.length === 0 && (
         <p className="p-10 text-center text-sm text-slate-500">
-          No supplier transactions match this search.
+          No supplier transactions match this search and these filters.
         </p>
       )}
     </div>
@@ -1006,7 +1130,13 @@ function PaymentDialog({
           </FormField>
           <FormField
             label="Reference Number"
-            hint="Check, transfer or receipt number. Each reference can be used once."
+            required={referenceRequired(method)}
+            showOptional={!referenceRequired(method)}
+            hint={
+              referenceRequired(method)
+                ? `Required for ${paymentMethodLabel(method)}. Each reference can be used once.`
+                : 'Check, transfer or receipt number. Each reference can be used once.'
+            }
             error={errors.referenceNumber}
           >
             <FilteredInput

@@ -38,6 +38,7 @@ export interface DeliveryFormValues {
     batchNumber: string
     sellPrice: number
     boxSellPrice: number | null
+    wholesaleBoxPrice: number | null
     expiresAt: string
   }>
 }

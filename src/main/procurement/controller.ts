@@ -8,7 +8,7 @@ import { formatValidationError } from '@shared/validation'
 import { isId } from '@shared/validators'
 import { app, shell } from 'electron'
 import { randomUUID } from 'node:crypto'
-import { copyFile, mkdir, stat, unlink } from 'node:fs/promises'
+import { copyFile, mkdir, open, stat, unlink } from 'node:fs/promises'
 import { basename, extname, join } from 'node:path'
 import {
   findDeliveries,
@@ -22,6 +22,32 @@ import {
 
 const invoiceDirectory = (): string => join(app.getPath('userData'), 'supplier-invoices')
 const invoiceExtensions = new Set(['.pdf', '.png', '.jpg', '.jpeg', '.webp'])
+
+/** Largest invoice file accepted; scans and photos of invoices are well under this. */
+const MAX_INVOICE_BYTES = 20 * 1024 * 1024
+
+/**
+ * Checks the first bytes of the file against its extension, so a renamed file (for example an
+ * executable saved as .pdf) is refused.
+ */
+async function hasInvoiceSignature(path: string, extension: string): Promise<boolean> {
+  const handle = await open(path, 'r')
+  try {
+    const head = Buffer.alloc(12)
+    const { bytesRead } = await handle.read(head, 0, 12, 0)
+    const bytes = head.subarray(0, bytesRead)
+    const starts = (signature: number[], offset = 0): boolean =>
+      signature.every((value, index) => bytes[offset + index] === value)
+    if (extension === '.pdf') return starts([0x25, 0x50, 0x44, 0x46, 0x2d])
+    if (extension === '.png') return starts([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+    if (extension === '.jpg' || extension === '.jpeg') return starts([0xff, 0xd8, 0xff])
+    if (extension === '.webp')
+      return starts([0x52, 0x49, 0x46, 0x46]) && starts([0x57, 0x45, 0x42, 0x50], 8)
+    return false
+  } finally {
+    await handle.close()
+  }
+}
 
 const mimeType = (extension: string): string => {
   const types: Record<string, string> = {
@@ -103,6 +129,15 @@ ipcMain.handle(channels.procurement.chooseInvoiceFile, async (event) => {
     if (!details.isFile() || details.size === 0) {
       return { success: false, error: 'The selected invoice file is empty or unreadable.' }
     }
+    if (details.size > MAX_INVOICE_BYTES) {
+      return { success: false, error: 'The invoice file is larger than 20 MB. Save a smaller scan or PDF.' }
+    }
+    if (!(await hasInvoiceSignature(source, extname(source).toLowerCase()))) {
+      return {
+        success: false,
+        error: `This file is not a real ${extname(source).slice(1).toUpperCase()} document. Select the original invoice PDF or image.`
+      }
+    }
     const token = randomUUID()
     // Note: Abandoned selections are discarded oldest-first so the map stays small.
     if (selectedInvoiceFiles.size >= 20)
@@ -146,6 +181,12 @@ ipcMain.handle(channels.procurement.uploadInvoice, async (_, payload: unknown) =
       }
     }
     const details = await stat(destination)
+    // Note: The file may have changed since it was chosen, so the copy is checked again.
+    if (details.size > MAX_INVOICE_BYTES || !(await hasInvoiceSignature(destination, extension))) {
+      await unlink(destination).catch(() => undefined)
+      destination = ''
+      return { success: false, error: 'The invoice file changed or is not a valid document. Choose it again.' }
+    }
     const invoice = await insertInvoice({
       ...data,
       originalFilename: file.name,

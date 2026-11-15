@@ -12,6 +12,8 @@ export interface ItemBatch {
   sellPrice: number
   /** Selling price of one box; null means piece price × pieces per box. */
   boxSellPrice: number | null
+  /** Price of one box for pharmacy clients; null means the retail box price. */
+  wholesaleBoxPrice: number | null
   expiresAt: string
   receipts: Array<{ orderNumber: string; deliveredAt: string; quantity: number }>
 }
@@ -58,7 +60,10 @@ export interface CustomerProfile {
 }
 
 export type CustomerDraft = Omit<CustomerProfile, 'id' | 'transactions' | 'createdAt'>
-export type ItemDraft = Omit<ItemProfile, 'id' | 'genericEquivalentIds' | 'batches'>
+export type ItemDraft = Omit<ItemProfile, 'id' | 'genericEquivalentIds' | 'batches'> & {
+  /** Set when the user confirmed changing pieces per box while stock is on hand. */
+  confirmPiecesChange?: boolean
+}
 
 export const getItemStock = (item: ItemProfile): number =>
   item.batches.reduce((total, batch) => total + batch.stock, 0)

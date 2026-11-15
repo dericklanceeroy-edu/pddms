@@ -6,6 +6,7 @@ import { formatValidationError } from '@shared/validation'
 export interface MasterSetup {
   fullName: string
   email: string
+  phone: string
   username: string
   password: string
 }

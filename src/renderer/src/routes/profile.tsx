@@ -1,5 +1,7 @@
 import DashboardShell from '@renderer/components/dashboard/DashboardShell'
+import FilteredInput from '@renderer/components/ui/FilteredInput'
 import FormField from '@renderer/components/ui/FormField'
+import { roleLabels } from '@renderer/data/userManagement'
 import { useAccount } from '@renderer/hooks/useAccount'
 import { channels } from '@shared/constants'
 import { profileUpdateSchema } from '@shared/schemas'
@@ -11,6 +13,7 @@ function Profile(): ReactElement {
   const { account, signOut } = useAccount()
   const [fullName, setFullName] = useState(account?.fullName ?? '')
   const [username, setUsername] = useState(account?.username ?? '')
+  const [phone, setPhone] = useState(account?.phone ?? '')
   const [currentPassword, setCurrentPassword] = useState('')
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
@@ -25,6 +28,7 @@ function Profile(): ReactElement {
           const parsed = profileUpdateSchema.safeParse({
             fullName,
             username,
+            ...(phone.trim() ? { phone } : {}),
             currentPassword,
             ...(password ? { password } : {})
           })
@@ -49,10 +53,11 @@ function Profile(): ReactElement {
             .finally(() => setBusy(false))
         }}
       >
-        <h2 className="page-title">My Profile</h2>
-        <p className="text-sm text-slate-500">
-          Role: {account?.role}. Your access level is set by the master account. Saving asks for
-          your current password and signs you out so you can sign in with the new details.
+        <h1 className="page-title">My Profile</h1>
+        <p className="text-sm text-slate-600">
+          Role: {account ? roleLabels[account.role] : ''}. Your access level is set by the master
+          account. Saving asks for your current password and signs you out so you can sign in with
+          the new details.
         </p>
         {error && (
           <p role="alert" className="status-message border-rose-200 bg-rose-50 text-rose-800">
@@ -77,6 +82,18 @@ function Profile(): ReactElement {
               onChange={(event) => setUsername(event.target.value)}
             />
           </FormField>
+          <FormField label="Mobile Number" required hint="11 digits starting with 09.">
+            <FilteredInput
+              rule="phone"
+              required
+              inputMode="numeric"
+              maxLength={11}
+              autoComplete="tel"
+              placeholder="e.g. 09171234567"
+              value={phone}
+              onValueChange={setPhone}
+            />
+          </FormField>
           <FormField label="Current Password" required hint="Needed to confirm any change.">
             <input
               required
@@ -89,7 +106,7 @@ function Profile(): ReactElement {
           </FormField>
           <FormField
             label="New Password"
-            hint="Leave blank to keep your current password. At least 8 characters."
+            hint="Leave blank to keep your current password. At least 8 characters with a letter and a number."
           >
             <input
               type="password"

@@ -28,4 +28,6 @@ export interface BackupInfo {
   directory: string
   createdAt: string
   invoiceCount: number
+  /** Invoices whose stored file was missing when the backup was made, e.g. "INV-001 (Supplier)". */
+  missingInvoices?: string[]
 }

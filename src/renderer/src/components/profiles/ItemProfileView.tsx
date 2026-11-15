@@ -1,5 +1,6 @@
 import DashboardShell from '@renderer/components/dashboard/DashboardShell'
 import FilteredInput from '@renderer/components/ui/FilteredInput'
+import Modal from '@renderer/components/ui/Modal'
 import {
   getItemStock,
   getSellableStock,
@@ -7,14 +8,17 @@ import {
   type ItemProfile
 } from '@renderer/data/profiles'
 import { useAccount } from '@renderer/hooks/useAccount'
+import { setWholesalePrice } from '@renderer/services/profiles'
 import { useProfileStore } from '@renderer/stores/useProfileStore'
+import { productKey } from '@shared/duplicates'
 import { expiryLabels, getExpiryStatus } from '@shared/inventory'
 import { MAX_REORDER_LEVEL } from '@shared/schemas'
-import { piecesLabel, unitSellPrice } from '@shared/units'
+import { piecesLabel, unitSellPrice, wholesaleBoxPrice } from '@shared/units'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { useState, type FormEvent, type ReactElement } from 'react'
 import { FiArrowLeft, FiEdit2, FiPackage, FiTrash2, FiX } from 'react-icons/fi'
 import StockOutPanel from './StockOutPanel'
+import { stockLabel } from './stockFilters'
 
 const currency = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' })
 const date = new Intl.DateTimeFormat('en-PH', { dateStyle: 'medium' })
@@ -49,6 +53,8 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
   const [confirmRemove, setConfirmRemove] = useState(false)
   const [isRemoving, setIsRemoving] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
+  const [confirmPieces, setConfirmPieces] = useState(false)
+  const [pricing, setPricing] = useState<ItemProfile['batches'][number] | null>(null)
   const canEdit = account?.role === 'master' || account?.role === 'staff'
 
   if (isNew) {
@@ -68,8 +74,8 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
       if (
         items.some(
           (value) =>
-            value.brandName.toLowerCase() === brandName.toLowerCase() &&
-            value.formulation.toLowerCase() === formulation.toLowerCase()
+            productKey(value.brandName) === productKey(brandName) &&
+            productKey(value.formulation) === productKey(formulation)
         )
       ) {
         setError('A product with this brand and formulation already exists.')
@@ -101,14 +107,14 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
         <div className="space-y-5 sm:space-y-6">
           <Link
             to="/inventory"
-            className="hover:text-brand-700 inline-flex items-center gap-2 rounded-lg px-1 text-sm font-medium text-slate-500 transition"
+            className="hover:text-brand-700 inline-flex items-center gap-2 rounded-lg px-1 text-sm font-medium text-slate-700 transition"
           >
             <FiArrowLeft /> Back to Inventory
           </Link>
           <form noValidate onSubmit={save} className="panel mx-auto max-w-3xl space-y-6 p-6 sm:p-7">
             <div>
               <p className="eyebrow">Inventory</p>
-              <h2 className="page-title mt-0.5">Add New Product</h2>
+              <h1 className="page-title mt-0.5">Add New Product</h1>
               <p className="page-subtitle">
                 Create the product record first. Stock, batch numbers and expiry dates are added
                 when you receive products against a purchase order.
@@ -158,8 +164,13 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
     }
   }
 
+  const piecesChangeWithStock = draft.piecesPerBox !== item.piecesPerBox && stock > 0
   const saveEdit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault()
+    if (piecesChangeWithStock && !confirmPieces) {
+      setError('Confirm the change to pieces per box before saving.')
+      return
+    }
     const genericName = draft.genericName.trim()
     const brandName = draft.brandName.trim()
     const category = draft.category.trim()
@@ -168,8 +179,8 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
       items.some(
         (value) =>
           value.id !== item.id &&
-          value.brandName.toLowerCase() === brandName.toLowerCase() &&
-          value.formulation.toLowerCase() === formulation.toLowerCase()
+          productKey(value.brandName) === productKey(brandName) &&
+          productKey(value.formulation) === productKey(formulation)
       )
     ) {
       setError('A product with this brand and formulation already exists.')
@@ -186,9 +197,11 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
         prescriptionRequired: draft.prescriptionRequired,
         controlled: draft.controlled,
         reorderLevel: draft.reorderLevel,
-        piecesPerBox: draft.piecesPerBox
+        piecesPerBox: draft.piecesPerBox,
+        confirmPiecesChange: confirmPieces
       })
       setDraft({ ...saved, batches: item.batches })
+      setConfirmPieces(false)
       setIsEditing(false)
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Unable to update the product.')
@@ -202,7 +215,7 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
       <div className="space-y-5 sm:space-y-6">
         <Link
           to="/inventory"
-          className="hover:text-brand-700 inline-flex items-center gap-2 rounded-lg px-1 text-sm font-medium text-slate-500 transition"
+          className="hover:text-brand-700 inline-flex items-center gap-2 rounded-lg px-1 text-sm font-medium text-slate-700 transition"
         >
           <FiArrowLeft /> Back to Inventory
         </Link>
@@ -214,12 +227,12 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
                 <span
                   className={`rounded-full border px-2.5 py-1 text-xs font-semibold capitalize ${status === 'in-stock' ? 'border-emerald-100 bg-emerald-50/80 text-emerald-700' : status === 'low-stock' ? 'border-amber-100 bg-amber-50/80 text-amber-700' : 'border-rose-100 bg-rose-50/80 text-rose-700'}`}
                 >
-                  {status.replaceAll('-', ' ')}
+                  {stockLabel(item)}
                 </span>
               </div>
-              <h2 className="mt-3 text-2xl font-semibold tracking-tight text-slate-900">
+              <h1 className="mt-3 text-2xl font-semibold tracking-tight text-slate-900">
                 {item.brandName}
-              </h2>
+              </h1>
               <p className="mt-3 text-sm text-slate-600 sm:text-base">
                 {item.genericName} · {item.formulation}
               </p>
@@ -291,6 +304,27 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
               draft={draft}
               update={(field, value) => setDraft((current) => ({ ...current, [field]: value }))}
             />
+            {piecesChangeWithStock && (
+              <div
+                role="note"
+                className="status-message space-y-2 border-amber-300 bg-amber-50 text-amber-900"
+              >
+                <p>
+                  This product has {stock} pieces in stock, counted in boxes of {item.piecesPerBox}.
+                  Stock stays in pieces, but box counts, box sales and box prices will use boxes of{' '}
+                  {draft.piecesPerBox} from now on. Check the box and wholesale prices of the
+                  batches below after saving.
+                </p>
+                <label className="flex items-center gap-2 font-semibold">
+                  <input
+                    type="checkbox"
+                    checked={confirmPieces}
+                    onChange={(event) => setConfirmPieces(event.target.checked)}
+                  />
+                  I understand. Change pieces per box.
+                </label>
+              </div>
+            )}
             {error && (
               <p role="alert" className="status-message border-rose-200 bg-rose-50 text-rose-800">
                 {error}
@@ -375,6 +409,27 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
                             / box
                           </p>
                         )}
+                        <p className="text-xs text-slate-600">
+                          Wholesale{' '}
+                          {currency.format(
+                            wholesaleBoxPrice(
+                              batch.sellPrice,
+                              batch.boxSellPrice,
+                              batch.wholesaleBoxPrice,
+                              item.piecesPerBox
+                            )
+                          )}{' '}
+                          / box{batch.wholesaleBoxPrice === null ? ' (same as retail)' : ''}
+                        </p>
+                        {canEdit && (
+                          <button
+                            type="button"
+                            className="text-brand-700 mt-1 text-xs font-semibold underline"
+                            onClick={() => setPricing(batch)}
+                          >
+                            Set Wholesale Price
+                          </button>
+                        )}
                       </td>
                       <td className="px-5 py-4">
                         {getExpiryStatus(batch.expiresAt) === 'unknown'
@@ -438,6 +493,17 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
           disabled={isRemoving}
           close={() => setConfirmRemove(false)}
           confirm={() => void remove()}
+        />
+      )}
+      {pricing && (
+        <WholesalePriceDialog
+          batch={pricing}
+          piecesPerBox={item.piecesPerBox}
+          close={() => setPricing(null)}
+          saved={async () => {
+            setPricing(null)
+            await useProfileStore.getState().loadItems(true)
+          }}
         />
       )}
     </DashboardShell>
@@ -566,7 +632,7 @@ function ProductFields({
       </Field>
       <section className="rounded-md border border-slate-200 bg-slate-50 p-4 sm:col-span-2">
         <p className="text-sm font-medium text-slate-700">
-          Dispensing Controls <span className="text-xs font-normal text-slate-400">(optional)</span>
+          Dispensing Controls <span className="text-xs font-normal text-slate-600">(optional)</span>
         </p>
         <div className="mt-3 flex flex-wrap gap-x-6 gap-y-3">
           <label className="flex items-center gap-3 text-sm text-slate-700">
@@ -656,5 +722,88 @@ function Header({ title, description }: { title: string; description: string }):
       <h3 className="section-title text-lg">{title}</h3>
       <p className="mt-1 text-sm text-slate-500">{description}</p>
     </header>
+  )
+}
+
+/** Price of one box for pharmacy clients on one batch; empty uses the retail box price. */
+function WholesalePriceDialog({
+  batch,
+  piecesPerBox,
+  close,
+  saved
+}: {
+  batch: ItemProfile['batches'][number]
+  piecesPerBox: number
+  close: VoidFunction
+  saved: () => Promise<void>
+}): ReactElement {
+  const [value, setValue] = useState(
+    batch.wholesaleBoxPrice === null ? '' : String(batch.wholesaleBoxPrice)
+  )
+  const [error, setError] = useState('')
+  const [saving, setSaving] = useState(false)
+  const retail = unitSellPrice(
+    'box',
+    batch.sellPrice,
+    batch.boxSellPrice,
+    Math.max(1, piecesPerBox)
+  )
+  return (
+    <Modal
+      title={`Wholesale Price for Batch ${batch.batchNumber}`}
+      description={`Pharmacy clients pay this price per box. Leave it empty to use the retail box price of ${currency.format(retail)}.`}
+      close={close}
+      size="sm"
+      busy={saving}
+    >
+      <form
+        noValidate
+        className="space-y-4"
+        onSubmit={(event) => {
+          event.preventDefault()
+          const price = value.trim() === '' ? null : Number(value)
+          if (price !== null && (!/^\d+(\.\d{1,2})?$/.test(value.trim()) || price < 0.01)) {
+            setError('Enter a price of at least ₱0.01 with at most two decimal places.')
+            return
+          }
+          setSaving(true)
+          setError('')
+          void setWholesalePrice(batch.id, price)
+            .then(saved)
+            .catch((cause) => {
+              setError(cause instanceof Error ? cause.message : 'Unable to save the price.')
+              setSaving(false)
+            })
+        }}
+      >
+        <label className="field-label block">
+          Wholesale Price per Box (₱)
+          <input
+            className="field mt-1.5"
+            type="number"
+            min="0.01"
+            step="0.01"
+            inputMode="decimal"
+            placeholder={retail.toFixed(2)}
+            aria-invalid={error ? true : undefined}
+            value={value}
+            onChange={(event) => setValue(event.target.value)}
+          />
+        </label>
+        {error && (
+          <p role="alert" className="text-sm font-medium text-rose-700">
+            {error}
+          </p>
+        )}
+        <div className="flex justify-end gap-2">
+          <button type="button" className="secondary-button" disabled={saving} onClick={close}>
+            Cancel
+          </button>
+          <button className="primary-button" disabled={saving}>
+            {saving ? 'Saving…' : 'Save Price'}
+          </button>
+        </div>
+      </form>
+    </Modal>
   )
 }

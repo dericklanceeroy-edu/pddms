@@ -13,6 +13,7 @@ import { isId } from '@shared/validators'
 import {
   findAll,
   findOneById,
+  findSupplierCosts,
   getById,
   insertOne,
   recordDelivery,
@@ -25,6 +26,15 @@ ipcMain.handle(channels.purchaseOrder.getAll, async () => {
   try {
     authorize((session) => accessControl.can(session.account.role).readAny(resources.purchaseOrder))
     return { success: true, orders: await findAll() }
+  } catch (error) {
+    return { success: false, error: formatValidationError(error) }
+  }
+})
+
+ipcMain.handle(channels.purchaseOrder.getSupplierCosts, async () => {
+  try {
+    authorize((session) => accessControl.can(session.account.role).readAny(resources.purchaseOrder))
+    return { success: true, costs: await findSupplierCosts() }
   } catch (error) {
     return { success: false, error: formatValidationError(error) }
   }

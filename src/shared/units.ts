@@ -58,6 +58,19 @@ export function unitSellPrice(
   return boxSellPrice ?? Number((sellPrice * pieces).toFixed(2))
 }
 
+/**
+ * Wholesale price of one box in pesos. Pharmacy clients pay the batch's wholesale box price when
+ * one is set; otherwise the retail box price applies.
+ */
+export function wholesaleBoxPrice(
+  sellPrice: number,
+  boxSellPrice: number | null,
+  wholesalePrice: number | null,
+  piecesPerBox: number
+): number {
+  return wholesalePrice ?? unitSellPrice('box', sellPrice, boxSellPrice, Math.max(1, piecesPerBox))
+}
+
 /** Whole units of the given kind that the pieces on hand can fill. */
 export const availableUnits = (
   stockPieces: number,

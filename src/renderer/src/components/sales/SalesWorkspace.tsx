@@ -8,7 +8,9 @@ import { useProfileStore } from '@renderer/stores/useProfileStore'
 import { expiryLabels, getExpiryStatus, isBatchSellable, localDate } from '@shared/inventory'
 import {
   calculateSale,
+  cartKey,
   money,
+  posPaymentMethods,
   priceToCents,
   removeCartItem,
   saleDiscount,
@@ -16,6 +18,8 @@ import {
   walkInDiscountSchema,
   type CartLine,
   type Checkout,
+  type PosPaymentMethod,
+  type Prescription,
   type SaleRecord,
   type WalkInDiscount
 } from '@shared/sales'
@@ -39,6 +43,13 @@ export default function SalesWorkspace(): ReactElement {
   // Note: A walk-in Senior/PWD sale keeps the ID details on the sale only; no profile is created.
   const [walkIn, setWalkIn] = useState<WalkInDiscount | null>(null)
   const [cash, setCash] = useState('')
+  const [paymentMethod, setPaymentMethod] = useState<PosPaymentMethod>('Cash')
+  const [paymentReference, setPaymentReference] = useState('')
+  const [prescription, setPrescription] = useState<Prescription>({
+    prescriberName: '',
+    prescriberLicense: '',
+    prescriptionNumber: ''
+  })
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -119,7 +130,12 @@ export default function SalesWorkspace(): ReactElement {
       }
     }
   }, [cart, customers, customerId, walkIn])
-  const changeQuantity = (batchId: number, quantity: number, unit: StockUnit): void => {
+  const changeQuantity = (
+    batchId: number,
+    quantity: number,
+    unit: StockUnit,
+    base: CartLine[] = cart
+  ): void => {
     setError('')
     try {
       const item = products.find((value) => value.batches.some((batch) => batch.id === batchId))
@@ -129,14 +145,36 @@ export default function SalesWorkspace(): ReactElement {
       const price = unitSellPrice(unit, batch.sellPrice, batch.boxSellPrice, item.piecesPerBox)
       setCart(
         setCartQuantity(
-          cart,
+          base,
           { batchId, quantity, unit, unitPriceCents: priceToCents(price) },
-          availableUnits(batch.stock, unit, item.piecesPerBox)
+          availableUnits(batch.stock - otherPieces(base, batchId, unit), unit, item.piecesPerBox)
         )
       )
     } catch (cause) {
       fail(cause)
     }
+  }
+  /** Pieces already in the cart from the same batch under the other unit (box or piece). */
+  const otherPieces = (base: CartLine[], batchId: number, unit: StockUnit): number => {
+    const piecesPerBox =
+      products.find((value) => value.batches.some((batch) => batch.id === batchId))?.piecesPerBox ??
+      1
+    return base
+      .filter((line) => line.batchId === batchId && line.unit !== unit)
+      .reduce((total, line) => total + line.quantity * (line.unit === 'box' ? piecesPerBox : 1), 0)
+  }
+  // Note: Prescription (Rx) and controlled medicines need the prescription recorded at checkout.
+  const cartProducts = products.filter((item) =>
+    item.batches.some((batch) => cart.some((line) => line.batchId === batch.id))
+  )
+  const rxProducts = cartProducts.filter((item) => item.prescriptionRequired || item.controlled)
+  const controlledProducts = cartProducts.filter((item) => item.controlled)
+  const eWallet = paymentMethod !== 'Cash'
+  const resetPayment = (): void => {
+    setCash('')
+    setPaymentMethod('Cash')
+    setPaymentReference('')
+    setPrescription({ prescriberName: '', prescriberLicense: '', prescriptionNumber: '' })
   }
   const pay = async (): Promise<void> => {
     if (paying.current) return
@@ -147,20 +185,41 @@ export default function SalesWorkspace(): ReactElement {
     setNotice('')
     try {
       if (pricing.error) throw new Error(pricing.error)
-      if (!/^\d+(\.\d{1,2})?$/.test(cash)) {
+      const received = eWallet ? (pricing.totals.totalCents / 100).toFixed(2) : cash
+      if (!/^\d+(\.\d{1,2})?$/.test(received)) {
         setCashError('Enter cash received with at most two decimal places.')
         return
       }
-      if (priceToCents(Number(cash)) < pricing.totals.totalCents) {
+      if (priceToCents(Number(received)) < pricing.totals.totalCents) {
         setCashError(`Cash received must be at least ${money(pricing.totals.totalCents)}.`)
         return
+      }
+      if (eWallet && !paymentReference.trim()) {
+        setCashError(`Enter the ${paymentMethod} reference number from the customer's app.`)
+        return
+      }
+      if (rxProducts.length) {
+        if (
+          prescription.prescriberName.trim().length < 2 ||
+          prescription.prescriberLicense.trim().length < 4
+        ) {
+          setCashError("Enter the prescribing doctor's name and PRC license number.")
+          return
+        }
+        if (controlledProducts.length && !prescription.prescriptionNumber?.trim()) {
+          setCashError('Enter the prescription number for the controlled medicine.')
+          return
+        }
       }
       const values = {
         customerId,
         walkInDiscount: walkIn,
         items: cart,
         expectedTotalCents: pricing.totals.totalCents,
-        cashCents: priceToCents(Number(cash))
+        cashCents: priceToCents(Number(received)),
+        paymentMethod,
+        paymentReference: eWallet ? paymentReference.trim() : null,
+        prescription: rxProducts.length ? prescription : null
       }
       const fingerprint = JSON.stringify(values)
       if (pending.current?.fingerprint !== fingerprint)
@@ -169,7 +228,7 @@ export default function SalesWorkspace(): ReactElement {
       const saved = await completeSale(data)
       setReceipt(saved)
       setCart([])
-      setCash('')
+      resetPayment()
       setCustomerId(null)
       setWalkIn(null)
       pending.current = null
@@ -203,7 +262,7 @@ export default function SalesWorkspace(): ReactElement {
         <header className="page-intro flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="eyebrow">Daily work</p>
-            <h2 className="page-title mt-0.5">Sales &amp; Dispensing</h2>
+            <h1 className="page-title mt-0.5">Sales &amp; Dispensing</h1>
             <p className="page-subtitle max-w-3xl">
               Search a medicine, add pieces or boxes to the cart, apply a Senior Citizen or PWD
               discount when eligible, then complete the sale.
@@ -279,7 +338,13 @@ export default function SalesWorkspace(): ReactElement {
                         )}
                       </td>
                       <td className="p-3">{sale.cashierName}</td>
-                      <td className="p-3">{money(sale.totalCents)}</td>
+                      <td className="p-3">
+                        {money(sale.totalCents)}
+                        <p className="text-sm text-slate-600">
+                          {sale.paymentMethod ?? 'Cash'}
+                          {sale.paymentReference ? ` · Ref ${sale.paymentReference}` : ''}
+                        </p>
+                      </td>
                       <td className="p-3">
                         <button
                           className="secondary-button"
@@ -403,7 +468,9 @@ export default function SalesWorkspace(): ReactElement {
                           ? (['piece', 'box'] as const)
                           : (['piece'] as const)
                         ).map((unit) => {
-                          const line = cart.find((item) => item.batchId === batch.id)
+                          const line = cart.find(
+                            (item) => item.batchId === batch.id && item.unit === unit
+                          )
                           return (
                             <button
                               key={unit}
@@ -414,11 +481,7 @@ export default function SalesWorkspace(): ReactElement {
                                 availableUnits(batch.stock, unit, product.piecesPerBox) < 1
                               }
                               onClick={() =>
-                                changeQuantity(
-                                  batch.id,
-                                  line && line.unit === unit ? line.quantity + 1 : 1,
-                                  unit
-                                )
+                                changeQuantity(batch.id, line ? line.quantity + 1 : 1, unit)
                               }
                             >
                               {unit === 'piece' ? 'Add Piece' : 'Add Box'}
@@ -458,7 +521,7 @@ export default function SalesWorkspace(): ReactElement {
                   return (
                     <div
                       className="space-y-2 rounded-md border border-slate-200 p-3"
-                      key={line.batchId}
+                      key={cartKey(line)}
                     >
                       <div className="flex items-start justify-between gap-3">
                         <p className="min-w-0 font-semibold break-words text-slate-900">
@@ -473,7 +536,7 @@ export default function SalesWorkspace(): ReactElement {
                           aria-label={`Remove ${item?.brandName ?? 'item'} from the cart`}
                           title="Remove from Cart"
                           disabled={busy}
-                          onClick={() => setCart(removeCartItem(cart, line.batchId))}
+                          onClick={() => setCart(removeCartItem(cart, cartKey(line)))}
                         >
                           <FiTrash2 aria-hidden="true" />
                         </button>
@@ -490,7 +553,11 @@ export default function SalesWorkspace(): ReactElement {
                             min="1"
                             max={
                               batch
-                                ? availableUnits(batch.stock, line.unit, piecesPerBox)
+                                ? availableUnits(
+                                    batch.stock - otherPieces(cart, line.batchId, line.unit),
+                                    line.unit,
+                                    piecesPerBox
+                                  )
                                 : undefined
                             }
                             step="1"
@@ -509,9 +576,14 @@ export default function SalesWorkspace(): ReactElement {
                               className="field mt-1"
                               value={line.unit}
                               disabled={busy}
-                              onChange={(event) =>
-                                changeQuantity(line.batchId, 1, event.target.value as StockUnit)
-                              }
+                              onChange={(event) => {
+                                const unit = event.target.value as StockUnit
+                                const rest = removeCartItem(cart, cartKey(line))
+                                const same = rest.find(
+                                  (value) => value.batchId === line.batchId && value.unit === unit
+                                )
+                                changeQuantity(line.batchId, (same?.quantity ?? 0) + 1, unit, rest)
+                              }}
                             >
                               <option value="piece">Piece</option>
                               <option value="box">Box of {piecesPerBox}</option>
@@ -644,10 +716,73 @@ export default function SalesWorkspace(): ReactElement {
                   </label>
                 </fieldset>
               )}
-              <p className="text-xs text-slate-500">
+              <p className="text-sm text-slate-600">
                 Senior Citizen and PWD eligibility (registered profile or walk-in ID) removes the
                 12% VAT, then applies a 20% discount.
               </p>
+              {rxProducts.length > 0 && (
+                <fieldset className="space-y-3 rounded-md border border-amber-300 bg-amber-50/60 p-3">
+                  <legend className="px-1 text-sm font-bold text-amber-900">
+                    Prescription Details
+                  </legend>
+                  <p className="text-sm text-amber-900">
+                    {rxProducts.map((item) => item.brandName).join(', ')}{' '}
+                    {rxProducts.length === 1 ? 'needs' : 'need'} a prescription. Check the
+                    prescription, then record the prescribing doctor.
+                    {controlledProducts.length > 0 &&
+                      ' Controlled medicine: the prescription number is also required.'}
+                  </p>
+                  <label className="field-label">
+                    Prescribing Doctor<span className="required-mark">*</span>
+                    <span className="mt-1.5 block font-normal">
+                      <FilteredInput
+                        rule="personName"
+                        maxLength={120}
+                        value={prescription.prescriberName}
+                        disabled={busy}
+                        placeholder="e.g. Dr. Ana Reyes"
+                        onValueChange={(value) =>
+                          setPrescription({ ...prescription, prescriberName: value })
+                        }
+                      />
+                    </span>
+                  </label>
+                  <label className="field-label">
+                    PRC License No.<span className="required-mark">*</span>
+                    <span className="mt-1.5 block font-normal">
+                      <FilteredInput
+                        rule="reference"
+                        maxLength={40}
+                        value={prescription.prescriberLicense}
+                        disabled={busy}
+                        placeholder="e.g. 0123456"
+                        onValueChange={(value) =>
+                          setPrescription({ ...prescription, prescriberLicense: value })
+                        }
+                      />
+                    </span>
+                  </label>
+                  <label className="field-label">
+                    Prescription No.
+                    {controlledProducts.length > 0 ? (
+                      <span className="required-mark">*</span>
+                    ) : (
+                      <span className="ml-1 text-sm font-normal text-slate-600">(optional)</span>
+                    )}
+                    <span className="mt-1.5 block font-normal">
+                      <FilteredInput
+                        rule="reference"
+                        maxLength={60}
+                        value={prescription.prescriptionNumber ?? ''}
+                        disabled={busy}
+                        onValueChange={(value) =>
+                          setPrescription({ ...prescription, prescriptionNumber: value })
+                        }
+                      />
+                    </span>
+                  </label>
+                </fieldset>
+              )}
               {pricing.error && (
                 <p role="alert" className="text-sm font-medium text-rose-700">
                   {pricing.error}
@@ -672,47 +807,91 @@ export default function SalesWorkspace(): ReactElement {
                 </div>
               </dl>
               <label className="field-label">
-                Cash Received (₱)<span className="required-mark">*</span>
-                <input
+                Payment Method<span className="required-mark">*</span>
+                <select
                   className="field mt-1.5 font-normal"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={cash}
+                  value={paymentMethod}
                   disabled={busy}
-                  aria-invalid={cashError ? true : undefined}
-                  aria-describedby={cashError ? 'cash-error' : undefined}
                   onChange={(event) => {
-                    setCash(event.target.value)
+                    setPaymentMethod(event.target.value as PosPaymentMethod)
                     setCashError('')
                   }}
-                />
-                {cashError && (
-                  <span id="cash-error" className="field-error">
-                    {cashError}
-                  </span>
-                )}
+                >
+                  {posPaymentMethods.map((method) => (
+                    <option key={method} value={method}>
+                      {method}
+                    </option>
+                  ))}
+                </select>
               </label>
-              <p className="text-lg font-bold">
-                Change:{' '}
-                {money(
-                  Math.max(0, Math.round((Number(cash) || 0) * 100) - pricing.totals.totalCents)
-                )}
-              </p>
+              {eWallet ? (
+                <label className="field-label">
+                  {paymentMethod} Reference No.<span className="required-mark">*</span>
+                  <span className="mt-1.5 block font-normal">
+                    <FilteredInput
+                      rule="reference"
+                      maxLength={60}
+                      value={paymentReference}
+                      disabled={busy}
+                      placeholder="From the customer's payment confirmation"
+                      aria-invalid={cashError ? true : undefined}
+                      aria-describedby={cashError ? 'cash-error' : undefined}
+                      onValueChange={(value) => {
+                        setPaymentReference(value)
+                        setCashError('')
+                      }}
+                    />
+                  </span>
+                  <span className="mt-1 block text-sm font-normal text-slate-600">
+                    Amount received: {money(pricing.totals.totalCents)} (exact amount, no change).
+                  </span>
+                </label>
+              ) : (
+                <label className="field-label">
+                  Cash Received (₱)<span className="required-mark">*</span>
+                  <input
+                    className="field mt-1.5 font-normal"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={cash}
+                    disabled={busy}
+                    aria-invalid={cashError ? true : undefined}
+                    aria-describedby={cashError ? 'cash-error' : undefined}
+                    onChange={(event) => {
+                      setCash(event.target.value)
+                      setCashError('')
+                    }}
+                  />
+                </label>
+              )}
+              {cashError && (
+                <p id="cash-error" role="alert" className="field-error">
+                  {cashError}
+                </p>
+              )}
+              {!eWallet && (
+                <p className="text-lg font-bold">
+                  Change:{' '}
+                  {money(
+                    Math.max(0, Math.round((Number(cash) || 0) * 100) - pricing.totals.totalCents)
+                  )}
+                </p>
+              )}
               <div className="flex flex-wrap gap-2">
                 <button
                   className="primary-button"
                   disabled={busy || loading || !cart.length || !!pricing.error}
                   onClick={() => void pay()}
                 >
-                  {busy ? 'Processing…' : 'Complete Cash Payment'}
+                  {busy ? 'Processing…' : `Complete ${paymentMethod} Payment`}
                 </button>
                 <button
                   className="secondary-button"
                   disabled={busy || !cart.length}
                   onClick={() => {
                     setCart([])
-                    setCash('')
+                    resetPayment()
                     setCustomerId(null)
                     setWalkIn(null)
                     pending.current = null

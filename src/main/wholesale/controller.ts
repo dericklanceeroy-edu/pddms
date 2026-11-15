@@ -3,10 +3,13 @@ import { findOneById } from '@main/account/repository'
 import { state } from '@main/api'
 import { windowDialog } from '@main/api/dialogs'
 import { ipcMain } from '@main/api/ipc'
+import { receiptPdf } from '@main/api/receipt-pdf'
 import { channels, resources } from '@shared/constants'
 import { SalesError } from '@shared/sales'
 import { describeIssue } from '@shared/validation'
 import {
+  deliveryReceiptHtml,
+  deliveryReceiptNumber,
   deliveryReceiptText,
   wholesaleDeliverSchema,
   WholesaleError,
@@ -98,16 +101,22 @@ handle(channels.wholesale.alerts, 'alerts', () => repository.overdueSummary())
 handle(channels.wholesale.exportReceipt, 'read', async (payload, account, event) => {
   const id = idSchema.parse(payload)
   const order = await repository.getOrder(id, false)
-  const text = deliveryReceiptText(order)
+  deliveryReceiptText(order)
   const selected = await windowDialog(event).showSaveDialog({
     title: 'Save delivery receipt',
-    defaultPath: `DR-${order.reference}.txt`,
-    filters: [{ name: 'Text receipt', extensions: ['txt'] }]
+    defaultPath: `${deliveryReceiptNumber(order)}.pdf`,
+    filters: [
+      { name: 'PDF receipt (80 mm)', extensions: ['pdf'] },
+      { name: 'Text receipt', extensions: ['txt'] }
+    ]
   })
   if (selected.canceled || !selected.filePath) return false
   const current = await session('read')
   if (current.id !== account.id)
     throw new WholesaleError('The signed-in account changed. Reopen the receipt.')
-  await writeFile(selected.filePath, text, 'utf8')
+  const persisted = await repository.getOrder(id, false)
+  if (selected.filePath.toLowerCase().endsWith('.txt'))
+    await writeFile(selected.filePath, deliveryReceiptText(persisted), 'utf8')
+  else await writeFile(selected.filePath, await receiptPdf(deliveryReceiptHtml(persisted)))
   return true
 })

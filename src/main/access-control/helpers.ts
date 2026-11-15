@@ -6,12 +6,14 @@ export function authorize(
   permissionHandler: (session: NonNullable<State['session']>) => Permission
 ): Permission {
   if (state.session === undefined) {
+    state.denied = true
     throw new UnauthorizedError('Session not found')
   }
 
   const permission = permissionHandler(state.session)
 
   if (!permission.granted) {
+    state.denied = true
     throw new UnauthorizedError('Permission not granted')
   }
 

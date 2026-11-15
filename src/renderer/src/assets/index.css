@@ -24,6 +24,9 @@
   --color-sidebar-900: #283342;
   --color-sidebar-800: #354253;
   --color-canvas: #edf1f5;
+  /* Note: Small print (hints, badges, table headers) is 13px rather than 12px, for legibility. */
+  --text-xs: 0.8125rem;
+  --text-xs--line-height: 1.4;
 }
 
 @layer base {

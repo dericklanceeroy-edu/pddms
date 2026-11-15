@@ -127,7 +127,7 @@ export default function ReportingWorkspace(): ReactElement {
       <div className="space-y-5">
         <header className="page-intro">
           <p className="eyebrow">Business</p>
-          <h2 className="page-title mt-0.5">Reports</h2>
+          <h1 className="page-title mt-0.5">Reports</h1>
           <p className="page-subtitle">
             Live database reports. Choose the same start and end date for a daily report. Amounts
             are in Philippine pesos.
