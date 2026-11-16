@@ -8,7 +8,13 @@ import { completeSale, getSale, getSaleHistory } from '@renderer/services/sales'
 import { useProfileStore } from '@renderer/stores/useProfileStore'
 import { customerDetail } from '@shared/controls'
 import { phoneKey } from '@shared/duplicates'
-import { expiryLabels, getExpiryStatus, isBatchSellable, localDate } from '@shared/inventory'
+import {
+  expiryDateLabel,
+  expiryLabels,
+  getExpiryStatus,
+  isBatchSellable,
+  localDate
+} from '@shared/inventory'
 import {
   calculateSale,
   cartKey,
@@ -52,6 +58,19 @@ const emptyPrescription: Prescription = {
 /** "Sell first": the sellable batch that expires soonest (batches arrive sorted by expiry). */
 const firstSellable = (item: ItemProfile): number | undefined =>
   item.batches.find((batch) => isBatchSellable(batch.stock, batch.expiresAt))?.id
+
+/**
+ * Stock shown on a POS product card. Pieces that are only in expired batches are on the shelf but
+ * cannot be sold, so they read "Expired" with a write-off hint instead of "Out of stock" (L12).
+ */
+function stockLabel(item: ItemProfile): string {
+  const sellable = getSellableStock(item)
+  if (sellable) return `${sellable} pcs sellable`
+  const expired = item.batches
+    .filter((batch) => batch.stock > 0 && getExpiryStatus(batch.expiresAt) === 'expired')
+    .reduce((total, batch) => total + batch.stock, 0)
+  return expired ? `Expired: ${expired} pcs to write off` : 'Out of stock'
+}
 
 export default function SalesWorkspace(): ReactElement {
   const { account } = useAccount()
@@ -415,7 +434,7 @@ export default function SalesWorkspace(): ReactElement {
             <h3 className="section-title">Transactions</h3>
             <p className="text-sm text-slate-500">
               Newest first · {account?.role === 'master' ? 'All cashiers' : 'Your sales only'}. A
-              sale rung up wrong can be voided: its items go back to their batch and it is left out
+              sale of today rung up wrong can be voided before the drawer is counted; it is left out
               of totals.{' '}
               {account?.role === 'master' ? '' : 'An administrator must approve each void.'}
             </p>
@@ -485,15 +504,17 @@ export default function SalesWorkspace(): ReactElement {
                         >
                           View
                         </button>
-                        {sale.status === 'completed' && (
-                          <button
-                            className="secondary-button ml-2 text-rose-700"
-                            disabled={busy}
-                            onClick={() => setVoiding(sale)}
-                          >
-                            <FiSlash aria-hidden="true" /> Void
-                          </button>
-                        )}
+                        {/* Note: Only today's sales can be voided; older days are closed (M2). */}
+                        {sale.status === 'completed' &&
+                          localDate(new Date(sale.createdAt)) === localDate() && (
+                            <button
+                              className="secondary-button ml-2 text-rose-700"
+                              disabled={busy}
+                              onClick={() => setVoiding(sale)}
+                            >
+                              <FiSlash aria-hidden="true" /> Void
+                            </button>
+                          )}
                       </td>
                     </tr>
                   ))}
@@ -555,9 +576,7 @@ export default function SalesWorkspace(): ReactElement {
                     <span
                       className={`text-right text-sm font-semibold ${getSellableStock(item) ? 'text-slate-700' : 'text-rose-700'}`}
                     >
-                      {getSellableStock(item)
-                        ? `${getSellableStock(item)} pcs sellable`
-                        : 'Out of stock'}
+                      {stockLabel(item)}
                     </span>
                   </button>
                 ))}
@@ -618,8 +637,10 @@ export default function SalesWorkspace(): ReactElement {
                             ` · ${money(priceToCents(unitSellPrice('box', batch.sellPrice, batch.boxSellPrice, batch.piecesPerBox)))} per box of ${batch.piecesPerBox}`}
                         </p>
                         <p className="text-sm text-slate-600">
-                          {piecesLabel(batch.stock, batch.piecesPerBox)} on hand · Expires{' '}
-                          {batch.expiresAt}
+                          {piecesLabel(batch.stock, batch.piecesPerBox)} on hand ·{' '}
+                          <span className="whitespace-nowrap">
+                            Expires {expiryDateLabel(batch.expiresAt)}
+                          </span>
                         </p>
                         <p
                           className={`text-sm font-medium ${!isBatchSellable(batch.stock, batch.expiresAt) ? 'text-rose-700' : getExpiryStatus(batch.expiresAt) === 'near-expiry' ? 'text-amber-700' : 'text-slate-500'}`}

@@ -92,6 +92,8 @@ export const packLabel = (piecesPerBox: number, unitCost: number | null): string
 export const voidSaleSchema = z.strictObject({
   saleId: id,
   reason: reasonText('Say why the sale is voided (at least 5 characters).'),
+  /** True when the medicines came back to the counter; false when the customer kept them. */
+  itemsReturned: z.boolean({ error: 'Say whether the medicines came back to the counter.' }),
   /** An administrator's sign-in, required when the person voiding is not an administrator. */
   approval: z
     .strictObject({
@@ -126,6 +128,8 @@ export interface CashCountPreview {
   /** E-wallet sales are not in the drawer; shown for completeness. */
   ewalletSalesCents: number
   voidedCount: number
+  /** This cashier's latest count for today; a new count replaces it and needs a reason. */
+  previousCountId: number | null
 }
 export interface CashCountRecord {
   id: number
@@ -142,6 +146,10 @@ export interface CashCountRecord {
   notes: string | null
   countedByName: string
   createdAt: string
+  /** The earlier count of the same day that this recount replaces. */
+  recountOf: number | null
+  /** Set when a later recount of the same day replaced this count. */
+  replacedBy: number | null
 }
 export const overShortLabel = (differenceCents: number): string =>
   differenceCents === 0 ? 'Balanced' : differenceCents > 0 ? 'Over' : 'Short'
@@ -175,6 +183,11 @@ export interface StockCountLine {
   reason: string | null
   /** Batch stock now; differs from expected when stock moved after the count started. */
   currentStock: number
+  /**
+   * System stock when this line's count was saved. The correction is counted − this, so sales
+   * made while counting are not subtracted twice. Null until saved (or on older counts).
+   */
+  stockAtCount: number | null
   unitCost: number
 }
 export interface StockCountRecord {

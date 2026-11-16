@@ -224,6 +224,8 @@ if (!process.env.REPORT_TEST_PHASE) {
         quantity,
         unitPriceCents: index ? 5600 : 11200
       })
+      // Note: Each dangerous-drug sale needs its own prescription (filled once).
+      let prescriptionCount = 0
       const checkout = async (items, customerId, total, cash = total) =>
         (
           await ok(channels.sales.checkout, {
@@ -236,7 +238,7 @@ if (!process.env.REPORT_TEST_PHASE) {
             prescription: {
               prescriberName: 'Dr. Report Prescriber',
               prescriberLicense: 'PRC-1234567',
-              prescriptionNumber: 'RX-REPORT-1',
+              prescriptionNumber: `RX-REPORT-${(prescriptionCount += 1)}`,
               patientName: 'Report Patient',
               patientAge: 60,
               patientAddress: '5 Mabini St, Manila',

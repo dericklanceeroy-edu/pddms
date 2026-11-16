@@ -12,6 +12,7 @@ import {
   startStockCount
 } from '@renderer/services/controls'
 import type { StockCountDetails, StockCountRecord } from '@shared/controls'
+import { expiryDateLabel } from '@shared/inventory'
 import { useCallback, useEffect, useState, type ReactElement } from 'react'
 import { FiPrinter } from 'react-icons/fi'
 
@@ -219,7 +220,7 @@ export default function StockCount({
 }
 
 function CountSheet({
-  count,
+  count: initial,
   close,
   finished
 }: {
@@ -227,6 +228,7 @@ function CountSheet({
   close: VoidFunction
   finished: () => Promise<void>
 }): ReactElement {
+  const [count, setCount] = useState(initial)
   const editable = count.status === 'open'
   const [entries, setEntries] = useState(() =>
     Object.fromEntries(
@@ -272,10 +274,35 @@ function CountSheet({
       setBusy(false)
     }
   }
+  // Note: A count is compared with the system stock at the moment it was saved (M1). A line not
+  // saved yet is compared with the stock now; it is saved as soon as the field is left.
+  const isSaved = (line: (typeof count.lines)[number]): boolean =>
+    line.counted !== null && entries[line.batchId].counted.trim() === String(line.counted)
+  const basis = (line: (typeof count.lines)[number]): number =>
+    isSaved(line) ? (line.stockAtCount ?? line.expected) : line.currentStock
   const differences = count.lines.filter((line) => {
     const value = entries[line.batchId].counted.trim()
-    return value !== '' && Number(value) !== line.expected
+    return value !== '' && Number(value) !== basis(line)
   })
+  const saveLine = async (line: (typeof count.lines)[number]): Promise<void> => {
+    const entry = entries[line.batchId]
+    const value = entry.counted.trim()
+    if (!editable || busy) return
+    if (value === (line.counted === null ? '' : String(line.counted))) return
+    if (value !== '' && (!Number.isInteger(Number(value)) || Number(value) < 0)) return
+    try {
+      await saveStockCountLines(count.id, [
+        {
+          batchId: line.batchId,
+          counted: value === '' ? null : Number(value),
+          reason: entry.reason.trim()
+        }
+      ])
+      setCount(await getStockCount(count.id))
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'The count could not be saved.')
+    }
+  }
   const uncounted = count.lines.filter((line) => entries[line.batchId].counted.trim() === '')
   const complete = async (): Promise<void> => {
     const ok = await confirm({
@@ -310,9 +337,10 @@ function CountSheet({
       <div className="space-y-4">
         {editable ? (
           <p className="text-sm text-slate-600">
-            Enter the pieces you counted for each batch. Leave a line empty if it was not counted
-            yet. Any difference needs a reason (for example: found on another shelf, broken, not
-            recorded at sale). Save to keep your progress; complete when every batch is counted.
+            Enter each batch&apos;s count right after counting its shelf. Each line is saved when
+            you leave the field, together with the system stock at that moment, so sales made during
+            the count are not subtracted twice. Any difference needs a reason (for example: found on
+            another shelf, broken, not recorded at sale). Complete when every batch is counted.
           </p>
         ) : (
           <p className="text-sm text-slate-600">
@@ -338,12 +366,13 @@ function CountSheet({
           </span>
         </div>
         <div className="max-h-[55vh] overflow-auto rounded-md border border-slate-200">
-          <table className="w-full min-w-[860px] text-sm">
+          <table className="w-full min-w-[960px] text-sm">
             <thead className="sticky top-0 z-10 bg-slate-50 text-left text-xs text-slate-500">
               <tr>
                 <th className="px-3 py-2">Product and Batch</th>
                 <th className="px-3 py-2">Expiry</th>
-                <th className="px-3 py-2 text-right">Expected (pcs)</th>
+                <th className="px-3 py-2 text-right">At Start (pcs)</th>
+                <th className="px-3 py-2 text-right">System Now (pcs)</th>
                 <th className="w-32 px-3 py-2">Counted (pcs)</th>
                 <th className="px-3 py-2 text-right">Difference</th>
                 <th className="px-3 py-2">Reason</th>
@@ -353,8 +382,12 @@ function CountSheet({
               {count.lines.map((line) => {
                 const entry = entries[line.batchId]
                 const counted = entry.counted.trim() === '' ? null : Number(entry.counted)
-                const difference = counted === null ? null : counted - line.expected
-                const moved = editable && line.currentStock !== line.expected
+                const difference = counted === null ? null : counted - basis(line)
+                const movedSinceCount =
+                  editable &&
+                  isSaved(line) &&
+                  line.stockAtCount !== null &&
+                  line.currentStock !== line.stockAtCount
                 return (
                   <tr key={line.batchId}>
                     <td className="px-3 py-2">
@@ -362,15 +395,19 @@ function CountSheet({
                       <p className="text-xs text-slate-500">
                         Batch {line.batchNumber} · boxes of {line.piecesPerBox}
                       </p>
-                      {moved && (
-                        <p className="text-xs text-amber-700">
-                          Stock changed since the count started (now {line.currentStock}). The
-                          difference is applied to today’s stock.
+                      {movedSinceCount && (
+                        <p className="text-xs text-amber-800">
+                          System stock was {line.stockAtCount} when counted and is{' '}
+                          {line.currentStock} now. The difference is taken from the stock when
+                          counted, so later sales are not subtracted twice.
                         </p>
                       )}
                     </td>
-                    <td className="px-3 py-2 whitespace-nowrap">{line.expiresAt.slice(0, 10)}</td>
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      {expiryDateLabel(line.expiresAt)}
+                    </td>
                     <td className="px-3 py-2 text-right tabular-nums">{line.expected}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{line.currentStock}</td>
                     <td className="px-3 py-2">
                       <input
                         className="field mt-0"
@@ -387,6 +424,7 @@ function CountSheet({
                             [line.batchId]: { ...entry, counted: event.target.value }
                           }))
                         }
+                        onBlur={() => void saveLine(line)}
                       />
                     </td>
                     <td
@@ -464,6 +502,7 @@ function CountSheet({
                 onClick={() =>
                   void run(async () => {
                     await saveStockCountLines(count.id, payload())
+                    setCount(await getStockCount(count.id))
                     setNotice('Progress saved.')
                   })
                 }

@@ -29,6 +29,7 @@
     "test:desktop": "node scripts/verify-desktop.mjs",
     "test:qa": "node scripts/verify-qa-fixes.mjs",
     "test:fixlist": "node scripts/verify-fix-list.mjs",
+    "test:secondqa": "node scripts/verify-second-qa.mjs",
     "start": "node scripts/run-electron-vite.mjs preview",
     "dev": "node scripts/run-electron-vite.mjs dev",
     "build": "npm run typecheck && electron-vite build",

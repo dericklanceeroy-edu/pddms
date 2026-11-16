@@ -12,7 +12,7 @@ import {
   type SupplierReturnRecord
 } from '@shared/controls'
 import { supplierReturnReasons, type Database } from '@shared/types'
-import type { Transaction } from 'kysely'
+import { sql, type Transaction } from 'kysely'
 
 /**
  * Stock sent back to a supplier (near expiry, damaged, wrong item, recalled) and the supplier's
@@ -181,7 +181,8 @@ export async function recordCreditNote(input: CreditNoteInput, accountId: number
       .selectFrom('supplierCreditNotes')
       .select('id')
       .where('supplierId', '=', data.supplierId)
-      .where('creditNoteNumber', '=', data.creditNoteNumber)
+      // Note: CN-QA-1 and cn-qa-1 are the same credit note (L7).
+      .where(sql<string>`lower(credit_note_number)`, '=', data.creditNoteNumber.toLowerCase())
       .executeTakeFirst()
     if (duplicate) throw new Error(`Credit note ${data.creditNoteNumber} is already recorded for this supplier.`)
     const orderNumber = data.purchaseOrderId

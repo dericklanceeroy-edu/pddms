@@ -132,6 +132,8 @@ export interface StockCountLinesTable {
   expected: number
   counted: ColumnType<number | null, number | null | undefined, number | null>
   reason: ColumnType<string | null, string | null | undefined, string | null>
+  /** System stock when the count was entered; null on lines saved before this was kept. */
+  stockAtCount: ColumnType<number | null, number | null | undefined, number | null>
 }
 
 export interface StockAdjustmentsTable {
@@ -160,6 +162,8 @@ export interface CashCountsTable {
   notes: string | null
   countedByName: string
   createdAt: string
+  /** The earlier count of the same cashier and day that this recount replaces. */
+  recountOf: ColumnType<number | null, number | null | undefined, number | null>
 }
 
 /** Last agreed cost per box for a supplier and product; prefilled on new orders. */

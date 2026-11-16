@@ -12,6 +12,7 @@ import {
   type UserUpdateValues
 } from '@renderer/data/userManagement'
 import { useUserManagement } from '@renderer/hooks/useUserManagement'
+import { RequestError } from '@renderer/services/controls'
 import { cloneElement, useId, useMemo, useState, type FormEvent, type ReactElement } from 'react'
 import { FiEdit2, FiPlus, FiSearch, FiShield, FiTrash2, FiUsers } from 'react-icons/fi'
 import AdministrationTools from './AdministrationTools'
@@ -115,7 +116,12 @@ export default function UserManagement(): ReactElement {
               <option value="cashier">Cashier</option>
             </select>
           </div>
-          <div className="overflow-x-auto">
+          <div
+            className="overflow-x-auto"
+            tabIndex={0}
+            role="region"
+            aria-label="Staff accounts table"
+          >
             <table className="w-full min-w-[720px] text-sm">
               <thead className="surface-header text-left text-slate-500">
                 <tr>
@@ -276,6 +282,11 @@ export default function UserManagement(): ReactElement {
             await management.deleteUser(deleteUser)
             setDeleteUser(null)
             setFeedback('User account deleted.')
+          }}
+          block={async () => {
+            await management.toggleStatus(deleteUser)
+            setDeleteUser(null)
+            setFeedback('User account blocked. It stays on its past records.')
           }}
         />
       )}
@@ -569,25 +580,31 @@ function EditUserDialog({
 function DeleteUserDialog({
   user,
   close,
-  confirm
+  confirm,
+  block
 }: {
   user: ManagedUser
   close: VoidFunction
   confirm: () => Promise<void>
+  block: () => Promise<void>
 }): ReactElement {
   const [error, setError] = useState('')
   const [deleting, setDeleting] = useState(false)
+  // Note: An account with history cannot be deleted; the reason is shown and Block is offered (L11).
+  const [canBlock, setCanBlock] = useState(false)
 
-  const remove = async (): Promise<void> => {
+  const run = async (action: () => Promise<void>, fallback: string): Promise<void> => {
     setDeleting(true)
     setError('')
     try {
-      await confirm()
+      await action()
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Unable to delete the account.')
+      setError(cause instanceof Error ? cause.message : fallback)
+      setCanBlock(cause instanceof RequestError && cause.archivable && user.status !== 'blocked')
       setDeleting(false)
     }
   }
+  const remove = (): Promise<void> => run(confirm, 'Unable to delete the account.')
 
   return (
     <Dialog title="Delete Staff Account?" close={close}>
@@ -607,13 +624,23 @@ function DeleteUserDialog({
           <button disabled={deleting} onClick={close} className="secondary-button">
             Cancel
           </button>
-          <button
-            disabled={deleting}
-            onClick={() => void remove()}
-            className="danger-button disabled:opacity-60"
-          >
-            {deleting ? 'Deleting…' : 'Delete Account'}
-          </button>
+          {canBlock ? (
+            <button
+              disabled={deleting}
+              onClick={() => void run(block, 'Unable to block the account.')}
+              className="primary-button disabled:opacity-60"
+            >
+              {deleting ? 'Blocking…' : 'Block Account Instead'}
+            </button>
+          ) : (
+            <button
+              disabled={deleting}
+              onClick={() => void remove()}
+              className="danger-button disabled:opacity-60"
+            >
+              {deleting ? 'Deleting…' : 'Delete Account'}
+            </button>
+          )}
         </div>
       </div>
     </Dialog>

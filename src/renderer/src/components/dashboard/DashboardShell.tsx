@@ -52,7 +52,7 @@ const navigation: Array<{ group: string; items: NavigationItem[] }> = [
     items: [
       { label: 'Inventory & Expiry', to: '/inventory', icon: FiArchive },
       { label: 'Receiving', to: '/suppliers', icon: FiPackage, tab: 'receiving' },
-      { label: 'Suppliers & Orders', to: '/suppliers', icon: FiTruck },
+      { label: 'Suppliers & Purchasing', to: '/suppliers', icon: FiTruck },
       { label: 'Invoices & Payments', to: '/suppliers', icon: FiCreditCard, tab: 'invoices' }
     ]
   },

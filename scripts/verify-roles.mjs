@@ -65,6 +65,7 @@ if (!process.env.ROLES_TEST_PHASE) {
   const { state } = await import('../src/main/api/index.ts')
   const { channels } = await import('../src/shared/constants.ts')
   const { handlers } = await import('./inventory-test-electron.mjs')
+  const { sql } = await import('kysely')
   const { canAccessPath, getHomePath } = await import('../src/renderer/src/navigation/access.ts')
   const { demoAccounts } = await import('./demo-setup.mjs')
   for (const module of [
@@ -111,7 +112,8 @@ if (!process.env.ROLES_TEST_PHASE) {
     const adminView = (await ok(channels.dashboard.get)).data
     assert.equal(adminView.view, 'admin')
     assert.ok(adminView.operationsPulse.some((item) => item.id === 'stock-valuation'))
-    assert.equal(adminView.recentTransactions.length, 4)
+    // Note: The demo has 14 retail sales (5 today, 9 dated back); the list shows the latest 10.
+    assert.equal(adminView.recentTransactions.length, 10)
     await ok(channels.account.getAll)
     await ok(channels.reporting.generate, report)
     const valuation = adminView.operationsPulse.find((item) => item.id === 'stock-valuation')
@@ -149,11 +151,16 @@ if (!process.env.ROLES_TEST_PHASE) {
     assert.equal(cashierView.view, 'cashier')
     assert.equal(cashierView.operationsPulse.length, 0)
     assert.equal(cashierView.expiryAlerts.length, 0)
-    assert.equal(cashierView.recentTransactions.length, 4)
+    assert.equal(cashierView.recentTransactions.length, 10)
+    const { dateBounds } = await import('../src/shared/reporting.ts')
+    const todayBounds = dateBounds(localDate(), localDate())
     const ownSales = await db
       .selectFrom('sales')
       .select(({ fn }) => fn.sum('totalCents').as('total'))
       .where('cashierId', '=', state.session.account.id)
+      .where('status', '=', 'completed')
+      .where('createdAt', '>=', todayBounds.start)
+      .where('createdAt', '<', todayBounds.end)
       .executeTakeFirstOrThrow()
     assert.equal(
       Math.round(
@@ -190,22 +197,27 @@ if (!process.env.ROLES_TEST_PHASE) {
     assert.equal(canAccessPath('staff', '/reports'), false)
     assert.equal(canAccessPath('master', '/users'), true)
 
-    // Sample data reconciles: batch stock = received - sold - wholesale delivered.
+    // Sample data reconciles in pieces: batch stock = received - sold - wholesale delivered.
+    const pieces = sql`quantity * pieces_per_unit`
     for (const batch of batches) {
       const received = await db
         .selectFrom('supplierDeliveryItems')
-        .select(({ fn }) => fn.sum('quantity').as('quantity'))
+        .select(({ fn }) => fn.sum(pieces).as('quantity'))
         .where('batchId', '=', batch.id)
         .executeTakeFirstOrThrow()
       const sold = await db
         .selectFrom('saleItems')
-        .select(({ fn }) => fn.sum('quantity').as('quantity'))
+        .select(({ fn }) => fn.sum(pieces).as('quantity'))
         .where('batchId', '=', batch.id)
         .executeTakeFirstOrThrow()
       const wholesale = await db
         .selectFrom('wholesaleOrderItems')
         .innerJoin('wholesaleOrders', 'wholesaleOrders.id', 'wholesaleOrderItems.orderId')
-        .select(({ fn }) => fn.sum('wholesaleOrderItems.quantity').as('quantity'))
+        .select(({ fn }) =>
+          fn
+            .sum(sql`wholesale_order_items.quantity * wholesale_order_items.pieces_per_unit`)
+            .as('quantity')
+        )
         .where('wholesaleOrderItems.batchId', '=', batch.id)
         .where('wholesaleOrders.status', '=', 'delivered')
         .executeTakeFirstOrThrow()

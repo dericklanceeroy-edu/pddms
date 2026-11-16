@@ -5,9 +5,9 @@ import { money, type SaleRecord } from '@shared/sales'
 import { useState, type FormEvent, type ReactElement } from 'react'
 
 /**
- * Voids a whole retail sale that was rung up wrong. Medicines are not returned or refunded here:
- * the void undoes the sale entry, puts every line back into its original batch, and keeps the sale
- * in history marked VOID. A cashier needs an administrator to type their username and password.
+ * Voids a whole retail sale of today that was rung up wrong. The sale stays in history marked
+ * VOID. Medicines that came back go back to their batch; medicines the customer kept are written
+ * off as lost. A cashier needs an administrator to type their username and password.
  */
 export default function VoidSaleDialog({
   sale,
@@ -21,6 +21,7 @@ export default function VoidSaleDialog({
   voided: (sale: SaleRecord) => Promise<void>
 }): ReactElement {
   const [reason, setReason] = useState('')
+  const [returned, setReturned] = useState<'yes' | 'no' | ''>('')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -30,6 +31,10 @@ export default function VoidSaleDialog({
     if (saving) return
     if (reason.trim().length < 5) {
       setError('Say why the sale is voided (at least 5 characters).')
+      return
+    }
+    if (!returned) {
+      setError('Say whether the medicines came back to the counter.')
       return
     }
     if (needsApproval && (!username.trim() || !password)) {
@@ -42,6 +47,7 @@ export default function VoidSaleDialog({
       const saved = await voidSale({
         saleId: sale.id,
         reason: reason.trim(),
+        itemsReturned: returned === 'yes',
         approval: needsApproval ? { username: username.trim(), password } : null
       })
       setPassword('')
@@ -62,9 +68,9 @@ export default function VoidSaleDialog({
     >
       <form noValidate className="space-y-4" onSubmit={(event) => void submit(event)}>
         <p className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
-          Use a void only for a sale rung up wrong. Every item goes back to the batch it came from,
-          the sale stays in history marked <strong>VOID</strong>, and it is left out of sales
-          totals. Medicines handed to the customer are not returned or refunded here.
+          Use a void only for a sale of today that was rung up wrong. The sale stays in history
+          marked <strong>VOID</strong> and is left out of sales totals. Refund the customer at the
+          counter as usual.
         </p>
         <RequiredNote />
         <FormField label="Reason" required>
@@ -76,12 +82,46 @@ export default function VoidSaleDialog({
             onChange={(event) => setReason(event.target.value)}
           />
         </FormField>
+        <fieldset className="space-y-2">
+          <legend className="field-label">
+            Did the medicines come back to the counter?
+            <span className="required-mark" aria-hidden="true">
+              {' '}
+              *
+            </span>
+          </legend>
+          <label className="flex items-start gap-2 text-sm text-slate-700">
+            <input
+              type="radio"
+              name="items-returned"
+              className="mt-0.5 size-4"
+              checked={returned === 'yes'}
+              onChange={() => setReturned('yes')}
+            />
+            <span>
+              <strong>Yes, I have them.</strong> They go back to the batch they came from.
+            </span>
+          </label>
+          <label className="flex items-start gap-2 text-sm text-slate-700">
+            <input
+              type="radio"
+              name="items-returned"
+              className="mt-0.5 size-4"
+              checked={returned === 'no'}
+              onChange={() => setReturned('no')}
+            />
+            <span>
+              <strong>No, the customer kept them.</strong> Stock is not put back; it is written off
+              as lost with this sale&apos;s reference.
+            </span>
+          </label>
+        </fieldset>
         {needsApproval && (
           <fieldset className="space-y-3 rounded-md border border-slate-200 p-3">
             <legend className="px-1 text-sm font-semibold">Administrator Approval</legend>
             <p className="text-xs text-slate-500">
-              The administrator types their own sign-in here. Wrong passwords count toward their
-              account lock, like a failed sign-in.
+              The administrator types their own sign-in here. After five wrong tries, approvals from
+              this account pause for a minute.
             </p>
             <FormField label="Administrator Username" required>
               <input

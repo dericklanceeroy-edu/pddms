@@ -165,6 +165,7 @@ async function seed() {
   const { initializeDatabase } = await import('../src/main/migrations.ts')
   const { channels } = await import('../src/shared/constants.ts')
   const { localDate } = await import('../src/shared/inventory.ts')
+  const { unitSellPrice, wholesaleBoxPrice } = await import('../src/shared/units.ts')
   const { handlers } = await import('./inventory-test-electron.mjs')
   for (const module of [
     'setup',
@@ -276,19 +277,29 @@ async function seed() {
         })
       ).product
 
-    // Supplier price list, set by the owner from each supplier's quotation (one piece per pack).
+    // Supplier price list, set by the owner from each supplier's quotation: [product, pieces per
+    // box, cost per box]. Box sizes differ by product (and cetirizine by supplier) so packs, box
+    // sales and per-batch box sizes show in the demo. Salbutamol syrup is sold by the bottle.
     const packs = {}
     for (const [supplierIndex, keys] of [
-      [0, [['paracetamol', 1.2], ['cetirizine', 2.5], ['ascorbic', 1.5]]],
-      [1, [['amoxicillin', 4], ['losartan', 3], ['metformin', 1.8], ['cetirizine', 2.5]]],
-      [2, [['salbutamol', 35], ['omeprazole', 3.5]]]
+      [0, [['paracetamol', 100, 120], ['cetirizine', 10, 25], ['ascorbic', 60, 90]]],
+      [
+        1,
+        [
+          ['amoxicillin', 50, 200],
+          ['losartan', 100, 300],
+          ['metformin', 30, 54],
+          ['cetirizine', 20, 50]
+        ]
+      ],
+      [2, [['salbutamol', 1, 35], ['omeprazole', 20, 70]]]
     ])
-      for (const [key, unitCost] of keys)
+      for (const [key, piecesPerBox, unitCost] of keys)
         packs[`${supplierIndex}:${key}`] = (
           await call(channels.priceList.createPack, {
             supplierId: suppliers[supplierIndex].id,
             drugId: products[key].id,
-            piecesPerBox: 1,
+            piecesPerBox,
             unitCost,
             effectiveFrom: day(-210),
             quotationReference: `DEMO-QUOTE-${supplierIndex + 1}`
@@ -367,33 +378,35 @@ async function seed() {
       })
 
     // 1. Older, fully received and fully paid order: normal, near-expiry and expired batches.
+    // Quantities are boxes: 3 × 100 Feverex, 4 × 10 Allerin, 2 × 60 Vitacee.
     const older = await createOrder(suppliers[0], [
-      ['paracetamol', 300, 1.2],
-      ['cetirizine', 40, 2.5],
-      ['ascorbic', 120, 1.5]
+      ['paracetamol', 3],
+      ['cetirizine', 4],
+      ['ascorbic', 2]
     ])
     await submit(older)
     await backdate(older, -200)
     await receive(older, day(-195), [
-      ['paracetamol', 300, 'FVX-2401', 2.5, day(420)],
-      ['cetirizine', 40, 'ALR-2311', 5, day(-12)],
-      ['ascorbic', 120, 'VTC-2402', 3, day(45)]
+      ['paracetamol', 3, 'FVX-2401', 2.5, day(420)],
+      ['cetirizine', 4, 'ALR-2311', 5, day(-12)],
+      ['ascorbic', 2, 'VTC-2402', 3, day(45)]
     ])
     const olderInvoice = await uploadInvoice(older, 'SPD-INV-1001', day(-195), day(-165), 640)
     await pay(older, olderInvoice, 640, day(-170), 'BT-DEMO-1001')
 
     // 2. Recent order, received, invoice partly paid with the balance due soon.
+    // Boxes: 3 × 50 Amoxidem, 2 × 100 Losardem, 1 × 30 Glucodem.
     const recent = await createOrder(suppliers[1], [
-      ['amoxicillin', 150, 4],
-      ['losartan', 200, 3],
-      ['metformin', 30, 1.8]
+      ['amoxicillin', 3],
+      ['losartan', 2],
+      ['metformin', 1]
     ])
     await submit(recent)
     await backdate(recent, -25)
     await receive(recent, day(-20), [
-      ['amoxicillin', 150, 'AMX-2409', 8, day(540)],
-      ['losartan', 200, 'LSD-2408', 6.5, day(600)],
-      ['metformin', 30, 'GLD-2409', 4, day(480)]
+      ['amoxicillin', 3, 'AMX-2409', 8, day(540)],
+      ['losartan', 2, 'LSD-2408', 6.5, day(600)],
+      ['metformin', 1, 'GLD-2409', 4, day(480)]
     ])
     const recentInvoice = await uploadInvoice(recent, 'BMS-INV-2045', day(-20), day(5), 1254)
     await pay(recent, recentInvoice, 600, day(-10), 'BT-DEMO-2045')
@@ -402,8 +415,8 @@ async function seed() {
     const partial = await createOrder(
       suppliers[2],
       [
-        ['salbutamol', 50, 35],
-        ['omeprazole', 80, 3.5]
+        ['salbutamol', 50],
+        ['omeprazole', 4]
       ],
       day(7),
       'Deliver to the back entrance.'
@@ -412,10 +425,10 @@ async function seed() {
     await receive(partial, day(0), [['salbutamol', 20, 'BRX-2410', 65, day(365)]])
 
     // 4. Draft order still being prepared.
-    await createOrder(suppliers[0], [['paracetamol', 200, 1.2]], day(10), 'Monthly restock')
+    await createOrder(suppliers[0], [['paracetamol', 2]], day(10), 'Monthly restock')
 
     // 5. Cancelled order.
-    const cancelled = await createOrder(suppliers[1], [['cetirizine', 50, 2.5]])
+    const cancelled = await createOrder(suppliers[1], [['cetirizine', 3]])
     await submit(cancelled)
     await call(channels.purchaseOrder.updateStatusById, cancelled.id, { status: 'cancelled' })
 
@@ -443,15 +456,27 @@ async function seed() {
       ).customer
 
     const batches = Object.fromEntries(
-      (await db.selectFrom('batches').select(['id', 'physicalTag', 'sellPrice']).execute()).map(
-        (batch) => [batch.physicalTag, batch]
-      )
+      (
+        await db
+          .selectFrom('batches')
+          .select(['id', 'physicalTag', 'sellPrice', 'boxSellPrice', 'wholesaleBoxPrice', 'piecesPerBox'])
+          .execute()
+      ).map((batch) => [batch.physicalTag, batch])
     )
     const line = (tag, quantity) => ({
       batchId: batches[tag].id,
       quantity,
+      unit: 'piece',
       unitPriceCents: Math.round(batches[tag].sellPrice * 100)
     })
+    /** Whole boxes, for wholesale orders and box sales at the counter. */
+    const boxLine = (tag, quantity, wholesale = false) => {
+      const batch = batches[tag]
+      const price = wholesale
+        ? wholesaleBoxPrice(batch.sellPrice, batch.boxSellPrice, batch.wholesaleBoxPrice, batch.piecesPerBox)
+        : unitSellPrice('box', batch.sellPrice, batch.boxSellPrice, batch.piecesPerBox)
+      return { batchId: batch.id, quantity, unit: 'box', unitPriceCents: Math.round(price * 100) }
+    }
 
     // Wholesale: one delivered order with a partial payment, one scheduled order (staff).
     const wholesale = async (items, dueDate, scheduledDate, notes) =>
@@ -466,13 +491,13 @@ async function seed() {
         items
       })
     const { data: deliveredOrderId } = await wholesale(
-      [line('FVX-2401', 60), line('AMX-2409', 20)],
+      [boxLine('FVX-2401', 1, true), boxLine('AMX-2409', 1, true)],
       day(20),
       day(0),
       'Pharmacy monthly supply'
     )
     await call(channels.wholesale.deliver, handoff(deliveredOrderId))
-    await wholesale([line('LSD-2408', 30)], day(30), day(3), 'Scheduled for delivery')
+    await wholesale([boxLine('LSD-2408', 1, true)], day(30), day(3), 'Scheduled for delivery')
 
     // Retail sales by the cashier, including Senior Citizen and PWD discounts.
     await call(channels.auth.signOut)
@@ -491,7 +516,7 @@ async function seed() {
     })
     const sell = async (customerId, items, prescription = null) => {
       const { totals } = await call(channels.sales.quote, { customerId, items })
-      await call(channels.sales.checkout, {
+      return call(channels.sales.checkout, {
         requestId: randomUUID(),
         customerId,
         items,
@@ -504,6 +529,37 @@ async function seed() {
     await sell(customers.senior.id, [line('LSD-2408', 30), line('GLD-2409', 14)], rx('RX-DEMO-0001'))
     await sell(customers.pwd.id, [line('AMX-2409', 21)], rx('RX-DEMO-0002'))
     await sell(customers.walkIn.id, [line('BRX-2410', 1)], rx(''))
+    await sell(null, [boxLine('VTC-2402', 1)])
+
+    // Note: Demo-only sales history so trends and earlier periods in Reports are not empty. Each
+    // sale goes through checkout like any other and is then dated back, with its stock movement,
+    // in this separate demo database only.
+    const backdateSale = async (sale, offset, hour) => {
+      const at = new Date()
+      at.setDate(at.getDate() + offset)
+      at.setHours(hour, 15, 0, 0)
+      const iso = at.toISOString()
+      await db.updateTable('sales').set({ createdAt: iso }).where('id', '=', sale.id).execute()
+      await db
+        .updateTable('stockOuts')
+        .set({ createdAt: iso.slice(0, 19).replace('T', ' ') })
+        .where('reason', '=', `Sale ${sale.reference}`)
+        .execute()
+    }
+    for (const [offset, hour, customerId, items, rxNumber] of [
+      [-40, 10, null, [line('FVX-2401', 8), line('VTC-2402', 4)], null],
+      [-38, 15, customers.senior.id, [line('LSD-2408', 30)], 'RX-DEMO-0101'],
+      [-33, 11, null, [line('FVX-2401', 6)], null],
+      [-6, 9, null, [line('FVX-2401', 12)], null],
+      [-5, 14, customers.pwd.id, [line('AMX-2409', 14)], 'RX-DEMO-0102'],
+      [-4, 10, null, [line('VTC-2402', 6), line('FVX-2401', 4)], null],
+      [-3, 16, customers.senior.id, [line('GLD-2409', 10)], 'RX-DEMO-0103'],
+      [-2, 11, null, [line('FVX-2401', 10)], null],
+      [-1, 13, customers.walkIn.id, [line('VTC-2402', 3)], null]
+    ]) {
+      const { sale } = await sell(customerId, items, rxNumber ? rx(rxNumber) : null)
+      await backdateSale(sale, offset, hour)
+    }
 
     // Receivable payments are recorded by the Admin (staff cannot view balances).
     await call(channels.auth.signOut)

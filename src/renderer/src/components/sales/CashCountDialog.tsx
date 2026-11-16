@@ -46,8 +46,8 @@ export default function CashCountDialog({ close }: { close: VoidFunction }): Rea
   const submit = async (event: FormEvent): Promise<void> => {
     event.preventDefault()
     if (saving || !preview) return
-    if (!/^\d+(\.\d{1,2})?$/.test(float.trim() || '0')) {
-      setError('Enter the opening float in pesos, e.g. 1000 or 1000.50.')
+    if (!/^\d+(\.\d{1,2})?$/.test(float.trim())) {
+      setError('Enter the opening float in pesos, e.g. 1000 or 1000.50. Enter 0 if none.')
       return
     }
     if (denominations.some((value) => !Number.isInteger(counts[value]) || counts[value] < 0)) {
@@ -56,6 +56,10 @@ export default function CashCountDialog({ close }: { close: VoidFunction }): Rea
     }
     if (difference !== 0 && notes.trim().length < 3) {
       setError('The drawer is over or short. Add a note explaining the difference.')
+      return
+    }
+    if (preview.previousCountId !== null && notes.trim().length < 3) {
+      setError('You already counted today. Say why you are counting again in Notes.')
       return
     }
     setSaving(true)
@@ -125,8 +129,16 @@ export default function CashCountDialog({ close }: { close: VoidFunction }): Rea
             <Stat label="Voided today (left out)" value={String(preview.voidedCount)} />
           </dl>
         )}
+        {preview?.previousCountId != null && (
+          <p className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+            <strong>Recount.</strong> You already saved count #{preview.previousCountId} today. This
+            count replaces it in the report; the earlier one stays on record. Say why you are
+            counting again in Notes.
+          </p>
+        )}
         <FormField
           label="Opening Float (₱)"
+          required
           hint="Change money placed in the drawer at the start of the day. Enter 0 if none."
         >
           <input
@@ -135,6 +147,7 @@ export default function CashCountDialog({ close }: { close: VoidFunction }): Rea
             min="0"
             step="0.01"
             inputMode="decimal"
+            placeholder="0.00"
             value={float}
             onChange={(event) => setFloat(event.target.value)}
           />
@@ -165,18 +178,26 @@ export default function CashCountDialog({ close }: { close: VoidFunction }): Rea
           </div>
         </fieldset>
         <div className={`rounded-md border p-4 text-sm ${tone}`} role="status">
-          <Line label="Expected (float + cash sales)" value={money(expected)} />
-          <Line label="Counted" value={money(counted)} />
-          <Line
-            label={`${overShortLabel(difference)}${difference === 0 ? '' : ' by'}`}
-            value={money(Math.abs(difference))}
-            strong
-          />
+          <dl className="space-y-1">
+            <Line label="Expected (float + cash sales)" value={money(expected)} />
+            <Line label="Counted" value={money(counted)} />
+            <Line
+              label={`${overShortLabel(difference)}${difference === 0 ? '' : ' by'}`}
+              value={money(Math.abs(difference))}
+              strong
+            />
+          </dl>
         </div>
         <FormField
           label="Notes"
-          required={difference !== 0}
-          hint={difference === 0 ? 'Optional.' : 'Explain the difference, e.g. gave wrong change.'}
+          required={difference !== 0 || preview?.previousCountId != null}
+          hint={
+            difference !== 0
+              ? 'Explain the difference, e.g. gave wrong change.'
+              : preview?.previousCountId != null
+                ? 'Say why you are counting again.'
+                : 'Optional.'
+          }
         >
           <input
             className="field"

@@ -155,11 +155,17 @@ ipcMain.handle(channels.inventory.exportCountSheet, async (event, id: unknown) =
 })
 
 // Note: The register is a regulatory record, so it is for the administrator (reports access).
-const registerQuery = z.strictObject({
-  drugId: z.number().int().positive(),
-  from: isoDateSchema('Enter a start date.'),
-  to: isoDateSchema('Enter an end date.')
-})
+const registerQuery = z
+  .strictObject({
+    drugId: z.number().int().positive(),
+    from: isoDateSchema('Enter a start date.'),
+    to: isoDateSchema('Enter an end date.')
+  })
+  // Note: A reversed range is an input mistake, not an empty register (L8).
+  .refine((value) => value.from <= value.to, {
+    path: ['to'],
+    message: 'The end date must be on or after the start date.'
+  })
 ipcMain.handle(channels.inventory.register, async (_, payload: unknown) => {
   try {
     authorize((session) => accessControl.can(session.account.role).readAny(resources.report))

@@ -341,8 +341,10 @@ export default function SupplierOrders({
     <DashboardShell pageTitle="Suppliers & Purchasing">
       <div className="space-y-5 lg:space-y-6">
         <PageHeader
-          section="Stock & Purchasing"
-          title={procurementTabs.find((item) => item.id === tab)?.label ?? 'Suppliers & Purchasing'}
+          // Note: The page keeps one name in the sidebar, top bar and heading (U3); the open tab is
+          // shown in the section trail above the heading and in the tab strip.
+          section={`Stock & Purchasing › ${procurementTabs.find((item) => item.id === tab)?.label ?? 'Purchase Orders'}`}
+          title="Suppliers & Purchasing"
           description={tabDescriptions[tab]}
           actions={
             primaryAction && (
@@ -1648,6 +1650,9 @@ function ReceiveDialog({
           `Only ${units(remaining(item), item)} remaining. Over-receiving is not allowed.`
       if (!Number.isInteger(rejected) || rejected < 0)
         nextErrors[`${item.id}.rejectedQuantity`] = 'Enter a whole number of 0 or more.'
+      else if (Number.isInteger(quantity) && quantity + rejected > remaining(item))
+        nextErrors[`${item.id}.rejectedQuantity`] =
+          `Received and rejected together cannot exceed the ${units(remaining(item), item)} still open.`
       else if (rejected > 0 && line.rejectionReason.trim().length < 3)
         nextErrors[`${item.id}.rejectionReason`] =
           'Say why the boxes were rejected, e.g. crushed, wet, wrong item.'

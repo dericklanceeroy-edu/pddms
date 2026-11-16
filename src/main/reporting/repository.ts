@@ -237,6 +237,7 @@ function definition(filter: ReportFilter): Definition {
     return {
       base: sql`SELECT s.id, s.reference, s.created_at, s.voided_at, s.customer_name, s.cashier_name, s.total_cents, s.payment_method,
       s.voided_by_name, s.void_approved_by_name, s.void_reason,
+      CASE WHEN s.void_items_returned = 0 THEN 'Kept by customer (written off as lost)' ELSE 'Returned to stock' END AS medicines,
       (SELECT GROUP_CONCAT(product_name || ' [batch ' || batch_number || '] × ' || quantity || CASE WHEN unit = 'box' THEN ' box(es) of ' || pieces_per_unit ELSE ' pc(s)' END, '; ') FROM sale_items WHERE sale_id = s.id) AS products,
       s.reference || ' ' || s.customer_name || ' ' || s.cashier_name || ' ' || COALESCE(s.void_reason, '') AS search_text
       FROM sales s WHERE s.status = 'voided' AND s.voided_at >= ${start} AND s.voided_at < ${end}`,
@@ -246,7 +247,8 @@ function definition(filter: ReportFilter): Definition {
         c('voidedAt', 'Voided', 'dateTime'),
         c('customerName', 'Customer'),
         c('cashierName', 'Cashier'),
-        c('products', 'Items returned to stock'),
+        c('products', 'Items'),
+        c('medicines', 'Medicines'),
         c('totalCents', 'Sale total', 'money'),
         c('paymentMethod', 'Paid by'),
         c('voidedByName', 'Voided by'),
@@ -254,7 +256,7 @@ function definition(filter: ReportFilter): Definition {
         c('voidReason', 'Reason')
       ],
       notes: [
-        'Whole retail sales voided because they were rung up wrong. Each line went back to its original batch; the sale stays in history marked VOID and is left out of sales totals. Medicines are not returned or refunded.'
+        'Whole retail sales of the same day voided because they were rung up wrong; the sale stays in history marked VOID and is left out of sales totals. Medicines that came back went to their original batch; medicines the customer kept were written off as lost (see Write-offs and Losses). A day whose sale is older, or whose cash drawer was already counted, cannot be voided.'
       ],
       sums: [{ key: 'totalCents', label: 'Voided amount', format: 'money' }],
       sort: sql`voided_at DESC, id DESC`
@@ -291,10 +293,16 @@ function definition(filter: ReportFilter): Definition {
     }
   if (filter.kind === 'cashCounts')
     return {
-      base: sql`SELECT id, business_date, created_at, cashier_name, opening_float_cents, cash_sales_count, cash_sales_cents, expected_cents, counted_cents, difference_cents,
-      CASE WHEN difference_cents = 0 THEN 'Balanced' WHEN difference_cents > 0 THEN 'Over' ELSE 'Short' END AS result, notes,
+      // Note: A recount replaces the earlier count of that cashier and day (L2). Both stay listed,
+      // labelled, and only the count in force goes into the net over / short.
+      base: sql`SELECT *, CASE WHEN replaced_by IS NULL THEN difference_cents ELSE 0 END AS final_difference_cents,
+      CASE WHEN replaced_by IS NOT NULL THEN 'Replaced by recount #' || replaced_by
+        WHEN recount_of IS NOT NULL THEN 'Recount of #' || recount_of ELSE 'Final' END AS count_status
+      FROM (SELECT id, business_date, created_at, cashier_name, opening_float_cents, cash_sales_count, cash_sales_cents, expected_cents, counted_cents, difference_cents,
+      CASE WHEN difference_cents = 0 THEN 'Balanced' WHEN difference_cents > 0 THEN 'Over' ELSE 'Short' END AS result, notes, recount_of,
+      (SELECT MIN(later.id) FROM cash_counts later WHERE later.recount_of = cash_counts.id) AS replaced_by,
       cashier_name || ' ' || COALESCE(notes, '') AS search_text
-      FROM cash_counts WHERE business_date >= ${filter.from} AND business_date <= ${filter.to}`,
+      FROM cash_counts WHERE business_date >= ${filter.from} AND business_date <= ${filter.to})`,
       columns: [
         c('businessDate', 'Business date'),
         c('createdAt', 'Counted at', 'dateTime'),
@@ -306,12 +314,13 @@ function definition(filter: ReportFilter): Definition {
         c('countedCents', 'Counted', 'money'),
         c('differenceCents', 'Over (+) / short (−)', 'money'),
         c('result', 'Result'),
+        c('countStatus', 'Count'),
         c('notes', 'Notes')
       ],
       notes: [
-        'Closing drawer counts entered by each cashier. Expected = opening float + completed cash sales of that cashier for the day (voided sales and GCash/Maya are not in the drawer). A cashier may count more than once; each count is kept.'
+        'Closing drawer counts entered by each cashier. Expected = opening float + completed cash sales of that cashier for the day (voided sales and GCash/Maya are not in the drawer). A cashier who counts again must give a reason; the recount replaces the earlier count, which stays listed. Net over / short counts only the counts in force.'
       ],
-      sums: [{ key: 'differenceCents', label: 'Net over / short', format: 'money' }],
+      sums: [{ key: 'finalDifferenceCents', label: 'Net over / short', format: 'money' }],
       sort: sql`business_date DESC, id DESC`
     }
   const volume = movements(start, end)
