@@ -47,3 +47,13 @@ export interface StockOutRecord {
   recordedByName: string
   createdAt: string
 }
+
+const expiryDateFormat = new Intl.DateTimeFormat('en-PH', { dateStyle: 'medium' })
+/** Expiry date as shown across the app, e.g. "Jan 9, 2028" (read as a local date, not UTC). */
+export const expiryDateLabel = (expiresAt: string): string => {
+  const day = String(expiresAt).slice(0, 10)
+  const value = new Date(`${day}T00:00:00`)
+  return /^\d{4}-\d{2}-\d{2}$/.test(day) && !Number.isNaN(value.getTime())
+    ? expiryDateFormat.format(value)
+    : String(expiresAt)
+}

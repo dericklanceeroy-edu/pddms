@@ -17,8 +17,9 @@ import { csvCell } from './repository'
  * Physical stock counts and the dangerous drugs register.
  *
  * A count snapshots every batch with stock. Staff print the count sheet, count the shelves, and
- * enter what they found. Completing the count adjusts each batch by (counted − expected), up or
- * down, with the reason given, so sales made while counting are not lost.
+ * enter what they found. When a line's count is saved, the system stock at that moment is kept
+ * with it. Completing the count adjusts each batch by (counted − stock when counted), up or down,
+ * with the reason given, so a sale made while counting is neither lost nor subtracted twice.
  */
 
 const sqliteToIso = (value: string): string =>
@@ -41,7 +42,7 @@ async function countSummaries(id?: number): Promise<StockCountRecord[]> {
     CASE WHEN d.id IS NULL THEN NULL ELSE d.brand_name || ' (' || d.generic_name || ') ' || d.formulation END AS product_name,
     (SELECT COUNT(*) FROM stock_count_lines WHERE count_id = c.id) AS line_count,
     (SELECT COUNT(*) FROM stock_count_lines WHERE count_id = c.id AND counted IS NOT NULL) AS counted_count,
-    (SELECT COUNT(*) FROM stock_count_lines WHERE count_id = c.id AND counted IS NOT NULL AND counted != expected) AS difference_count
+    (SELECT COUNT(*) FROM stock_count_lines WHERE count_id = c.id AND counted IS NOT NULL AND counted != COALESCE(stock_at_count, expected)) AS difference_count
     FROM stock_counts c JOIN accounts s ON s.id = c.started_by LEFT JOIN accounts x ON x.id = c.closed_by LEFT JOIN drugs d ON d.id = c.drug_id
     ${id ? sql`WHERE c.id = ${id}` : sql``} ORDER BY c.id DESC LIMIT 100`.execute(db)
   return rows.rows.map(({ productName, ...row }) => ({
@@ -67,6 +68,7 @@ export async function getCount(id: number): Promise<StockCountDetails> {
       'stockCountLines.expected',
       'stockCountLines.counted',
       'stockCountLines.reason',
+      'stockCountLines.stockAtCount',
       'batches.physicalTag',
       'batches.expiresAt',
       'batches.piecesPerBox',
@@ -92,6 +94,7 @@ export async function getCount(id: number): Promise<StockCountDetails> {
       counted: line.counted,
       reason: line.reason,
       currentStock: line.currentStock,
+      stockAtCount: line.stockAtCount,
       unitCost: line.buyPrice
     }))
   }
@@ -145,14 +148,28 @@ export async function recordCountLines(input: unknown): Promise<void> {
     if (!count) throw new Error('Stock count not found.')
     if (count.status !== 'open') throw new Error('This stock count is closed.')
     for (const line of data.lines) {
-      const result = await transaction
+      const saved = await transaction
+        .selectFrom('stockCountLines')
+        .innerJoin('batches', 'batches.id', 'stockCountLines.batchId')
+        .select(['stockCountLines.counted', 'stockCountLines.stockAtCount', 'batches.currentStock'])
+        .where('stockCountLines.countId', '=', data.countId)
+        .where('stockCountLines.batchId', '=', line.batchId)
+        .executeTakeFirst()
+      if (!saved) throw new Error('A batch on the sheet does not belong to this count.')
+      // Note: The system stock is taken when a count is first entered or changed, so saving the
+      // same number again later (after more sales) keeps the stock it was compared with.
+      const stockAtCount =
+        line.counted === null
+          ? null
+          : saved.counted === line.counted && saved.stockAtCount !== null
+            ? saved.stockAtCount
+            : saved.currentStock
+      await transaction
         .updateTable('stockCountLines')
-        .set({ counted: line.counted, reason: line.reason || null })
+        .set({ counted: line.counted, reason: line.reason || null, stockAtCount })
         .where('countId', '=', data.countId)
         .where('batchId', '=', line.batchId)
-        .executeTakeFirst()
-      if (Number(result.numUpdatedRows) !== 1)
-        throw new Error('A batch on the sheet does not belong to this count.')
+        .execute()
     }
   })
 }
@@ -166,16 +183,18 @@ export async function completeCount(id: number, accountId: number): Promise<numb
     throw new Error(
       `Enter the counted quantity for every batch (${missing.length} left, e.g. ${missing[0].productName} batch ${missing[0].batchNumber}). Enter 0 if none were found.`
     )
-  const differences = count.lines.filter((line) => line.counted !== line.expected)
+  // Note: Lines saved before stock-at-count was kept compare with the stock at the start.
+  const basis = (line: (typeof count.lines)[number]): number => line.stockAtCount ?? line.expected
+  const differences = count.lines.filter((line) => line.counted !== basis(line))
   const unexplained = differences.find((line) => (line.reason ?? '').trim().length < 3)
   if (unexplained)
     throw new Error(
-      `Give a reason for the difference on ${unexplained.productName} batch ${unexplained.batchNumber} (expected ${unexplained.expected}, counted ${unexplained.counted}).`
+      `Give a reason for the difference on ${unexplained.productName} batch ${unexplained.batchNumber} (system ${basis(unexplained)}, counted ${unexplained.counted}).`
     )
   await db.transaction().execute(async (transaction) => {
     const now = new Date().toISOString()
     for (const line of differences) {
-      const change = line.counted! - line.expected
+      const change = line.counted! - basis(line)
       const batch = await transaction
         .selectFrom('batches')
         .select('currentStock')
@@ -213,7 +232,7 @@ export async function completeCount(id: number, accountId: number): Promise<numb
     summary: `Completed stock count #${id}: ${count.lines.length} batch(es) counted, ${differences.length} adjusted`,
     changes: differences.map((line) => ({
       field: `${line.productName} batch ${line.batchNumber} (${line.reason})`,
-      from: line.expected,
+      from: basis(line),
       to: line.counted
     }))
   })
@@ -297,6 +316,7 @@ export async function drugRegister(drugId: number, from: string, to: string): Pr
     at: string
     voidedAt: string | null
     voidReason: string | null
+    voidItemsReturned: number | null
     status: string
     reference: string
     batch: string
@@ -310,7 +330,7 @@ export async function drugRegister(drugId: number, from: string, to: string): Pr
     doctorAddress: string | null
     license: string | null
     cashier: string
-  }>`SELECT s.created_at AS at, s.voided_at, s.void_reason, s.status, s.reference, i.batch_number AS batch, i.quantity * i.pieces_per_unit AS pieces,
+  }>`SELECT s.created_at AS at, s.voided_at, s.void_reason, s.void_items_returned, s.status, s.reference, i.batch_number AS batch, i.quantity * i.pieces_per_unit AS pieces,
     s.customer_name AS patient, s.patient_age AS age, s.patient_address AS address, s.prescription_number AS rx, s.prescriber_s2_license AS s2,
     s.prescriber_name AS doctor, s.prescriber_address AS doctor_address, s.prescriber_license AS license, s.cashier_name AS cashier
     FROM sale_items i JOIN sales s ON s.id = i.sale_id WHERE i.drug_id = ${drugId}`.execute(db)
@@ -387,7 +407,10 @@ export async function drugRegister(drugId: number, from: string, to: string): Pr
               quantityIn: Number(row.pieces),
               quantityOut: 0,
               reference: row.reference,
-              remarks: `Sale voided, returned to stock: ${row.voidReason ?? ''}`
+              remarks:
+                row.voidItemsReturned === 0
+                  ? `Sale voided, kept by the customer (written off as lost): ${row.voidReason ?? ''}`
+                  : `Sale voided, returned to stock: ${row.voidReason ?? ''}`
             }
           ]
         : [out]

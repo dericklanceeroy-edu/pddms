@@ -259,6 +259,11 @@ export interface SaleRecord extends SaleTotals {
   voidedByName: string | null
   voidApprovedByName: string | null
   voidReason: string | null
+  /**
+   * Whether the voided sale's medicines came back to the counter: 1 back on the shelf, 0 the
+   * customer kept them (written off as lost), null for voids made before this was asked (returned).
+   */
+  voidItemsReturned: number | null
   createdAt: string
   items: SaleLine[]
 }

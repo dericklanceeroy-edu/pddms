@@ -1,3 +1,4 @@
+import { noteAudit } from '@main/audit/repository'
 import { db } from '@main/db'
 import { purchaseOrderDeliverySchema } from '@shared/schemas'
 import type {
@@ -265,6 +266,9 @@ export async function updateDraftById(
   return (await findOneById(id)) as PurchaseOrderWithDetails
 }
 
+const statusLabel = (status: string): string =>
+  status.replaceAll('_', ' ').replace(/^./, (letter) => letter.toUpperCase())
+
 export async function updateStatusById(
   id: number,
   status: PurchaseOrderStatus,
@@ -272,7 +276,7 @@ export async function updateStatusById(
 ): Promise<PurchaseOrderWithDetails> {
   const current = await db
     .selectFrom('purchaseOrders')
-    .select('status')
+    .select(['status', 'orderNumber'])
     .where('id', '=', id)
     .executeTakeFirstOrThrow()
   const changed = current.status !== status
@@ -325,6 +329,12 @@ export async function updateStatusById(
     .where('status', '=', current.status)
     .executeTakeFirstOrThrow()
   })
+  // Note: The activity log shows the status before and after (L9).
+  if (changed)
+    noteAudit({
+      summary: `Purchase order ${current.orderNumber}: ${statusLabel(current.status)} → ${statusLabel(status)}`,
+      changes: [{ field: 'Status', from: statusLabel(current.status), to: statusLabel(status) }]
+    })
 
   return (await findOneById(id)) as PurchaseOrderWithDetails
 }
@@ -395,6 +405,15 @@ export async function recordDelivery(
       if (item.receivedQuantity + deliveredItem.receivedQuantity > item.quantity) {
         throw new Error(
           `Only ${item.quantity - item.receivedQuantity} ${item.unit === 'box' ? 'box(es)' : 'piece(s)'} remain to be received for this line. Over-receiving is not allowed.`
+        )
+      }
+      // Note: Received and rejected boxes in one delivery together cannot exceed what is still
+      // open on the line (L5): a 2-box line cannot arrive as 2 good and 1 damaged.
+      const open = item.quantity - item.receivedQuantity
+      if (deliveredItem.receivedQuantity + deliveredItem.rejectedQuantity > open) {
+        const unit = item.unit === 'box' ? 'box(es)' : 'piece(s)'
+        throw new Error(
+          `Received and rejected together cannot exceed the ${open} ${unit} still open on this line (${deliveredItem.receivedQuantity} received + ${deliveredItem.rejectedQuantity} rejected).`
         )
       }
       // Note: Rejected boxes never enter stock and are not owed to the supplier, so the line

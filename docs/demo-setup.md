@@ -37,7 +37,9 @@ All names, phone numbers (`091700001xx`/`091700002xx`) and e-mail addresses (`@e
 fictional. Every record is created through the app's own IPC handlers, so the normal validation,
 password hashing, stock, discount and payment rules apply.
 
-- 3 suppliers and 8 products.
+- 3 suppliers and 8 products. The supplier price list uses real box sizes (boxes of 10, 20, 30,
+  50, 60 and 100 pieces; the syrup is sold by the bottle), so orders, receiving, box sales and
+  wholesale show boxes and pieces.
 - 5 purchase orders: 2 received (one dated about 200 days ago, one about 25 days ago), 1 partially
   received, 1 draft and 1 cancelled.
 - 7 inventory batches from receiving, covering normal stock, near expiry (about 45 days), an
@@ -46,8 +48,9 @@ password hashing, stock, discount and payment rules apply.
   balance due in 5 days.
 - 3 retail customers (a walk-in customer, a Senior Citizen and a PWD customer) and 1 pharmacy
   client used for wholesale.
-- 4 retail sales by the cashier (with Senior Citizen and PWD discounts), 1 delivered wholesale
-  order with a partial payment and 1 wholesale order scheduled for delivery in 3 days.
+- 5 retail sales today by the cashier (with Senior Citizen and PWD discounts and one whole-box
+  sale), 9 earlier retail sales spread over the last 6 days and about 5 weeks ago, 1 delivered
+  wholesale order with a partial payment and 1 wholesale order scheduled for delivery in 3 days.
 
 Dashboard figures are calculated live from these records; none are stored as fixed numbers.
 
@@ -63,5 +66,7 @@ Dashboard figures are calculated live from these records; none are stored as fix
 - The script does not run with `NODE_ENV=production`, and `scripts/` is excluded from packaged
   builds by `electron-builder.yml`, so no demo credentials ship with the app.
 - Purchase order and sale dates: the two received orders are back-dated so that order, delivery
-  and expiry dates stay in order. The other orders and all sales are dated on the day the setup
-  runs, so "today" figures on the dashboards are populated.
+  and expiry dates stay in order. The other orders and today's sales are dated on the day the
+  setup runs, so "today" figures on the dashboards are populated. The earlier sales go through
+  checkout like any other sale and are then dated back, with their stock movements, so sales
+  trends and earlier report periods have data. This happens only in the demo database.

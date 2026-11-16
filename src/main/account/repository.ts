@@ -108,6 +108,35 @@ export async function setBlockedById(id: number, blocked: boolean): Promise<void
     .executeTakeFirstOrThrow()
 }
 
+/**
+ * Why an account cannot be deleted: anyone who sold, received, counted or recorded anything stays
+ * on those records, so the account is blocked instead (L11). Null when it was never used.
+ */
+export async function accountDeleteBlock(id: number): Promise<string | null> {
+  const uses: Array<[string, string, string]> = [
+    ['sales', 'cashier_id', 'sale(s)'],
+    ['wholesale_orders', 'created_by', 'wholesale order(s)'],
+    ['purchase_orders', 'submitted_by', 'purchase order(s)'],
+    ['supplier_deliveries', 'recorded_by', 'delivery record(s)'],
+    ['stock_outs', 'recorded_by', 'stock movement(s)'],
+    ['cash_counts', 'cashier_id', 'cash count(s)'],
+    ['stock_counts', 'started_by', 'stock count(s)']
+  ]
+  const tables = new Set((await db.introspection.getTables()).map((table) => table.name))
+  const found: string[] = []
+  for (const [table, column, label] of uses) {
+    if (!tables.has(table)) continue
+    const row = await sql<{ count: number }>`SELECT COUNT(*) AS count FROM ${sql.table(table)} WHERE ${sql.ref(column)} = ${id}`.execute(
+      db
+    )
+    const count = Number(row.rows[0]?.count ?? 0)
+    if (count) found.push(`${count} ${label}`)
+  }
+  return found.length
+    ? `This account is on ${found.join(', ')}, so it is kept for those records. Block it instead: it can no longer sign in.`
+    : null
+}
+
 export async function removeOneById(id: number): Promise<void> {
   await db.deleteFrom('accounts').where('id', '=', id).executeTakeFirstOrThrow()
 }

@@ -11,7 +11,7 @@ import {
   type VoidSale
 } from '@shared/controls'
 import { dateBounds } from '@shared/reporting'
-import { isLocked, LOGIN_LOCK_MS, LOGIN_MAX_ATTEMPTS, LOGIN_WINDOW_MS } from '@shared/security'
+import { LOGIN_LOCK_MS, LOGIN_MAX_ATTEMPTS, LOGIN_WINDOW_MS } from '@shared/security'
 import { verify } from 'argon2'
 import { deductBatchStock } from '@main/inventory/repository'
 import { isBatchSellable, localDate } from '@shared/inventory'
@@ -31,7 +31,7 @@ import {
 } from '@shared/sales'
 import type { Database } from '@shared/types'
 import { saleUnitPieces, UnitError, unitSellPrice } from '@shared/units'
-import type { Kysely } from 'kysely'
+import { sql, type Kysely } from 'kysely'
 import { randomUUID } from 'node:crypto'
 
 type ParsedSaleDraft = ReturnType<typeof saleDraftSchema.parse>
@@ -235,6 +235,8 @@ export async function checkout(input: Checkout, accountId: number): Promise<Sale
         .select('id')
         .where('paymentMethod', '=', data.paymentMethod)
         .where('paymentReference', '=', data.paymentReference)
+        // Note: A voided sale's reference may be rung up again on the corrected sale (M4).
+        .where('status', '=', 'completed')
         .executeTakeFirst()
       if (duplicate)
         throw new SalesError(`That ${data.paymentMethod} reference has already been recorded.`)
@@ -253,6 +255,23 @@ export async function checkout(input: Checkout, accountId: number): Promise<Sale
         if (missing.length)
           throw new SalesError(
             `${rx.controlled.join(', ')} is a controlled (dangerous) drug. Enter the ${missing.join(', ')} for the dangerous drugs register.`
+          )
+        // Note: A dangerous-drug (S2) prescription is filled once (L10). Register sales are the
+        // ones with the doctor's S2 number; a voided sale does not count as filled.
+        const filled = await transaction
+          .selectFrom('sales')
+          .select(['reference', 'createdAt'])
+          .where('status', '=', 'completed')
+          .where('prescriberS2License', 'is not', null)
+          .where(
+            sql<string>`lower(trim(prescription_number))`,
+            '=',
+            data.prescription!.prescriptionNumber.trim().toLowerCase()
+          )
+          .executeTakeFirst()
+        if (filled)
+          throw new SalesError(
+            `Prescription ${data.prescription!.prescriptionNumber.trim()} was already filled on ${new Date(filled.createdAt).toLocaleDateString('en-PH')} (${filled.reference}). A dangerous-drug prescription is filled once; ask for a new prescription.`
           )
       }
     }
@@ -292,6 +311,7 @@ export async function checkout(input: Checkout, accountId: number): Promise<Sale
         voidedByName: null,
         voidApprovedByName: null,
         voidReason: null,
+        voidItemsReturned: null,
         createdAt: new Date().toISOString()
       })
       .returning('id')
@@ -317,52 +337,60 @@ export async function checkout(input: Checkout, accountId: number): Promise<Sale
   return getSale(id, accountId)
 }
 
+// Note: Wrong approvals are limited per person asking, not on the administrator's account, so a
+// cashier cannot lock the administrator out of sign-in by guessing here (L4). Five wrong tries in
+// the sign-in window block that person's approvals for the sign-in lock time.
+const approvalFailures = new Map<number, { count: number; last: number; lockedUntil: number }>()
+
 /**
- * Checks an administrator's username and password typed at the counter to approve a void. Wrong
- * passwords count toward that account's sign-in lock, exactly like a failed sign-in.
+ * Checks an administrator's username and password typed at the counter to approve a void. The
+ * username is matched without letter case, like sign-in (L3).
  */
-async function approveAsAdministrator(username: string, password: string): Promise<string> {
+async function approveAsAdministrator(
+  username: string,
+  password: string,
+  requestedBy: number
+): Promise<string> {
+  const now = Date.now()
+  const failures = approvalFailures.get(requestedBy)
+  if (failures && failures.lockedUntil > now)
+    throw new SalesError('Too many wrong approvals. Wait a minute, then ask the administrator again.')
   const account = await db
     .selectFrom('accounts')
     .selectAll()
-    .where('username', '=', username.trim())
+    .where('username', '=', username.trim().toLowerCase())
     .executeTakeFirst()
-  const refused = new SalesError('Administrator username or password is incorrect.')
-  if (!account || account.role !== 'master' || account.isArchived || !account.isVerified)
-    throw refused
-  if (isLocked(account))
-    throw new SalesError('That administrator account is locked for a minute after failed attempts.')
-  if (!(await verify(account.password, password))) {
-    const now = Date.now()
-    const reset =
-      !account.lastFailedAt ||
-      (account.lockedUntil && Date.parse(account.lockedUntil) <= now) ||
-      now - Date.parse(account.lastFailedAt) > LOGIN_WINDOW_MS
-    const count = reset ? 1 : account.failedAttempts + 1
-    await db
-      .updateTable('accounts')
-      .set({
-        failedAttempts: count,
-        lastFailedAt: new Date(now).toISOString(),
-        lockedUntil: count >= LOGIN_MAX_ATTEMPTS ? new Date(now + LOGIN_LOCK_MS).toISOString() : null
-      })
-      .where('id', '=', account.id)
-      .execute()
-    throw refused
+  const valid =
+    !!account &&
+    account.role === 'master' &&
+    !account.isArchived &&
+    !!account.isVerified &&
+    (await verify(account.password, password))
+  if (!valid) {
+    const count = failures && now - failures.last <= LOGIN_WINDOW_MS ? failures.count + 1 : 1
+    if (approvalFailures.size >= 1000) approvalFailures.delete(approvalFailures.keys().next().value!)
+    approvalFailures.set(requestedBy, {
+      count,
+      last: now,
+      lockedUntil: count >= LOGIN_MAX_ATTEMPTS ? now + LOGIN_LOCK_MS : 0
+    })
+    throw new SalesError('Administrator username or password is incorrect.')
   }
-  await db
-    .updateTable('accounts')
-    .set({ failedAttempts: 0, lastFailedAt: null, lockedUntil: null })
-    .where('id', '=', account.id)
-    .execute()
+  approvalFailures.delete(requestedBy)
   return account.fullName
 }
 
 /**
- * Voids a whole retail sale that was rung up wrong. Medicines are not returned or refunded; a
- * void only undoes a sale entry: each line's pieces go back to the batch they came from, the sale
- * stays in history marked VOID and is left out of totals. An administrator voids directly; anyone
- * else needs an administrator to type their username and password at the counter.
+ * Voids a whole retail sale that was rung up wrong. The sale stays in history marked VOID and is
+ * left out of totals. An administrator voids directly; anyone else needs an administrator to type
+ * their username and password at the counter.
+ *
+ * - Only a sale of today can be voided, and only before its cashier's cash count for the day
+ *   (M2), so a closed day never changes. Older mistakes are corrected with a write-off or a stock
+ *   count, which are dated today.
+ * - If the medicines came back to the counter they go back to the batch they came from. If the
+ *   customer kept them, the stock is written off as lost with the sale's reference (M3), so the
+ *   shelf, the losses report and the dangerous drugs register stay right.
  */
 export async function voidSale(
   input: VoidSale,
@@ -374,7 +402,11 @@ export async function voidSale(
   if (actor.role !== 'master') {
     if (!data.approval)
       throw new SalesError('An administrator must approve this void with their username and password.')
-    approver = await approveAsAdministrator(data.approval.username, data.approval.password)
+    approver = await approveAsAdministrator(
+      data.approval.username,
+      data.approval.password,
+      actor.id
+    )
   }
   await db.transaction().execute(async (transaction) => {
     let query = transaction.selectFrom('sales').selectAll().where('id', '=', data.saleId)
@@ -382,17 +414,47 @@ export async function voidSale(
     const sale = await query.executeTakeFirst()
     if (!sale) throw new SalesError('Transaction not found or access denied.')
     if (sale.status === 'voided') throw new SalesError('This sale is already voided.')
+    const saleDay = localDate(new Date(sale.createdAt))
+    if (saleDay !== localDate())
+      throw new SalesError(
+        `Only today's sales can be voided. This sale is from ${saleDay}, a day that is already closed. Correct the stock with a write-off or a stock count instead.`
+      )
+    const counted = await transaction
+      .selectFrom('cashCounts')
+      .select('id')
+      .where('cashierId', '=', sale.cashierId)
+      .where('businessDate', '=', saleDay)
+      .where('createdAt', '>', sale.createdAt)
+      .executeTakeFirst()
+    if (counted)
+      throw new SalesError(
+        `${sale.cashierName}'s cash drawer for today was already counted after this sale, so it can no longer be voided.`
+      )
     const items = await transaction
       .selectFrom('saleItems')
       .selectAll()
       .where('saleId', '=', sale.id)
       .execute()
-    for (const item of items)
+    for (const item of items) {
+      const pieces = item.quantity * item.piecesPerUnit
       await transaction
         .updateTable('batches')
-        .set((eb) => ({ currentStock: eb('currentStock', '+', item.quantity * item.piecesPerUnit) }))
+        .set((eb) => ({ currentStock: eb('currentStock', '+', pieces) }))
         .where('id', '=', item.batchId)
         .executeTakeFirstOrThrow()
+      if (!data.itemsReturned)
+        await deductBatchStock(
+          transaction,
+          {
+            batchId: item.batchId,
+            quantity: pieces,
+            kind: 'write_off',
+            reasonCode: 'lost',
+            reason: `Kept by the customer; sale ${sale.reference} voided`
+          },
+          actor.id
+        )
+    }
     await transaction
       .updateTable('sales')
       .set({
@@ -401,13 +463,14 @@ export async function voidSale(
         voidedBy: actor.id,
         voidedByName: actor.fullName,
         voidApprovedByName: approver,
-        voidReason: data.reason
+        voidReason: data.reason,
+        voidItemsReturned: data.itemsReturned ? 1 : 0
       })
       .where('id', '=', sale.id)
       .where('status', '=', 'completed')
       .executeTakeFirstOrThrow()
     noteAudit({
-      summary: `Voided ${sale.reference} (${(sale.totalCents / 100).toFixed(2)} PHP, ${items.length} line(s)); stock returned to the original batches. Approved by ${approver}.`,
+      summary: `Voided ${sale.reference} (${(sale.totalCents / 100).toFixed(2)} PHP, ${items.length} line(s)); ${data.itemsReturned ? 'medicines returned to the original batches' : 'medicines kept by the customer, written off as lost'}. Approved by ${approver}.`,
       reason: data.reason,
       changes: [{ field: 'Status', from: 'completed', to: 'voided' }]
     })
@@ -427,6 +490,13 @@ export async function cashCountPreview(cashierId: number): Promise<CashCountPrev
     .execute()
   const completed = rows.filter((row) => row.status === 'completed')
   const cash = completed.filter((row) => row.paymentMethod === 'Cash')
+  const previous = await db
+    .selectFrom('cashCounts')
+    .select('id')
+    .where('cashierId', '=', cashierId)
+    .where('businessDate', '=', localDate())
+    .orderBy('id', 'desc')
+    .executeTakeFirst()
   return {
     businessDate: localDate(),
     cashSalesCents: cash.reduce((sum, row) => sum + row.totalCents, 0),
@@ -434,7 +504,8 @@ export async function cashCountPreview(cashierId: number): Promise<CashCountPrev
     ewalletSalesCents: completed
       .filter((row) => row.paymentMethod !== 'Cash')
       .reduce((sum, row) => sum + row.totalCents, 0),
-    voidedCount: rows.length - completed.length
+    voidedCount: rows.length - completed.length,
+    previousCountId: previous?.id ?? null
   }
 }
 
@@ -454,6 +525,14 @@ export async function recordCashCount(
   const preview = await cashCountPreview(cashier.id)
   const counted = countedCents(data.denominations)
   const expected = data.openingFloatCents + preview.cashSalesCents
+  // Note: The screen asks for these too; the backend checks them so a direct call cannot skip them.
+  if (counted !== expected && data.notes.length < 3)
+    throw new SalesError('The drawer is over or short. Add a note explaining the difference.')
+  const previous = preview.previousCountId === null ? undefined : { id: preview.previousCountId }
+  if (previous && data.notes.length < 3)
+    throw new SalesError(
+      `You already saved a cash count today (#${previous.id}). Say why you are counting again in Notes; the new count replaces it.`
+    )
   const record = await db
     .insertInto('cashCounts')
     .values({
@@ -469,15 +548,16 @@ export async function recordCashCount(
       denominations: JSON.stringify(data.denominations),
       notes: data.notes || null,
       countedByName: cashier.fullName,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      recountOf: previous?.id ?? null
     })
     .returningAll()
     .executeTakeFirstOrThrow()
   noteAudit({
-    summary: `Cash count ${preview.businessDate}: counted ${(counted / 100).toFixed(2)}, expected ${(expected / 100).toFixed(2)} (${overShortLabel(counted - expected)} ${(Math.abs(counted - expected) / 100).toFixed(2)})`,
+    summary: `${previous ? `Recount (replaces #${previous.id}) ` : ''}Cash count ${preview.businessDate}: counted ${(counted / 100).toFixed(2)}, expected ${(expected / 100).toFixed(2)} (${overShortLabel(counted - expected)} ${(Math.abs(counted - expected) / 100).toFixed(2)})`,
     reason: data.notes || undefined
   })
-  return toCashCount(record)
+  return toCashCount({ ...record, replacedBy: null })
 }
 
 export async function findCashCounts(
@@ -488,6 +568,13 @@ export async function findCashCounts(
   let query = db
     .selectFrom('cashCounts')
     .selectAll()
+    .select((eb) =>
+      eb
+        .selectFrom('cashCounts as later')
+        .select((inner) => inner.fn.min<number>('later.id').as('id'))
+        .whereRef('later.recountOf', '=', 'cashCounts.id')
+        .as('replacedBy')
+    )
     .where('businessDate', '>=', from)
     .where('businessDate', '<=', to)
     .orderBy('id', 'desc')

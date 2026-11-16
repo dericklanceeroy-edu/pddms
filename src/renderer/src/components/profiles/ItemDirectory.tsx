@@ -81,7 +81,7 @@ export default function ItemDirectory(): ReactElement {
   }, [loadItems])
 
   return (
-    <DashboardShell pageTitle="Inventory">
+    <DashboardShell pageTitle="Inventory & Expiry">
       <div className="space-y-5 sm:space-y-6">
         <section className="page-intro">
           <div className="page-intro-content flex flex-col justify-between gap-4 lg:flex-row lg:items-end">

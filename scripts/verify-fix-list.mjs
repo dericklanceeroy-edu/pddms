@@ -515,32 +515,45 @@ if (!process.env.FIX_LIST_TEST_PHASE) {
   )
   await ok(channels.customer.restoreOneById, rose.id)
 
-  // 9. Retail voids: a cashier needs an administrator's username and password; a wrong password
-  // counts toward the administrator's sign-in lock. Stock goes back to the same batch.
+  // 9. Retail voids: a cashier needs an administrator's username and password. A wrong password
+  // does not touch the administrator's sign-in lock (second QA L4). Stock goes back to the same
+  // batch when the medicines came back.
   as(cashier)
   const sale = (await ok(channels.sales.checkout, checkout())).sale
   assert.equal(await stock(batch90.id), 86)
-  await bad(channels.sales.void, /must approve/, { saleId: sale.id, reason: 'Wrong item rung up' })
-  await bad(channels.sales.void, null, { saleId: sale.id, reason: 'no', approval: null })
+  await bad(channels.sales.void, /must approve/, {
+    saleId: sale.id,
+    reason: 'Wrong item rung up',
+    itemsReturned: true
+  })
+  await bad(channels.sales.void, null, {
+    saleId: sale.id,
+    reason: 'no',
+    itemsReturned: true,
+    approval: null
+  })
   await bad(channels.sales.void, /incorrect/, {
     saleId: sale.id,
     reason: 'Wrong item rung up',
+    itemsReturned: true,
     approval: { username: 'fix-admin', password: 'WrongPassword1' }
   })
   assert.equal(
     (await db.selectFrom('accounts').select('failedAttempts').where('id', '=', admin.id).executeTakeFirst())
       .failedAttempts,
-    1
+    0
   )
   await bad(channels.sales.void, /incorrect/, {
     saleId: sale.id,
     reason: 'Wrong item rung up',
+    itemsReturned: true,
     approval: { username: 'fix-staff', password: 'FixListTest123' }
   })
   const voided = (
     await ok(channels.sales.void, {
       saleId: sale.id,
       reason: 'Wrong item rung up',
+      itemsReturned: true,
       approval: { username: 'fix-admin', password: 'FixListTest123' }
     })
   ).sale
@@ -554,6 +567,7 @@ if (!process.env.FIX_LIST_TEST_PHASE) {
   await bad(channels.sales.void, /already voided/, {
     saleId: sale.id,
     reason: 'Wrong item rung up',
+    itemsReturned: true,
     approval: { username: 'fix-admin', password: 'FixListTest123' }
   })
   const voidAudit = await db
@@ -642,12 +656,26 @@ if (!process.env.FIX_LIST_TEST_PHASE) {
     reasonCode: 'other',
     reason: ''
   })
+  // "Expired" is only for a batch past its expiry (second QA L6), so the batch is dated back for
+  // this write-off and then restored.
+  await bad(channels.inventory.recordStockOut, /has not expired/, {
+    batchId: batch50.id,
+    quantity: 5,
+    reasonCode: 'expired',
+    reason: ''
+  })
+  await db.updateTable('batches').set({ expiresAt: addDays(-1) }).where('id', '=', batch50.id).execute()
   await ok(channels.inventory.recordStockOut, {
     batchId: batch50.id,
     quantity: 5,
     reasonCode: 'expired',
     reason: ''
   })
+  await db
+    .updateTable('batches')
+    .set({ expiresAt: batch50.expiresAt })
+    .where('id', '=', batch50.id)
+    .execute()
   await ok(channels.inventory.recordStockOut, {
     batchId: batch50.id,
     quantity: 1,

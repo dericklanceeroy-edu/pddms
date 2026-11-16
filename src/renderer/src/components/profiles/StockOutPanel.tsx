@@ -3,7 +3,7 @@ import { splitErrors, type FieldErrors } from '@renderer/components/ui/fieldErro
 import type { ItemProfile } from '@renderer/data/profiles'
 import { getStockOuts, recordStockOut } from '@renderer/services/inventory'
 import { useProfileStore } from '@renderer/stores/useProfileStore'
-import type { StockOutRecord } from '@shared/inventory'
+import { expiryDateLabel, getExpiryStatus, type StockOutRecord } from '@shared/inventory'
 import { writeOffReasons, type WriteOffReason } from '@shared/types'
 import { useEffect, useState, type FormEvent, type ReactElement } from 'react'
 
@@ -44,9 +44,16 @@ export default function StockOutPanel({ item }: { item: ItemProfile }): ReactEle
       setSaving(false)
       return
     }
+    const chosen = item.batches.find((batch) => batch.id === Number(batchId))
     try {
       if (!reasonCode) {
         setFieldErrors({ reasonCode: 'Choose why the stock is written off.' })
+        return
+      }
+      if (reasonCode === 'expired' && chosen && getExpiryStatus(chosen.expiresAt) !== 'expired') {
+        setFieldErrors({
+          reasonCode: `This batch has not expired yet (expires ${expiryDateLabel(chosen.expiresAt)}). Choose another reason.`
+        })
         return
       }
       await recordStockOut({
@@ -96,7 +103,8 @@ export default function StockOutPanel({ item }: { item: ItemProfile }): ReactEle
               .filter((batch) => batch.stock > 0)
               .map((batch) => (
                 <option key={batch.id} value={batch.id}>
-                  {batch.batchNumber} · {batch.stock} on hand
+                  {batch.batchNumber} · {batch.stock} on hand · expires{' '}
+                  {expiryDateLabel(batch.expiresAt)}
                 </option>
               ))}
           </select>

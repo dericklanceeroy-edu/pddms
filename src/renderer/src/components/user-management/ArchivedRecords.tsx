@@ -98,7 +98,12 @@ export default function ArchivedRecords(): ReactElement {
       {rows.length === 0 ? (
         <p className="text-sm text-slate-500">Nothing is archived.</p>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-slate-200">
+        <div
+          className="overflow-x-auto rounded-lg border border-slate-200"
+          tabIndex={0}
+          role="region"
+          aria-label="Archived records table"
+        >
           <table className="data-table w-full min-w-[620px] text-left text-sm">
             <thead>
               <tr>

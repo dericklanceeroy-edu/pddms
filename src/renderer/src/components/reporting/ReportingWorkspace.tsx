@@ -124,7 +124,7 @@ export default function ReportingWorkspace(): ReactElement {
     filter.to === cleared.to &&
     !filter.search
   return (
-    <DashboardShell pageTitle="Business Reports">
+    <DashboardShell pageTitle="Reports">
       <div className="space-y-5">
         <header className="page-intro">
           <p className="eyebrow">Business</p>

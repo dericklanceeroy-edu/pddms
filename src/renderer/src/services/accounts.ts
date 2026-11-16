@@ -3,6 +3,7 @@ import { channels } from '@shared/constants'
 import { accountUpdateSchema, newAccountSchema } from '@shared/schemas'
 import type { AccountWithoutPassword, ManagedAccount } from '@shared/types'
 import { validate } from '@shared/validation'
+import { RequestError } from './controls'
 
 interface AccountResult {
   success: boolean
@@ -54,6 +55,7 @@ export async function deleteAccount(id: number): Promise<void> {
   const result = (await window.electron.ipcRenderer.invoke(
     channels.account.removeOneById,
     id
-  )) as AccountResult
-  if (!result.success) throw new Error(result.error ?? 'Unable to delete the account.')
+  )) as AccountResult & { archivable?: boolean }
+  if (!result.success)
+    throw new RequestError(result.error ?? 'Unable to delete the account.', [], !!result.archivable)
 }

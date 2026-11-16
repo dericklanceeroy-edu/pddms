@@ -187,7 +187,11 @@ export async function insertOne(data: NewProduct): Promise<Product> {
   })
 }
 
-export async function updateOneById(id: number, data: ProductUpdate): Promise<Product> {
+export async function updateOneById(
+  id: number,
+  data: ProductUpdate,
+  isAdministrator = false
+): Promise<Product> {
   return db.transaction().execute(async (transaction) => {
     const current = await transaction
       .selectFrom('drugs')
@@ -202,6 +206,14 @@ export async function updateOneById(id: number, data: ProductUpdate): Promise<Pr
       data.formulation ?? current.formulation,
       id
     )
+    // Note: Removing the Rx or controlled flag lets the medicine sell without a prescription or
+    // register entry, so only the administrator may do it. Anyone who edits products may add one.
+    if (!isAdministrator) {
+      if (data.isPrescribed === false && current.isPrescribed === 1)
+        throw new Error('Only the administrator can remove "Prescription required" from a medicine.')
+      if (data.isControlled === false && current.isControlled === 1)
+        throw new Error('Only the administrator can remove the controlled (dangerous drug) flag.')
+    }
     const { isPrescribed, isControlled, ...details } = data
     const values: DrugUpdate = { ...details }
     if (isPrescribed !== undefined) values.isPrescribed = isPrescribed ? 1 : 0

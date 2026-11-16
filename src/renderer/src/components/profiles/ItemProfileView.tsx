@@ -125,6 +125,7 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
             </div>
             <ProductFields
               draft={draft}
+              locked={{ prescriptionRequired: false, controlled: false }}
               update={(field, value) => setDraft((current) => ({ ...current, [field]: value }))}
             />
             {error && (
@@ -299,6 +300,10 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
             </div>
             <ProductFields
               draft={draft}
+              locked={{
+                prescriptionRequired: account?.role !== 'master' && !!item?.prescriptionRequired,
+                controlled: account?.role !== 'master' && !!item?.controlled
+              }}
               update={(field, value) => setDraft((current) => ({ ...current, [field]: value }))}
             />
             {error && (
@@ -519,9 +524,12 @@ type EditableProductField =
 
 function ProductFields({
   draft,
+  locked,
   update
 }: {
   draft: ItemProfile
+  /** Flags only the administrator may switch off (M5): ticked flags stay ticked for staff. */
+  locked: { prescriptionRequired: boolean; controlled: boolean }
   update: (field: EditableProductField, value: string | number | boolean) => void
 }): ReactElement {
   return (
@@ -597,6 +605,7 @@ function ProductFields({
             <input
               type="checkbox"
               checked={draft.prescriptionRequired}
+              disabled={locked.prescriptionRequired}
               onChange={(event) => update('prescriptionRequired', event.target.checked)}
               className="text-brand-700 size-4 rounded border-slate-300"
             />
@@ -606,12 +615,18 @@ function ProductFields({
             <input
               type="checkbox"
               checked={draft.controlled}
+              disabled={locked.controlled}
               onChange={(event) => update('controlled', event.target.checked)}
               className="text-brand-700 size-4 rounded border-slate-300"
             />
             Controlled Medicine
           </label>
         </div>
+        {(locked.prescriptionRequired || locked.controlled) && (
+          <p className="mt-2 text-xs text-slate-600">
+            Only the administrator can remove the prescription or controlled flag from a medicine.
+          </p>
+        )}
       </section>
     </div>
   )

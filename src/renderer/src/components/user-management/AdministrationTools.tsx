@@ -8,11 +8,15 @@ import { FiCheck, FiMinus } from 'react-icons/fi'
 /** Plain names for the permission areas, in the order an administrator thinks about them. */
 const areaLabels: Record<string, string> = {
   sale: 'Sales & Dispensing',
+  saleVoid: 'Sale Voids',
+  cashCount: 'Cash Counts (all cashiers)',
   customer: 'Customers',
   product: 'Inventory Products',
-  inventoryAdjustment: 'Stock Adjustments',
+  inventoryAdjustment: 'Stock Adjustments & Counts',
   supplier: 'Suppliers',
+  priceList: 'Supplier Price List',
   purchaseOrder: 'Purchase Orders',
+  supplierReturn: 'Supplier Returns & Credits',
   wholesale: 'Wholesale Orders',
   receivable: 'Accounts Receivable',
   report: 'Reports',
@@ -338,7 +342,12 @@ export default function AdministrationTools(): ReactElement {
           The list shows the default local backup folder and backups created in this session.
           Backups saved elsewhere can be chosen through Restore From Backup.
         </p>
-        <div className="max-h-48 space-y-2 overflow-auto">
+        <div
+          className="max-h-48 space-y-2 overflow-auto"
+          tabIndex={0}
+          role="region"
+          aria-label="Backups list"
+        >
           {backups.map((backup) => (
             <p
               className="rounded-lg border border-slate-200 p-3 text-sm break-all"
@@ -440,7 +449,12 @@ export default function AdministrationTools(): ReactElement {
           </p>
         )}
         {busy && <p role="status">Loading…</p>}
-        <div className="max-h-[55vh] overflow-auto rounded-lg border border-slate-200">
+        <div
+          className="max-h-[55vh] overflow-auto rounded-lg border border-slate-200"
+          tabIndex={0}
+          role="region"
+          aria-label="Activity log table"
+        >
           <table className="data-table w-full min-w-[960px] text-left text-sm">
             <thead className="sticky top-0">
               <tr>

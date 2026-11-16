@@ -1,6 +1,6 @@
 import { accessControl, authorize } from '@main/access-control'
 import { state } from '@main/api'
-import { channels, resources } from '@shared/constants'
+import { channels, resources, roles } from '@shared/constants'
 import { batchWholesalePriceSchema, newDrugSchema, productUpdateSchema } from '@shared/schemas'
 import { formatValidationError } from '@shared/validation'
 import { isId } from '@shared/validators'
@@ -40,7 +40,11 @@ ipcMain.handle(channels.product.updateOneById, async (_, id: unknown, payload: u
   try {
     authorize((session) => accessControl.can(session.account.role).updateAny(resources.product))
     if (!isId(id)) return { success: false, error: 'Invalid product.' }
-    const product = await updateOneById(id, productUpdateSchema.parse(payload))
+    const product = await updateOneById(
+      id,
+      productUpdateSchema.parse(payload),
+      state.session!.account.role === roles.master
+    )
     state.database.stale = true
     return { success: true, product: { ...product, batches: [] } }
   } catch (error) {

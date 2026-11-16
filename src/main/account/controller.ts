@@ -8,6 +8,7 @@ import { formatValidationError } from '@shared/validation'
 import { isId } from '@shared/validators'
 import { hash, verify } from 'argon2'
 import {
+  accountDeleteBlock,
   findAll,
   findOneByEmail,
   findOneById,
@@ -229,8 +230,26 @@ ipcMain.handle(channels.account.removeOneById, async (_, id: unknown) => {
     if (account.role === 'master') {
       return { success: false, error: 'Master accounts cannot be deleted.' }
     }
+    const block = await accountDeleteBlock(id)
+    if (block) return { success: false, error: block, archivable: true }
 
-    await removeOneById(id)
+    try {
+      await removeOneById(id)
+    } catch (error) {
+      // Note: Any other record still pointing at the account also keeps it; block it instead.
+      if (
+        error instanceof Error &&
+        'code' in error &&
+        String(error.code).startsWith('SQLITE_CONSTRAINT')
+      )
+        return {
+          success: false,
+          error:
+            'This account is linked to saved records, so it is kept for them. Block it instead: it can no longer sign in.',
+          archivable: true
+        }
+      throw error
+    }
     state.database.stale = true
     return { success: true }
   } catch (error) {

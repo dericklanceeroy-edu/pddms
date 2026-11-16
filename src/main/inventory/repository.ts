@@ -14,9 +14,15 @@ export async function recordStockOut(input: StockOutValues, recordedBy: number):
     const batch = await transaction
       .selectFrom('batches')
       .innerJoin('drugs', 'drugs.id', 'batches.drugId')
-      .select(['batches.physicalTag', 'batches.id', 'drugs.brandName'])
+      .select(['batches.physicalTag', 'batches.id', 'batches.expiresAt', 'drugs.brandName'])
       .where('batches.id', '=', data.batchId)
       .executeTakeFirst()
+    // Note: "Expired" is only for a batch past its expiry date, so losses land under the right
+    // reason (L6). Stock taken off early because it expires soon is "Other" with a note.
+    if (batch && data.reasonCode === 'expired' && getExpiryStatus(String(batch.expiresAt)) !== 'expired')
+      throw new Error(
+        `Batch ${batch.physicalTag ?? batch.id} has not expired yet (expires ${String(batch.expiresAt).slice(0, 10)}). Choose another reason, such as Damaged, or return it to the supplier.`
+      )
     await deductBatchStock(
       transaction,
       {
