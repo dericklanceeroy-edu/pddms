@@ -52,7 +52,7 @@ const navigation: Array<{ group: string; items: NavigationItem[] }> = [
     items: [
       { label: 'Inventory & Expiry', to: '/inventory', icon: FiArchive },
       { label: 'Receiving', to: '/suppliers', icon: FiPackage, tab: 'receiving' },
-      { label: 'Suppliers & Orders', to: '/suppliers', icon: FiTruck },
+      { label: 'Suppliers & Purchasing', to: '/suppliers', icon: FiTruck },
       { label: 'Invoices & Payments', to: '/suppliers', icon: FiCreditCard, tab: 'invoices' }
     ]
   },
@@ -157,7 +157,7 @@ function Sidebar({
           if (permitted.length === 0) return null
           return (
             <div key={group} className="pb-5">
-              <p className="px-5 pb-1.5 text-[0.7rem] font-semibold tracking-wider text-slate-400 uppercase">
+              <p className="px-5 pb-1.5 text-xs font-semibold tracking-wider text-slate-300 uppercase">
                 {group}
               </p>
               {permitted.map(({ label, to, icon: Icon, tab }) => {
@@ -168,7 +168,8 @@ function Sidebar({
                         (!tab && !['receiving', 'invoices'].includes(activeTab ?? '')))
                     : activePath === to ||
                       (to === '/inventory' && activePath.startsWith('/items/')) ||
-                      (to === '/customers' && activePath.startsWith('/customers/'))
+                      (to === '/customers' && activePath.startsWith('/customers/')) ||
+                      (to === '/wholesale' && activePath.startsWith('/wholesale/'))
 
                 return (
                   <Link
@@ -336,9 +337,10 @@ export default function DashboardShell({
                 <FiMenu aria-hidden="true" />
               </button>
               <div className="min-w-0">
-                <h1 className="truncate text-base font-semibold tracking-tight text-slate-900">
+                {/* Note: The page's own title is the h1; the top bar repeats it as plain text. */}
+                <p className="truncate text-base font-semibold tracking-tight text-slate-900">
                   {pageTitle}
-                </h1>
+                </p>
                 <p className="hidden truncate text-xs text-slate-500 sm:block">
                   {dateFormatter.format(generatedAt)}
                 </p>

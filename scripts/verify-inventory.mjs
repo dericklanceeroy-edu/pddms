@@ -42,6 +42,7 @@ if (!process.env.INVENTORY_TEST_DATABASE) {
   }
 } else {
   const { db } = await import('../src/main/db.ts')
+  const { packLines } = await import('./test-packs.mjs')
   const { initializeDatabase } = await import('../src/main/migrations.ts')
   const { state } = await import('../src/main/api/index.ts')
   const { channels } = await import('../src/shared/constants.ts')
@@ -90,7 +91,7 @@ if (!process.env.INVENTORY_TEST_DATABASE) {
         products[0].batches.reduce((sum, batch) => sum + batch.stock, 0),
         10
       )
-      assert.equal(products[0].batches[0].receipts.length, 2)
+      assert.equal(products[0].batches.find((batch) => batch.batchNumber === 'TEST-NEAR').receipts.length, 2)
       assert.equal((await db.selectFrom('stockOuts').selectAll().execute()).length, 3)
       assert.equal((await db.selectFrom('supplierDeliveries').selectAll().execute()).length, 3)
       assert.equal(
@@ -288,7 +289,7 @@ if (!process.env.INVENTORY_TEST_DATABASE) {
         supplierId: supplier.id,
         expectedAt: localDate(),
         notes: null,
-        items: [{ drugId: product.id, quantity: 20, unitCost: 10 }]
+        items: await packLines(db, supplier.id, [{ drugId: product.id, quantity: 20, unitCost: 10 }])
       })
       assert.match(
         (
@@ -296,7 +297,7 @@ if (!process.env.INVENTORY_TEST_DATABASE) {
             supplierId: supplier.id,
             expectedAt: offsetDate(-1),
             notes: null,
-            items: [{ drugId: product.id, quantity: 1, unitCost: 1 }]
+            items: await packLines(db, supplier.id, [{ drugId: product.id, quantity: 1, unitCost: 1 }])
           })
         ).error,
         /expected delivery date/i
@@ -307,10 +308,10 @@ if (!process.env.INVENTORY_TEST_DATABASE) {
             supplierId: supplier.id,
             expectedAt: null,
             notes: null,
-            items: [
+            items: await packLines(db, supplier.id, [
               { drugId: product.id, quantity: 1, unitCost: 1 },
               { drugId: product.id, quantity: 2, unitCost: 1 }
-            ]
+            ])
           })
         ).error,
         /already on the order/i
@@ -319,7 +320,7 @@ if (!process.env.INVENTORY_TEST_DATABASE) {
         supplierId: supplier.id,
         expectedAt: localDate(),
         notes: 'Edited draft',
-        items: [{ drugId: product.id, quantity: 20, unitCost: 10 }]
+        items: await packLines(db, supplier.id, [{ drugId: product.id, quantity: 20, unitCost: 10 }])
       })
       assert.equal(draftEdit.order.notes, 'Edited draft')
       assert.equal(draftEdit.order.totalAmount, 200)
@@ -337,7 +338,7 @@ if (!process.env.INVENTORY_TEST_DATABASE) {
             supplierId: supplier.id,
             expectedAt: null,
             notes: null,
-            items: [{ drugId: product.id, quantity: 99, unitCost: 10 }]
+            items: await packLines(db, supplier.id, [{ drugId: product.id, quantity: 99, unitCost: 10 }])
           })
         ).error,
         /Only draft orders/
@@ -430,7 +431,7 @@ if (!process.env.INVENTORY_TEST_DATABASE) {
             amount: 1,
             paidAt: offsetDate(-30),
             method: 'Bank transfer',
-            referenceNumber: null,
+            referenceNumber: 'PAY-EARLY',
             notes: null
           })
         ).error,
@@ -598,7 +599,7 @@ if (!process.env.INVENTORY_TEST_DATABASE) {
       assert.equal(dashboard.expiryAlerts.length, 2)
       assert.ok(dashboard.expiryAlerts.some((alert) => alert.expiryStatus === 'expired'))
       assert.equal(dashboard.lowStockAlerts.length, 0)
-      const adjust = { batchId: near.id, quantity: 10, reason: 'Damaged stock' }
+      const adjust = { batchId: near.id, quantity: 10, reasonCode: 'damaged', reason: 'Crushed box' }
       state.session = undefined
       await denied(channels.inventory.recordStockOut, adjust)
       for (const role of ['staff', 'cashier']) {
@@ -633,7 +634,7 @@ if (!process.env.INVENTORY_TEST_DATABASE) {
       const next = (
         await success(channels.purchaseOrder.createOne, {
           supplierId: supplier.id,
-          items: [{ drugId: product.id, quantity: 6, unitCost: 10 }]
+          items: await packLines(db, supplier.id, [{ drugId: product.id, quantity: 6, unitCost: 10 }])
         })
       ).order
       await success(channels.purchaseOrder.updateStatusById, next.id, { status: 'submitted' })

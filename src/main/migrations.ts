@@ -20,6 +20,9 @@ import { up as boxPieceUnits } from '../../migrations/1789001000000_box_piece_un
 import { up as handlerTracking } from '../../migrations/1789001100000_handler_tracking'
 import { up as walkInDiscount } from '../../migrations/1789001200000_walk_in_discount'
 import { up as pharmacyClientsAccountEmail } from '../../migrations/1789001300000_pharmacy_clients_account_email'
+import { up as qaFixesPaymentsPrices } from '../../migrations/1789001400000_qa_fixes_payments_prices'
+import { up as fixListControls } from '../../migrations/1789001500000_fix_list_controls'
+import { up as secondQaFixes } from '../../migrations/1789001600000_second_qa_fixes'
 
 export async function initializeDatabase(): Promise<void> {
   await migrate(db)
@@ -51,4 +54,7 @@ export async function migrate(db: Kysely<Database>): Promise<void> {
   await handlerTracking(db)
   await walkInDiscount(db)
   await pharmacyClientsAccountEmail(db)
+  await qaFixesPaymentsPrices(db)
+  await fixListControls(db)
+  await secondQaFixes(db)
 }

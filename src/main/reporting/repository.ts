@@ -22,8 +22,11 @@ const c = (key: string, label: string, format?: ReportColumn['format']): ReportC
 })
 const product = { key: 'product', label: 'Product', productLink: true }
 const paidAR = sql`COALESCE((SELECT SUM(amount_cents) FROM wholesale_payments WHERE order_id = w.id), 0)`
-const owedAP = sql`COALESCE((SELECT ROUND(SUM(received_quantity * unit_cost) * 100) FROM purchase_order_items WHERE purchase_order_id = po.id), 0)`
+// Note: Owed = delivered boxes at their invoice cost, less supplier credit notes applied.
+const owedAP = sql`(COALESCE((SELECT ROUND(SUM(i.quantity * i.unit_cost) * 100) FROM supplier_delivery_items i JOIN supplier_deliveries d ON d.id = i.delivery_id WHERE d.purchase_order_id = po.id), 0)
+  - COALESCE((SELECT ROUND(SUM(amount) * 100) FROM supplier_credit_notes WHERE purchase_order_id = po.id), 0))`
 const paidAP = sql`COALESCE((SELECT ROUND(SUM(amount) * 100) FROM supplier_payments WHERE purchase_order_id = po.id), 0)`
+const completedSale = sql`status = 'completed'`
 export async function stockValuation(database: Kysely<Database> = db): Promise<number> {
   const result = await sql<{
     value: number
@@ -32,9 +35,11 @@ export async function stockValuation(database: Kysely<Database> = db): Promise<n
   )
   return Number(result.rows[0].value)
 }
+/** Stock movement timestamps use SQLite's "YYYY-MM-DD HH:MM:SS" (UTC) format. */
+const sqliteTime = (iso: string): string => iso.replace('T', ' ').slice(0, 19)
 function movements(start: string, end: string): RawBuilder<unknown> {
   return sql`SELECT i.drug_id, SUM(i.quantity * i.pieces_per_unit) AS quantity FROM sale_items i JOIN sales s ON s.id = i.sale_id
-    WHERE s.created_at >= ${start} AND s.created_at < ${end} GROUP BY i.drug_id
+    WHERE s.created_at >= ${start} AND s.created_at < ${end} AND s.status = 'completed' GROUP BY i.drug_id
     UNION ALL SELECT i.drug_id, SUM(i.quantity * i.pieces_per_unit) FROM wholesale_order_items i JOIN wholesale_orders w ON w.id = i.order_id
     WHERE w.status = 'delivered' AND w.delivered_at >= ${start} AND w.delivered_at < ${end} GROUP BY i.drug_id`
 }
@@ -47,12 +52,13 @@ interface Definition {
 }
 function definition(filter: ReportFilter): Definition {
   const { start, end } = dateBounds(filter.from, filter.to)
-  const period = sql`s.created_at >= ${start} AND s.created_at < ${end}`
+  const period = sql`s.created_at >= ${start} AND s.created_at < ${end} AND s.status = 'completed'`
   const retail = sql`SELECT s.id, s.reference, s.created_at, s.customer_name, s.cashier_name,
     s.subtotal_cents, s.vat_exemption_cents, s.discount_cents, s.discount_type, s.total_cents, s.cash_cents, s.change_cents,
+    s.payment_method, s.payment_reference,
     COALESCE((SELECT SUM(quantity * pieces_per_unit) FROM sale_items WHERE sale_id = s.id), 0) AS quantity,
     (SELECT GROUP_CONCAT(product_name || ' [batch ' || batch_number || '] × ' || quantity || CASE WHEN unit = 'box' THEN ' box(es) of ' || pieces_per_unit ELSE ' pc(s)' END || ' @ PHP ' || printf('%.2f', unit_price_cents / 100.0), '; ') FROM sale_items WHERE sale_id = s.id) AS products,
-    s.reference || ' ' || s.customer_name || ' ' || s.cashier_name AS search_text
+    s.reference || ' ' || s.customer_name || ' ' || s.cashier_name || ' ' || s.payment_method || ' ' || COALESCE(s.payment_reference, '') AS search_text
     FROM sales s WHERE ${period}`
   if (filter.kind === 'sales' || filter.kind === 'discounts')
     return {
@@ -72,11 +78,13 @@ function definition(filter: ReportFilter): Definition {
         c('vatExemptionCents', 'VAT exemption', 'money'),
         c('discountCents', 'Discount', 'money'),
         c('totalCents', 'Final total', 'money'),
-        c('cashCents', 'Cash tendered', 'money'),
+        c('paymentMethod', 'Payment method'),
+        c('paymentReference', 'Payment reference'),
+        c('cashCents', 'Amount received', 'money'),
         c('changeCents', 'Change', 'money')
       ],
       notes: [
-        'Completed retail sales only. Cash tendered includes change; revenue is the saved final total. Discount/VAT amounts are saved sale snapshots.'
+        'Completed retail sales only; voided sales are left out (see Voided Sales). Amount received is cash tendered (including change) or the exact GCash/Maya transfer; revenue is the saved final total. Discount/VAT amounts are saved sale snapshots.'
       ],
       sums: [
         { key: 'totalCents', label: 'Retail revenue', format: 'money' },
@@ -88,7 +96,7 @@ function definition(filter: ReportFilter): Definition {
     }
   if (filter.kind === 'income')
     return {
-      base: sql`SELECT id, reference, created_at AS occurred_at, customer_name, 'Retail' AS channel, total_cents, reference || ' ' || customer_name AS search_text FROM sales WHERE created_at >= ${start} AND created_at < ${end}
+      base: sql`SELECT id, reference, created_at AS occurred_at, customer_name, 'Retail' AS channel, total_cents, reference || ' ' || customer_name AS search_text FROM sales WHERE created_at >= ${start} AND created_at < ${end} AND ${completedSale}
       UNION ALL SELECT id, reference, delivered_at, customer_name, 'Wholesale', total_cents, reference || ' ' || customer_name FROM wholesale_orders WHERE status = 'delivered' AND delivered_at >= ${start} AND delivered_at < ${end}`,
       columns: [
         c('channel', 'Channel'),
@@ -107,7 +115,7 @@ function definition(filter: ReportFilter): Definition {
     return {
       base: sql`SELECT id, reference, created_at, cashier_name, total_cents, cash_cents, change_cents,
       cash_cents - change_cents AS net_cash_cents, cash_cents - change_cents - total_cents AS difference_cents,
-      reference || ' ' || cashier_name AS search_text FROM sales WHERE created_at >= ${start} AND created_at < ${end} AND cash_cents - change_cents != total_cents`,
+      reference || ' ' || cashier_name AS search_text FROM sales WHERE created_at >= ${start} AND created_at < ${end} AND ${completedSale} AND cash_cents - change_cents != total_cents`,
       columns: [
         c('reference', 'Sale'),
         c('createdAt', 'Date / time', 'dateTime'),
@@ -119,7 +127,7 @@ function definition(filter: ReportFilter): Definition {
         c('differenceCents', 'Difference', 'money')
       ],
       notes: [
-        'Reconciles recorded cash tendered minus change against saved sale totals. No physical cash-count/drawer source exists. Valid exact/excess payments must not be flagged.'
+        'Reconciles recorded cash tendered minus change against saved sale totals, per sale. The physical drawer count at closing is in End-of-Day Cash Counts. Valid exact/excess payments must not be flagged.'
       ],
       sort: sql`created_at DESC, id DESC`
     }
@@ -198,10 +206,11 @@ function definition(filter: ReportFilter): Definition {
       base: sql`SELECT s.id, s.reference, s.created_at AS occurred_at, s.customer_name, 'Retail' AS channel,
       i.drug_id AS product_id, i.product_name AS product, i.batch_number, i.quantity * i.pieces_per_unit AS quantity,
       d.is_prescribed, d.is_controlled, i.quantity * i.unit_price_cents AS gross_cents,
+      s.prescriber_name, s.prescriber_license, s.prescription_number,
       s.reference || ' ' || s.customer_name || ' ' || i.product_name AS search_text
       FROM sale_items i JOIN sales s ON s.id = i.sale_id JOIN drugs d ON d.id = i.drug_id WHERE ${period} AND (d.is_prescribed = 1 OR d.is_controlled = 1)
       UNION ALL SELECT w.id, w.reference, w.delivered_at, w.customer_name, 'Wholesale', i.drug_id, i.product_name, i.batch_number, i.quantity * i.pieces_per_unit,
-      d.is_prescribed, d.is_controlled, i.quantity * i.unit_price_cents, w.reference || ' ' || w.customer_name || ' ' || i.product_name
+      d.is_prescribed, d.is_controlled, i.quantity * i.unit_price_cents, NULL, NULL, NULL, w.reference || ' ' || w.customer_name || ' ' || i.product_name
       FROM wholesale_order_items i JOIN wholesale_orders w ON w.id = i.order_id JOIN drugs d ON d.id = i.drug_id WHERE w.status = 'delivered' AND w.delivered_at >= ${start} AND w.delivered_at < ${end} AND (d.is_prescribed = 1 OR d.is_controlled = 1)`,
       columns: [
         c('channel', 'Channel'),
@@ -213,13 +222,106 @@ function definition(filter: ReportFilter): Definition {
         c('quantity', 'Pieces'),
         c('isPrescribed', 'Prescription flag (current)'),
         c('isControlled', 'Controlled flag (current)'),
-        c('grossCents', 'Before-discount line value', 'money')
+        c('grossCents', 'Before-discount line value', 'money'),
+        c('prescriberName', 'Prescribing doctor'),
+        c('prescriberLicense', 'PRC license'),
+        c('prescriptionNumber', 'Prescription no.')
       ],
       notes: [
-        'Uses current persisted prescription/controlled flags. Historical classification snapshots and prescription documents are not stored; this is not a regulatory compliance certification. Line amounts are before sale-level discounts.'
+        'Uses current persisted prescription/controlled flags. Retail sales record the prescribing doctor, PRC license and prescription number from checkout (sales before this was added show none). This is not a regulatory compliance certification. Line amounts are before sale-level discounts.'
       ],
       sums: [{ key: 'quantity', label: 'Pieces' }],
       sort: sql`occurred_at DESC, channel, id DESC, product_id, batch_number`
+    }
+  if (filter.kind === 'voids')
+    return {
+      base: sql`SELECT s.id, s.reference, s.created_at, s.voided_at, s.customer_name, s.cashier_name, s.total_cents, s.payment_method,
+      s.voided_by_name, s.void_approved_by_name, s.void_reason,
+      CASE WHEN s.void_items_returned = 0 THEN 'Kept by customer (written off as lost)' ELSE 'Returned to stock' END AS medicines,
+      (SELECT GROUP_CONCAT(product_name || ' [batch ' || batch_number || '] × ' || quantity || CASE WHEN unit = 'box' THEN ' box(es) of ' || pieces_per_unit ELSE ' pc(s)' END, '; ') FROM sale_items WHERE sale_id = s.id) AS products,
+      s.reference || ' ' || s.customer_name || ' ' || s.cashier_name || ' ' || COALESCE(s.void_reason, '') AS search_text
+      FROM sales s WHERE s.status = 'voided' AND s.voided_at >= ${start} AND s.voided_at < ${end}`,
+      columns: [
+        c('reference', 'Sale'),
+        c('createdAt', 'Sold', 'dateTime'),
+        c('voidedAt', 'Voided', 'dateTime'),
+        c('customerName', 'Customer'),
+        c('cashierName', 'Cashier'),
+        c('products', 'Items'),
+        c('medicines', 'Medicines'),
+        c('totalCents', 'Sale total', 'money'),
+        c('paymentMethod', 'Paid by'),
+        c('voidedByName', 'Voided by'),
+        c('voidApprovedByName', 'Approved by'),
+        c('voidReason', 'Reason')
+      ],
+      notes: [
+        'Whole retail sales of the same day voided because they were rung up wrong; the sale stays in history marked VOID and is left out of sales totals. Medicines that came back went to their original batch; medicines the customer kept were written off as lost (see Write-offs and Losses). A day whose sale is older, or whose cash drawer was already counted, cannot be voided.'
+      ],
+      sums: [{ key: 'totalCents', label: 'Voided amount', format: 'money' }],
+      sort: sql`voided_at DESC, id DESC`
+    }
+  if (filter.kind === 'losses')
+    return {
+      base: sql`SELECT o.id, o.created_at, o.quantity, o.reason_code, o.reason AS notes, d.id AS product_id,
+      d.brand_name || ' (' || d.generic_name || ') ' || d.formulation AS product, COALESCE(b.physical_tag, 'Batch ' || b.id) AS batch_number,
+      b.expires_at, ROUND(b.buy_price * 100) AS unit_cost_cents, ROUND(o.quantity * b.buy_price * 100) AS cost_cents, a.full_name AS recorded_by,
+      CASE o.reason_code WHEN 'expired' THEN 'Expired' WHEN 'damaged' THEN 'Damaged or broken' WHEN 'lost' THEN 'Lost or missing' WHEN 'recalled' THEN 'Recalled' ELSE 'Other' END AS reason_label,
+      d.brand_name || ' ' || d.generic_name || ' ' || COALESCE(b.physical_tag, '') || ' ' || o.reason AS search_text
+      FROM stock_outs o JOIN batches b ON b.id = o.batch_id JOIN drugs d ON d.id = b.drug_id JOIN accounts a ON a.id = o.recorded_by
+      WHERE o.kind = 'write_off' AND o.created_at >= ${sqliteTime(start)} AND o.created_at < ${sqliteTime(end)}`,
+      columns: [
+        c('createdAt', 'Date / time', 'dateTime'),
+        product,
+        c('batchNumber', 'Batch'),
+        c('expiresAt', 'Expiry'),
+        c('reasonLabel', 'Reason'),
+        c('notes', 'Notes'),
+        c('quantity', 'Pieces'),
+        c('unitCostCents', 'Cost per piece', 'money'),
+        c('costCents', 'Loss at cost', 'money'),
+        c('recordedBy', 'Recorded by')
+      ],
+      notes: [
+        'Stock written off in the period, valued at the batch purchase cost. Totals by reason are shown above the table. Stock returned to suppliers is not a loss and is listed under Suppliers & Purchasing, Returns & Credit Notes.'
+      ],
+      sums: [
+        { key: 'costCents', label: 'Total loss at cost', format: 'money' },
+        { key: 'quantity', label: 'Pieces written off' }
+      ],
+      sort: sql`created_at DESC, id DESC`
+    }
+  if (filter.kind === 'cashCounts')
+    return {
+      // Note: A recount replaces the earlier count of that cashier and day (L2). Both stay listed,
+      // labelled, and only the count in force goes into the net over / short.
+      base: sql`SELECT *, CASE WHEN replaced_by IS NULL THEN difference_cents ELSE 0 END AS final_difference_cents,
+      CASE WHEN replaced_by IS NOT NULL THEN 'Replaced by recount #' || replaced_by
+        WHEN recount_of IS NOT NULL THEN 'Recount of #' || recount_of ELSE 'Final' END AS count_status
+      FROM (SELECT id, business_date, created_at, cashier_name, opening_float_cents, cash_sales_count, cash_sales_cents, expected_cents, counted_cents, difference_cents,
+      CASE WHEN difference_cents = 0 THEN 'Balanced' WHEN difference_cents > 0 THEN 'Over' ELSE 'Short' END AS result, notes, recount_of,
+      (SELECT MIN(later.id) FROM cash_counts later WHERE later.recount_of = cash_counts.id) AS replaced_by,
+      cashier_name || ' ' || COALESCE(notes, '') AS search_text
+      FROM cash_counts WHERE business_date >= ${filter.from} AND business_date <= ${filter.to})`,
+      columns: [
+        c('businessDate', 'Business date'),
+        c('createdAt', 'Counted at', 'dateTime'),
+        c('cashierName', 'Cashier'),
+        c('openingFloatCents', 'Opening float', 'money'),
+        c('cashSalesCount', 'Cash sales'),
+        c('cashSalesCents', 'Cash sales total', 'money'),
+        c('expectedCents', 'Expected in drawer', 'money'),
+        c('countedCents', 'Counted', 'money'),
+        c('differenceCents', 'Over (+) / short (−)', 'money'),
+        c('result', 'Result'),
+        c('countStatus', 'Count'),
+        c('notes', 'Notes')
+      ],
+      notes: [
+        'Closing drawer counts entered by each cashier. Expected = opening float + completed cash sales of that cashier for the day (voided sales and GCash/Maya are not in the drawer). A cashier who counts again must give a reason; the recount replaces the earlier count, which stays listed. Net over / short counts only the counts in force.'
+      ],
+      sums: [{ key: 'finalDifferenceCents', label: 'Net over / short', format: 'money' }],
+      sort: sql`business_date DESC, id DESC`
     }
   const volume = movements(start, end)
   return {
@@ -363,8 +465,9 @@ async function financial(
   const { start, end } = dateBounds(filter.from, filter.to)
   const data = (
     await sql<ReportRow>`SELECT
-    (SELECT COALESCE(SUM(total_cents), 0) FROM sales WHERE created_at >= ${start} AND created_at < ${end}) AS retail,
-    (SELECT COUNT(*) FROM sales WHERE created_at >= ${start} AND created_at < ${end}) AS retail_count,
+    (SELECT COALESCE(SUM(total_cents), 0) FROM sales WHERE created_at >= ${start} AND created_at < ${end} AND ${completedSale}) AS retail,
+    (SELECT COUNT(*) FROM sales WHERE created_at >= ${start} AND created_at < ${end} AND ${completedSale}) AS retail_count,
+    (SELECT COALESCE(ROUND(SUM(o.quantity * b.buy_price) * 100), 0) FROM stock_outs o JOIN batches b ON b.id = o.batch_id WHERE o.kind = 'write_off' AND o.created_at >= ${sqliteTime(start)} AND o.created_at < ${sqliteTime(end)}) AS losses,
     (SELECT COALESCE(SUM(total_cents), 0) FROM wholesale_orders WHERE status = 'delivered' AND delivered_at >= ${start} AND delivered_at < ${end}) AS wholesale,
     (SELECT COUNT(*) FROM wholesale_orders WHERE status = 'delivered' AND delivered_at >= ${start} AND delivered_at < ${end}) AS wholesale_count,
     (SELECT COALESCE(SUM(amount_cents), 0) FROM wholesale_payments WHERE paid_at >= ${filter.from} AND paid_at <= ${filter.to}) AS collections,
@@ -396,6 +499,7 @@ async function financial(
     },
     { label: 'Current AR outstanding', value: Number(data.ar), format: 'money' },
     { label: 'Current AP outstanding', value: Number(data.ap), format: 'money' },
+    { label: 'Stock written off at cost (losses)', value: Number(data.losses), format: 'money' },
     { label: 'Current inventory at cost', value: await stockValuation(database), format: 'money' },
     { label: 'Retail transactions', value: Number(data.retailCount) },
     { label: 'Delivered wholesale orders', value: Number(data.wholesaleCount) }
@@ -420,7 +524,8 @@ async function financial(
     notes: [
       'Revenue covers completed retail sales and wholesale orders delivered in the selected period. Wholesale prepayments are collections, not delivered revenue.',
       'Expenses here are recorded supplier payment outflows only, not accrual expenses or cost of goods sold. No payroll/rent/general-expense source exists. Differences shown are not accounting profit.',
-      'AR, AP and inventory are current balances across all dates, not historical period-end balances. AR includes active unfulfilled credit orders per the existing wholesale module. AP uses received PO quantities, not invoice totals. Search does not apply to this summary.'
+      'AR, AP and inventory are current balances across all dates, not historical period-end balances. AR includes active unfulfilled credit orders per the existing wholesale module. AP uses delivered boxes at their invoice cost less supplier credit notes, not invoice totals. Search does not apply to this summary.',
+      'Voided retail sales are left out of revenue. Losses are write-offs (expired, damaged, lost, recalled, other) at batch cost; stock returned to suppliers is not a loss.'
     ]
   }
 }
@@ -458,6 +563,16 @@ export async function generateReport(
         format: sum.format
       }))
     ]
+    if (filter.kind === 'losses') {
+      const totals = await sql<{
+        reasonLabel: string
+        total: number
+      }>`SELECT reason_label, SUM(cost_cents) AS total FROM (${filtered}) GROUP BY reason_label ORDER BY total DESC`.execute(
+        transaction
+      )
+      for (const row of totals.rows)
+        metrics.push({ label: `Loss: ${row.reasonLabel}`, value: Number(row.total), format: 'money' })
+    }
     if (filter.kind === 'income') {
       const totals = await sql<{
         channel: string

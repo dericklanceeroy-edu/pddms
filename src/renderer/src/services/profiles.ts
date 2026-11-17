@@ -6,12 +6,14 @@ import type {
 } from '@renderer/data/profiles'
 import { channels } from '@shared/constants'
 import {
+  batchWholesalePriceSchema,
   customerUpdateSchema,
   newCustomerSchema,
   newDrugSchema,
   productUpdateSchema
 } from '@shared/schemas'
 import { validate } from '@shared/validation'
+import { request } from './controls'
 
 interface Result<T> {
   success: boolean
@@ -24,12 +26,13 @@ interface Result<T> {
 
 interface CustomerPayload extends Omit<
   CustomerDraft,
-  'email' | 'address' | 'discountId' | 'contactPerson'
+  'email' | 'address' | 'discountId' | 'contactPerson' | 'tin'
 > {
   contactPerson: string | null
   email: string | null
   address: string | null
   discountId: string | null
+  tin: string | null
 }
 
 const customerPayload = (customer: CustomerDraft): CustomerPayload => ({
@@ -37,7 +40,8 @@ const customerPayload = (customer: CustomerDraft): CustomerPayload => ({
   email: customer.email || null,
   address: customer.address || null,
   discountId: customer.discountId || null,
-  contactPerson: customer.contactPerson || null
+  contactPerson: customer.contactPerson || null,
+  tin: customer.clientType === 'pharmacy' ? customer.tin || null : null
 })
 
 const mapCustomer = (customer: CustomerProfile): CustomerProfile => ({
@@ -47,6 +51,7 @@ const mapCustomer = (customer: CustomerProfile): CustomerProfile => ({
   discountId: customer.discountId ?? '',
   clientType: customer.clientType ?? 'retail',
   contactPerson: customer.contactPerson ?? '',
+  tin: customer.tin ?? '',
   transactions: customer.transactions ?? []
 })
 
@@ -56,11 +61,12 @@ const mapProduct = (
   ...product,
   prescriptionRequired: product.isPrescribed ?? product.prescriptionRequired,
   controlled: product.isControlled ?? product.controlled,
-  piecesPerBox: product.piecesPerBox ?? 1,
   genericEquivalentIds: [],
   batches: product.batches.map((batch) => ({
     ...batch,
     boxSellPrice: batch.boxSellPrice ?? null,
+    wholesaleBoxPrice: batch.wholesaleBoxPrice ?? null,
+    piecesPerBox: Math.max(1, batch.piecesPerBox ?? 1),
     expiresAt: String(batch.expiresAt)
   }))
 })
@@ -73,26 +79,39 @@ export async function getCustomers(): Promise<CustomerProfile[]> {
   return (result.customers ?? []).map(mapCustomer)
 }
 
-export async function saveCustomer(customer: CustomerDraft, id?: number): Promise<CustomerProfile> {
+/**
+ * Saves a customer or pharmacy client. When a similar record already exists the request is
+ * refused with a RequestError listing the matches; saving again with `confirmDuplicate` keeps
+ * both (for example two different people with the same name).
+ */
+export async function saveCustomer(
+  customer: CustomerDraft,
+  id?: number,
+  confirmDuplicate = false
+): Promise<CustomerProfile> {
   const channel = id ? channels.customer.updateOneById : channels.customer.createOne
   const payload = validate(id ? customerUpdateSchema : newCustomerSchema, customerPayload(customer))
-  const args = id ? [id, payload] : [payload]
-  const result = (await window.electron.ipcRenderer.invoke(
-    channel,
-    ...args
-  )) as Result<CustomerProfile>
-  if (!result.success || !result.customer) {
-    throw new Error(result.error ?? 'Unable to save the customer.')
-  }
-  return mapCustomer(result.customer)
+  const flags = { confirmDuplicate }
+  const args = id ? [id, payload, flags] : [payload, flags]
+  const result = await request<Result<CustomerProfile>>(channel, ...args)
+  return mapCustomer(result.customer!)
 }
 
+export async function getArchivedCustomers(): Promise<CustomerProfile[]> {
+  return ((await request<Result<never>>(channels.customer.getArchived)).customers ?? []).map(
+    mapCustomer
+  )
+}
+
+export async function getArchivedProducts(): Promise<ItemProfile[]> {
+  return ((await request<Result<never>>(channels.product.getArchived)).products ?? []).map(
+    mapProduct
+  )
+}
+
+/** Deletes a never-used record; throws a RequestError (archivable) when it has history. */
 export async function removeCustomer(id: number): Promise<void> {
-  const result = (await window.electron.ipcRenderer.invoke(
-    channels.customer.removeOneById,
-    id
-  )) as Result<never>
-  if (!result.success) throw new Error(result.error ?? 'Unable to remove the customer.')
+  await request(channels.customer.removeOneById, id)
 }
 
 export async function getProducts(): Promise<ItemProfile[]> {
@@ -122,8 +141,7 @@ export async function addProduct(product: ItemDraft): Promise<ItemProfile> {
     formulation: product.formulation,
     isPrescribed: product.prescriptionRequired,
     isControlled: product.controlled,
-    reorderLevel: product.reorderLevel,
-    piecesPerBox: product.piecesPerBox
+    reorderLevel: product.reorderLevel
   })
   const result = (await window.electron.ipcRenderer.invoke(channels.product.createOne, {
     ...payload
@@ -142,8 +160,7 @@ export async function updateProduct(id: number, product: ItemDraft): Promise<Ite
     formulation: product.formulation,
     isPrescribed: product.prescriptionRequired,
     isControlled: product.controlled,
-    reorderLevel: product.reorderLevel,
-    piecesPerBox: product.piecesPerBox
+    reorderLevel: product.reorderLevel
   })
   const result = (await window.electron.ipcRenderer.invoke(channels.product.updateOneById, id, {
     ...payload
@@ -154,10 +171,17 @@ export async function updateProduct(id: number, product: ItemDraft): Promise<Ite
   return mapProduct(result.product)
 }
 
+/** Deletes a never-used product; throws a RequestError (archivable) when it has history. */
 export async function removeProduct(id: number): Promise<void> {
+  await request(channels.product.removeOneById, id)
+}
+
+/** Sets or clears the price of one box for pharmacy clients on one batch. */
+export async function setWholesalePrice(batchId: number, price: number | null): Promise<void> {
+  const payload = validate(batchWholesalePriceSchema, { batchId, wholesaleBoxPrice: price })
   const result = (await window.electron.ipcRenderer.invoke(
-    channels.product.removeOneById,
-    id
+    channels.product.setWholesalePrice,
+    payload
   )) as Result<never>
-  if (!result.success) throw new Error(result.error ?? 'Unable to remove the product.')
+  if (!result.success) throw new Error(result.error ?? 'Unable to save the wholesale price.')
 }

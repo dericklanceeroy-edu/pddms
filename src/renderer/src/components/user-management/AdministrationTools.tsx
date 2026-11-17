@@ -1,17 +1,23 @@
+import InfoTip from '@renderer/components/ui/InfoTip'
+import ArchivedRecords from '@renderer/components/user-management/ArchivedRecords'
 import { RESTORE_NOTICE_KEY } from '@renderer/data/restoreNotice'
 import { channels } from '@shared/constants'
-import type { AuditRecord, BackupInfo } from '@shared/security'
+import type { AuditDetails, AuditRecord, BackupInfo } from '@shared/security'
 import { useEffect, useRef, useState, type ReactElement } from 'react'
 import { FiCheck, FiMinus } from 'react-icons/fi'
 
 /** Plain names for the permission areas, in the order an administrator thinks about them. */
 const areaLabels: Record<string, string> = {
   sale: 'Sales & Dispensing',
+  saleVoid: 'Sale Voids',
+  cashCount: 'Cash Counts (all cashiers)',
   customer: 'Customers',
   product: 'Inventory Products',
-  inventoryAdjustment: 'Stock Adjustments',
+  inventoryAdjustment: 'Stock Adjustments & Counts',
   supplier: 'Suppliers',
+  priceList: 'Supplier Price List',
   purchaseOrder: 'Purchase Orders',
+  supplierReturn: 'Supplier Returns & Credits',
   wholesale: 'Wholesale Orders',
   receivable: 'Accounts Receivable',
   report: 'Reports',
@@ -58,21 +64,30 @@ const logPayload = (filter: LogFilter, beforeId?: number): Record<string, unknow
   ...(filter.resource ? { resource: filter.resource } : {}),
   ...(beforeId ? { beforeId } : {})
 })
-/** "View · Create · Edit (own only)" for one role and area. */
-function grantedActions(actions: Record<string, string[]> | undefined): string[] {
+/** "View (own) · Edit (own)" for one role and area. */
+function grantedActions(actions: Record<string, unknown> | undefined): string[] {
   if (!actions) return []
   const result = new Map<string, boolean>()
-  for (const key of Object.keys(actions)) {
-    const [action, possession] = key.split(':')
-    const own = possession === 'own'
+  for (const [key, value] of Object.entries(actions)) {
+    // Note: accesscontrol lists grants as { read: [{ possession: 'own' }] }; older builds used
+    // "read:own" keys. An action counts as own-only when no grant for it covers any record.
+    const [action, keyPossession] = key.split(':')
+    const possessions = Array.isArray(value)
+      ? value.map((grant) =>
+          grant && typeof grant === 'object' && 'possession' in grant
+            ? String((grant as { possession: unknown }).possession)
+            : (keyPossession ?? 'any')
+        )
+      : [keyPossession ?? 'any']
+    const own = possessions.every((possession) => possession === 'own')
     result.set(action, (result.get(action) ?? true) && own)
   }
   return Object.keys(actionLabels)
     .filter((action) => result.has(action))
-    .map((action) => `${actionLabels[action]}${result.get(action) ? ' (own)' : ''}`)
+    .map((action) => `${actionLabels[action]}${result.get(action) ? ' (Own)' : ''}`)
 }
 
-type Grants = Record<string, Record<string, Record<string, string[]>>>
+type Grants = Record<string, Record<string, Record<string, unknown>>>
 interface Result {
   success: boolean
   error?: string
@@ -192,13 +207,22 @@ export default function AdministrationTools(): ReactElement {
       )}
       <section className="panel space-y-4 p-5 sm:p-6">
         <div>
-          <h3 className="section-title">Role Permissions</h3>
-          <p className="section-subtitle">
-            What each role can do in each area. To change someone’s access, edit the user and pick
-            another role. The Master role is created during setup and cannot be assigned.
-          </p>
+          <div className="flex items-center gap-1.5">
+            <h3 className="section-title">Role Permissions</h3>
+            <InfoTip label="Role Permissions">
+              What each role can do in each area. To change someone’s access, edit the user and pick
+              another role. The Master role is created during setup and cannot be assigned. “(Own)”
+              means the role can use only its own records, for example a cashier’s own sales or
+              their own account.
+            </InfoTip>
+          </div>
         </div>
-        <div className="overflow-x-auto rounded-lg border border-slate-200">
+        <div
+          className="overflow-x-auto rounded-lg border border-slate-200"
+          tabIndex={0}
+          role="region"
+          aria-label="Role permissions table"
+        >
           <table className="data-table w-full min-w-[640px] text-left text-sm">
             <thead>
               <tr>
@@ -246,19 +270,18 @@ export default function AdministrationTools(): ReactElement {
             </tbody>
           </table>
         </div>
-        <p className="text-xs text-slate-500">
-          “Own” means the role sees only its own records, for example a cashier’s own sales.
-        </p>
       </section>
       <section className="panel space-y-4 p-5 sm:p-6">
         <div>
-          <h3 className="section-title">Backups &amp; Restore</h3>
-          <p className="section-subtitle">
-            A backup holds a consistent copy of the database and the supplier invoice files it
-            refers to. Keep the whole backup folder and store it securely; files are not encrypted.
-            Restoring signs everyone out. Backups from earlier versions of Med Prix are upgraded
-            during restore.
-          </p>
+          <div className="flex items-center gap-1.5">
+            <h3 className="section-title">Backups &amp; Restore</h3>
+            <InfoTip label="Backups & Restore">
+              A backup holds a consistent copy of the database and the supplier invoice files it
+              refers to. Keep the whole backup folder and store it securely; files are not
+              encrypted. Restoring signs everyone out. Backups from earlier versions of Med Prix are
+              upgraded during restore.
+            </InfoTip>
+          </div>
         </div>
         <div className="flex flex-wrap gap-2">
           <button
@@ -268,7 +291,12 @@ export default function AdministrationTools(): ReactElement {
               void run(async () => {
                 const result = await request(channels.administration.backup)
                 if (result.backup) {
-                  setMessage(`Backup saved: ${result.backup.directory}`)
+                  const missing: string[] = result.backup.missingInvoices ?? []
+                  setMessage(
+                    missing.length
+                      ? `Backup saved: ${result.backup.directory}. ${missing.length} invoice file(s) were missing and are not in this backup: ${missing.join(', ')}. Upload those invoice documents again in Suppliers → Invoices & Payments.`
+                      : `Backup saved: ${result.backup.directory}`
+                  )
                   setBackups([result.backup, ...backups])
                 }
               })
@@ -313,11 +341,19 @@ export default function AdministrationTools(): ReactElement {
             Refresh Backup List
           </button>
         </div>
-        <p className="text-xs text-slate-500">
-          The list shows the default local backup folder and backups created in this session.
-          Backups saved elsewhere can be chosen through Restore From Backup.
+        <p className="flex items-center gap-1 text-xs text-slate-500">
+          Backups in the default folder and from this session.
+          <InfoTip label="Backup list">
+            The list shows the default local backup folder and backups created in this session.
+            Backups saved elsewhere can be chosen through Restore From Backup.
+          </InfoTip>
         </p>
-        <div className="max-h-48 space-y-2 overflow-auto">
+        <div
+          className="max-h-48 space-y-2 overflow-auto"
+          tabIndex={0}
+          role="region"
+          aria-label="Backups list"
+        >
           {backups.map((backup) => (
             <p
               className="rounded-lg border border-slate-200 p-3 text-sm break-all"
@@ -334,13 +370,17 @@ export default function AdministrationTools(): ReactElement {
           <p className="text-sm text-slate-500">No completed local backups found.</p>
         )}
       </section>
+      <ArchivedRecords />
       <section className="panel space-y-4 p-5 sm:p-6">
         <div>
-          <h3 className="section-title">System Activity Log</h3>
-          <p className="section-subtitle">
-            Security events and important saved operations. Passwords and raw request data are never
-            logged. A “started” entry without a final result may mean the operation was interrupted.
-          </p>
+          <div className="flex items-center gap-1.5">
+            <h3 className="section-title">System Activity Log</h3>
+            <InfoTip label="System Activity Log">
+              Security events and important saved operations. Passwords and raw request data are
+              never logged. A “started” entry without a final result may mean the operation was
+              interrupted.
+            </InfoTip>
+          </div>
         </div>
         <div className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50/70 p-4 sm:grid-cols-2 xl:grid-cols-[minmax(0,2fr)_repeat(4,minmax(0,1fr))_auto] xl:items-end">
           <label className="block text-sm font-medium text-slate-700">
@@ -418,15 +458,22 @@ export default function AdministrationTools(): ReactElement {
           </p>
         )}
         {busy && <p role="status">Loading…</p>}
-        <div className="max-h-[55vh] overflow-auto rounded-lg border border-slate-200">
-          <table className="data-table w-full min-w-[720px] text-left text-sm">
+        <div
+          className="max-h-[55vh] overflow-auto rounded-lg border border-slate-200"
+          tabIndex={0}
+          role="region"
+          aria-label="Activity log table"
+        >
+          <table className="data-table w-full min-w-[960px] text-left text-sm">
             <thead className="sticky top-0">
               <tr>
-                {['Time', 'Account', 'Action', 'Area', 'Target ID', 'Result'].map((label) => (
-                  <th className="px-3 py-2.5" key={label}>
-                    {label}
-                  </th>
-                ))}
+                {['Time', 'Account', 'Action', 'Area', 'Target ID', 'Result', 'Details'].map(
+                  (label) => (
+                    <th className="px-3 py-2.5" key={label}>
+                      {label}
+                    </th>
+                  )
+                )}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -447,6 +494,9 @@ export default function AdministrationTools(): ReactElement {
                   <td className="px-3 py-2.5">{log.targetId ?? '—'}</td>
                   <td className="px-3 py-2.5">
                     <ResultBadge result={log.result} />
+                  </td>
+                  <td className="max-w-md min-w-56 px-3 py-2.5 align-top">
+                    <AuditDetailsCell details={log.details} />
                   </td>
                 </tr>
               ))}
@@ -477,6 +527,36 @@ export default function AdministrationTools(): ReactElement {
           </button>
         )}
       </section>
+    </div>
+  )
+}
+
+/** What the entry changed: summary, reason and each field's old → new value. */
+function AuditDetailsCell({ details }: { details: string | null }): ReactElement {
+  if (!details) return <span className="text-slate-400">—</span>
+  let parsed: AuditDetails
+  try {
+    parsed = JSON.parse(details) as AuditDetails
+  } catch {
+    return <span className="text-slate-400">—</span>
+  }
+  const show = (value: unknown): string =>
+    value === null || value === undefined || value === '' ? 'empty' : String(value)
+  return (
+    <div className="space-y-1 text-xs">
+      {parsed.summary && <p className="font-medium text-slate-800">{parsed.summary}</p>}
+      {parsed.reason && <p className="text-slate-600">Reason: {parsed.reason}</p>}
+      {parsed.changes && parsed.changes.length > 0 && (
+        <ul className="space-y-0.5 text-slate-600">
+          {parsed.changes.slice(0, 8).map((change, index) => (
+            <li key={index}>
+              <span className="font-semibold">{change.field}:</span> {show(change.from)} →{' '}
+              {show(change.to)}
+            </li>
+          ))}
+          {parsed.changes.length > 8 && <li>…and {parsed.changes.length - 8} more</li>}
+        </ul>
+      )}
     </div>
   )
 }

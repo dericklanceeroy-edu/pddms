@@ -1,11 +1,54 @@
 import { getItemStock, getSellableStock, type ItemProfile } from '@renderer/data/profiles'
 import { expiryLabels, getExpiryStatus } from '@shared/inventory'
-import type { ReactElement } from 'react'
+import { useMemo, useState, type ReactElement } from 'react'
+import { FiSearch } from 'react-icons/fi'
+import {
+  matchesFilter,
+  matchesSearch,
+  stockFilters,
+  stockLabel,
+  type StockFilter
+} from './stockFilters'
 
-export default function InventoryReport({ items }: { items: ItemProfile[] }): ReactElement {
+export default function InventoryReport({ items: all }: { items: ItemProfile[] }): ReactElement {
+  const [query, setQuery] = useState('')
+  const [filter, setFilter] = useState<StockFilter>('all')
+  const items = useMemo(
+    () => all.filter((item) => matchesFilter(item, filter) && matchesSearch(item, query)),
+    [all, filter, query]
+  )
   return (
     <section className="panel min-w-0 overflow-hidden">
-      <h3 className="p-5 font-semibold">Current Inventory Report</h3>
+      <div className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
+        <h3 className="section-title">Current Inventory Report</h3>
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <label className="relative block min-w-0 sm:w-80">
+            <span className="sr-only">Search the inventory report</span>
+            <FiSearch
+              aria-hidden="true"
+              className="absolute top-1/2 left-3.5 -translate-y-1/2 text-slate-400"
+            />
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search brand, generic, category or formulation"
+              className="field mt-0 pl-10"
+            />
+          </label>
+          <select
+            value={filter}
+            onChange={(event) => setFilter(event.target.value as StockFilter)}
+            className="field mt-0 sm:w-56"
+            aria-label="Filter the report by stock or expiry status"
+          >
+            {stockFilters.map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
       <div className="max-h-[65vh] overflow-auto" tabIndex={0} aria-label="Inventory report table">
         <table className="w-full min-w-[850px] text-left text-sm">
           <thead className="sticky top-0 bg-slate-50">
@@ -39,11 +82,7 @@ export default function InventoryReport({ items }: { items: ItemProfile[] }): Re
                     {getItemStock(item)} / {getSellableStock(item)}
                   </td>
                   <td className="px-4 py-3">
-                    {getSellableStock(item) === 0
-                      ? 'Out of stock'
-                      : getSellableStock(item) <= item.reorderLevel
-                        ? 'Low stock'
-                        : 'In stock'}
+                    {stockLabel(item)}
                     <p className="text-xs">Threshold: {item.reorderLevel}</p>
                   </td>
                   <td className="max-w-60 px-4 py-3 break-words">
@@ -75,7 +114,11 @@ export default function InventoryReport({ items }: { items: ItemProfile[] }): Re
             )}
           </tbody>
         </table>
-        {!items.length && <p className="p-5 text-sm text-slate-500">No products recorded.</p>}
+        {!items.length && (
+          <p className="p-5 text-sm text-slate-600">
+            {all.length ? 'No products match this search or filter.' : 'No products recorded.'}
+          </p>
+        )}
       </div>
     </section>
   )

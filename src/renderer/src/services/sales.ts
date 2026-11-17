@@ -1,11 +1,11 @@
 import { channels } from '@shared/constants'
-import type { Checkout, SaleDraft, SaleRecord, SaleTotals } from '@shared/sales'
+import type { Checkout, SaleDraft, SaleHistoryRecord, SaleRecord, SaleTotals } from '@shared/sales'
 
 interface Result {
   success: boolean
   error?: string
   sale?: SaleRecord
-  records?: Omit<SaleRecord, 'items'>[]
+  records?: SaleHistoryRecord[]
   totals?: SaleTotals
   cancelled?: boolean
 }
@@ -18,7 +18,7 @@ export const quoteSale = async (draft: SaleDraft): Promise<SaleTotals> =>
   (await request(channels.sales.quote, draft)).totals!
 export const completeSale = async (data: Checkout): Promise<SaleRecord> =>
   (await request(channels.sales.checkout, data)).sale!
-export const getSaleHistory = async (beforeId?: number): Promise<Omit<SaleRecord, 'items'>[]> =>
+export const getSaleHistory = async (beforeId?: number): Promise<SaleHistoryRecord[]> =>
   (await request(channels.sales.history, beforeId)).records!
 export const getSale = async (id: number): Promise<SaleRecord> =>
   (await request(channels.sales.getOne, id)).sale!

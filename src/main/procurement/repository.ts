@@ -1,5 +1,7 @@
 import { db } from '@main/db'
+import { sql, type Kysely } from 'kysely'
 import type {
+  Database,
   PurchaseOrderPaymentSummary,
   SupplierDeliveryWithDetails,
   SupplierInvoiceStatus,
@@ -63,6 +65,37 @@ const deadlineStatus = (
   if (daysRemaining < 0) return 'overdue'
   if (daysRemaining <= 7) return 'due_soon'
   return 'upcoming'
+}
+
+/**
+ * What each purchase order owes: the delivered value at the invoice cost of each delivery
+ * (rejected boxes are not included), less supplier credit notes applied to it, less payments.
+ */
+export async function orderBalances(
+  database: Kysely<Database>,
+  orderIds?: number[]
+): Promise<Map<number, { delivered: number; credits: number; paid: number; outstanding: number }>> {
+  const filter = (column: string): ReturnType<typeof sql> =>
+    orderIds ? sql`AND ${sql.ref(column)} IN (${sql.join(orderIds.length ? orderIds : [0])})` : sql``
+  const rows = (
+    await sql<{ id: number; delivered: number; credits: number; paid: number }>`SELECT po.id,
+      COALESCE((SELECT SUM(i.quantity * i.unit_cost) FROM supplier_delivery_items i JOIN supplier_deliveries d ON d.id = i.delivery_id WHERE d.purchase_order_id = po.id), 0) AS delivered,
+      COALESCE((SELECT SUM(amount) FROM supplier_credit_notes WHERE purchase_order_id = po.id), 0) AS credits,
+      COALESCE((SELECT SUM(amount) FROM supplier_payments WHERE purchase_order_id = po.id), 0) AS paid
+      FROM purchase_orders po WHERE 1 = 1 ${filter('po.id')}`.execute(database)
+  ).rows
+  const money = (value: number): number => Number(Number(value).toFixed(2))
+  return new Map(
+    rows.map((row) => {
+      const delivered = money(row.delivered)
+      const credits = money(row.credits)
+      const paid = money(row.paid)
+      return [
+        row.id,
+        { delivered, credits, paid, outstanding: Math.max(0, money(delivered - credits - paid)) }
+      ]
+    })
+  )
 }
 
 const allocatePayments = (
@@ -132,7 +165,11 @@ export async function findDeliveries(): Promise<SupplierDeliveryWithDetails[]> {
       'supplierDeliveryItems.quantity',
       'purchaseOrderItems.quantity as orderedQuantity',
       'purchaseOrderItems.unit',
-      'purchaseOrderItems.piecesPerUnit',
+      'purchaseOrderItems.piecesPerUnit as orderedPiecesPerUnit',
+      'purchaseOrderItems.unitCost as orderedUnitCost',
+      'supplierDeliveryItems.piecesPerUnit',
+      'supplierDeliveryItems.unitCost',
+      'supplierDeliveryItems.differenceReason',
       'drugs.brandName',
       'drugs.genericName',
       'batches.id as batchId',
@@ -140,9 +177,29 @@ export async function findDeliveries(): Promise<SupplierDeliveryWithDetails[]> {
       'batches.expiresAt'
     ])
     .execute()
+  const rejections = await db
+    .selectFrom('supplierDeliveryRejections')
+    .innerJoin('drugs', 'drugs.id', 'supplierDeliveryRejections.drugId')
+    .select([
+      'supplierDeliveryRejections.id',
+      'supplierDeliveryRejections.deliveryId',
+      'supplierDeliveryRejections.quantity',
+      'supplierDeliveryRejections.reason',
+      'drugs.brandName',
+      'drugs.genericName'
+    ])
+    .execute()
 
   return deliveries.map((delivery) => ({
     ...delivery,
+    rejections: rejections
+      .filter((item) => item.deliveryId === delivery.id)
+      .map((item) => ({
+        id: item.id,
+        productName: `${item.brandName} (${item.genericName})`,
+        quantity: item.quantity,
+        reason: item.reason
+      })),
     items: items
       .filter((item) => item.deliveryId === delivery.id)
       .map((item) => ({
@@ -153,6 +210,10 @@ export async function findDeliveries(): Promise<SupplierDeliveryWithDetails[]> {
         orderedQuantity: item.orderedQuantity,
         unit: item.unit,
         piecesPerUnit: item.piecesPerUnit,
+        orderedPiecesPerUnit: item.orderedPiecesPerUnit,
+        unitCost: item.unitCost,
+        orderedUnitCost: item.orderedUnitCost,
+        differenceReason: item.differenceReason,
         expiresAt: String(item.expiresAt)
       }))
   }))
@@ -191,7 +252,21 @@ export async function findInvoices(): Promise<SupplierInvoiceWithDetails[]> {
     .select(['purchaseOrderId', 'invoiceId', 'amount'])
     .orderBy('id')
     .execute()
-  const paidByInvoice = allocatePayments(invoices, payments)
+  // Note: A supplier credit note applied to an order settles its invoices like a payment.
+  const credits = await db
+    .selectFrom('supplierCreditNotes')
+    .select(['purchaseOrderId', 'amount'])
+    .where('purchaseOrderId', 'is not', null)
+    .orderBy('id')
+    .execute()
+  const paidByInvoice = allocatePayments(invoices, [
+    ...payments,
+    ...credits.map((credit) => ({
+      purchaseOrderId: credit.purchaseOrderId!,
+      invoiceId: null,
+      amount: credit.amount
+    }))
+  ])
 
   return invoices.map((invoice) => {
     const paidAmount = paidByInvoice.get(invoice.id) ?? 0
@@ -221,33 +296,24 @@ export async function findPaymentSummaries(): Promise<PurchaseOrderPaymentSummar
     .where('purchaseOrders.status', 'in', ['partially_received', 'received', 'cancelled'])
     .orderBy('purchaseOrders.orderedAt', 'desc')
     .execute()
-  const items = await db
-    .selectFrom('purchaseOrderItems')
-    .select(['purchaseOrderId', 'receivedQuantity', 'unitCost'])
-    .execute()
-  const paidRows = await db
-    .selectFrom('supplierPayments')
-    .select('purchaseOrderId')
-    .select(({ fn }) => fn.sum<number>('amount').as('paidAmount'))
-    .groupBy('purchaseOrderId')
-    .execute()
-  const paidByOrder = new Map(
-    paidRows.map((payment) => [payment.purchaseOrderId, Number(payment.paidAmount)])
-  )
-
+  const balances = await orderBalances(db)
   return orders
     .map((order) => {
-      const totalAmount = Number(
-        items
-          .filter((item) => item.purchaseOrderId === order.purchaseOrderId)
-          .reduce((total, item) => total + item.receivedQuantity * item.unitCost, 0)
-          .toFixed(2)
-      )
-      const paidAmount = Number((paidByOrder.get(order.purchaseOrderId) ?? 0).toFixed(2))
-      const outstandingAmount = Math.max(0, Number((totalAmount - paidAmount).toFixed(2)))
+      const balance = balances.get(order.purchaseOrderId)!
       const status: SupplierInvoiceStatus =
-        paidAmount === 0 ? 'unpaid' : outstandingAmount === 0 ? 'paid' : 'partially_paid'
-      return { ...order, totalAmount, paidAmount, outstandingAmount, status }
+        balance.paid + balance.credits === 0
+          ? 'unpaid'
+          : balance.outstanding === 0
+            ? 'paid'
+            : 'partially_paid'
+      return {
+        ...order,
+        totalAmount: balance.delivered,
+        paidAmount: balance.paid,
+        creditAmount: balance.credits,
+        outstandingAmount: balance.outstanding,
+        status
+      }
     })
     .filter((order) => order.totalAmount > 0)
 }
@@ -310,6 +376,34 @@ export async function insertInvoice(data: InvoiceFileInput): Promise<SupplierInv
       .where('invoiceNumber', '=', data.invoiceNumber)
       .executeTakeFirst()
     if (duplicate) throw new Error('That invoice number already exists for this supplier.')
+    // Note: Invoices cannot bill more than was ordered (or, on a cancelled order, received).
+    // Note: Delivered lines count at their invoice cost; boxes still to come at the order cost.
+    const lines = await transaction
+      .selectFrom('purchaseOrderItems')
+      .select(['quantity', 'receivedQuantity', 'unitCost'])
+      .where('purchaseOrderId', '=', data.purchaseOrderId)
+      .execute()
+    const delivered = (await orderBalances(transaction, [data.purchaseOrderId])).get(
+      data.purchaseOrderId
+    )!.delivered
+    const orderValue =
+      delivered +
+      (order.status === 'cancelled'
+        ? 0
+        : lines.reduce(
+            (sum, line) => sum + (line.quantity - line.receivedQuantity) * line.unitCost,
+            0
+          ))
+    const invoiced = await transaction
+      .selectFrom('supplierInvoices')
+      .select((eb) => eb.fn.sum<number>('amount').as('total'))
+      .where('purchaseOrderId', '=', data.purchaseOrderId)
+      .executeTakeFirstOrThrow()
+    const already = Number(invoiced.total ?? 0)
+    if (already + data.amount > orderValue + 0.005)
+      throw new Error(
+        `Invoices for this order cannot exceed the order value of ₱${orderValue.toFixed(2)}${already > 0 ? ` (₱${already.toFixed(2)} is already invoiced)` : ''}. Check the amount.`
+      )
 
     const invoice = await transaction
       .insertInto('supplierInvoices')
@@ -412,24 +506,8 @@ export async function insertPayment(data: PaymentInput): Promise<SupplierPayment
       if (duplicate) throw new Error('That payment reference has already been recorded.')
     }
 
-    const paid = await transaction
-      .selectFrom('supplierPayments')
-      .select(({ fn }) => fn.sum<number>('amount').as('amount'))
-      .where('purchaseOrderId', '=', order.id)
-      .executeTakeFirstOrThrow()
-    const orderItems = await transaction
-      .selectFrom('purchaseOrderItems')
-      .select(['receivedQuantity', 'unitCost'])
-      .where('purchaseOrderId', '=', order.id)
-      .execute()
-    const paidAmount = Number(paid.amount ?? 0)
     const amount = Number(data.amount.toFixed(2))
-    const totalAmount = Number(
-      orderItems
-        .reduce((total, item) => total + item.receivedQuantity * item.unitCost, 0)
-        .toFixed(2)
-    )
-    const remaining = Number((totalAmount - paidAmount).toFixed(2))
+    const remaining = (await orderBalances(transaction, [order.id])).get(order.id)!.outstanding
     if (remaining <= 0) throw new Error('This purchase order is already paid.')
     if (amount > remaining) throw new Error('Payment cannot exceed the delivered order balance.')
 

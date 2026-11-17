@@ -69,7 +69,7 @@ ipcMain.handle(channels.administration.backup, async (event) => {
     return {
       success: false,
       error:
-        'Backup failed. Check folder access and stored invoice files. No complete backup was created.'
+        'Backup failed. Check that the folder can be written to and has free space. No complete backup was created.'
     }
   }
 })

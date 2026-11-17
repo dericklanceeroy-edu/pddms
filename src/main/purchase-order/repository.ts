@@ -1,3 +1,4 @@
+import { noteAudit } from '@main/audit/repository'
 import { db } from '@main/db'
 import { purchaseOrderDeliverySchema } from '@shared/schemas'
 import type {
@@ -7,7 +8,8 @@ import type {
   PurchaseOrderStatus,
   PurchaseOrderWithDetails
 } from '@shared/types'
-import { piecesPerUnit, UnitError, type StockUnit } from '@shared/units'
+import { priceOn } from '@main/price-list/repository'
+import { localDate } from '@shared/inventory'
 import { sql, type Transaction } from 'kysely'
 import { randomUUID } from 'node:crypto'
 
@@ -16,17 +18,22 @@ interface CreateOrderInput {
   expectedAt: string | null
   notes: string | null
   createdBy: number
-  items: Array<
-    Pick<NewPurchaseOrderItem, 'drugId' | 'quantity' | 'unitCost'> & { unit?: StockUnit }
-  >
+  /** Packs from the supplier's price list and the number of boxes of each. */
+  items: Array<{ packId: number; quantity: number }>
 }
 
 interface DeliveryInput {
   itemId: number
   receivedQuantity: number
+  rejectedQuantity: number
+  rejectionReason: string
+  piecesPerBox: number | null
+  unitCost: number | null
+  differenceReason: string
   batchNumber: string
-  sellPrice: number
+  sellPrice: number | null
   boxSellPrice?: number | null
+  wholesaleBoxPrice?: number | null
   expiresAt: string
 }
 
@@ -42,41 +49,61 @@ interface RecordDeliveryInput {
 
 const PRICE_TOLERANCE = 0.000001
 
-/** Builds stored lines, snapshotting how many pieces each ordered unit holds. */
+/**
+ * Builds stored lines from the supplier's price list: the pack fixes the product, the box size
+ * and the agreed cost per box in effect on the given date. Nothing typed by the person placing
+ * the order changes the price.
+ */
 async function orderLines(
   transaction: Transaction<Database>,
   purchaseOrderId: number,
-  items: CreateOrderInput['items']
+  supplierId: number,
+  items: CreateOrderInput['items'],
+  date = localDate()
 ): Promise<NewPurchaseOrderItem[]> {
-  const drugIds = [...new Set(items.map((item) => item.drugId))]
-  const drugs = await transaction
-    .selectFrom('drugs')
-    .select(['id', 'brandName', 'piecesPerBox'])
-    .where('id', 'in', drugIds)
-    .where('isArchived', '=', 0)
+  const packIds = [...new Set(items.map((item) => item.packId))]
+  const packs = await transaction
+    .selectFrom('supplierPacks')
+    .innerJoin('drugs', 'drugs.id', 'supplierPacks.drugId')
+    .select([
+      'supplierPacks.id',
+      'supplierPacks.supplierId',
+      'supplierPacks.drugId',
+      'supplierPacks.piecesPerBox',
+      'supplierPacks.isArchived',
+      'drugs.brandName',
+      'drugs.isArchived as productArchived'
+    ])
+    .where('supplierPacks.id', 'in', packIds)
     .execute()
-  if (drugs.length !== drugIds.length) throw new Error('One or more products were not found.')
-  return items.map((item) => {
-    const drug = drugs.find((value) => value.id === item.drugId)!
-    const unit = item.unit ?? 'piece'
-    let pieces: number
-    try {
-      pieces = piecesPerUnit(unit, drug.piecesPerBox)
-    } catch (error) {
-      if (error instanceof UnitError) throw new Error(`${drug.brandName}: ${error.message}`)
-      throw error
-    }
-    return {
+  const lines: NewPurchaseOrderItem[] = []
+  for (const item of items) {
+    const pack = packs.find((value) => value.id === item.packId)
+    if (!pack || pack.isArchived || pack.productArchived)
+      throw new Error('A pack on this order is no longer on the price list. Pick it again.')
+    if (pack.supplierId !== supplierId)
+      throw new Error(`${pack.brandName}: this pack belongs to a different supplier's price list.`)
+    const unitCost = await priceOn(transaction, pack.id, date)
+    if (unitCost === null)
+      throw new Error(
+        `${pack.brandName} (box of ${pack.piecesPerBox}) has no agreed price in effect yet. Ask the administrator to set it in the price list.`
+      )
+    lines.push({
       purchaseOrderId,
-      drugId: item.drugId,
+      drugId: pack.drugId,
+      packId: pack.id,
       quantity: item.quantity,
-      unitCost: item.unitCost,
-      unit,
-      piecesPerUnit: pieces,
+      unitCost,
+      unit: 'box',
+      piecesPerUnit: pack.piecesPerBox,
       receivedQuantity: 0
-    }
-  })
+    })
+  }
+  return lines
 }
+
+const lineTotal = (lines: Array<{ quantity: number; unitCost: number }>): number =>
+  Number(lines.reduce((total, line) => total + line.quantity * line.unitCost, 0).toFixed(2))
 
 export async function findAll(): Promise<PurchaseOrderWithDetails[]> {
   const orders = await db
@@ -122,6 +149,7 @@ export async function findAll(): Promise<PurchaseOrderWithDetails[]> {
       'purchaseOrderItems.receivedQuantity',
       'purchaseOrderItems.unit',
       'purchaseOrderItems.piecesPerUnit',
+      'purchaseOrderItems.packId',
       'drugs.brandName',
       'drugs.genericName'
     ])
@@ -140,6 +168,7 @@ export async function findAll(): Promise<PurchaseOrderWithDetails[]> {
         receivedQuantity: item.receivedQuantity,
         unit: item.unit,
         piecesPerUnit: item.piecesPerUnit,
+        packId: item.packId,
         productName: `${item.brandName} (${item.genericName})`
       }))
   }))
@@ -157,14 +186,14 @@ export async function insertOne(data: CreateOrderInput): Promise<PurchaseOrderWi
       .where('id', '=', data.supplierId)
       .executeTakeFirst()
     if (!supplier) throw new Error('Supplier not found.')
-    // Note: Validates products and box set-up before anything is written.
-    await orderLines(transaction, 0, data.items)
+    // Note: Validates the packs and their prices before anything is written.
+    const priced = await orderLines(transaction, 0, data.supplierId, data.items)
 
     const orderNumber = `PO-${new Date()
       .toISOString()
       .replace(/[-:TZ.]/g, '')
       .slice(0, 14)}-${randomUUID().slice(0, 8).toUpperCase()}`
-    const totalAmount = data.items.reduce((total, item) => total + item.quantity * item.unitCost, 0)
+    const totalAmount = lineTotal(priced)
     const order = await transaction
       .insertInto('purchaseOrders')
       .values({
@@ -181,7 +210,7 @@ export async function insertOne(data: CreateOrderInput): Promise<PurchaseOrderWi
 
     await transaction
       .insertInto('purchaseOrderItems')
-      .values(await orderLines(transaction, order.id, data.items))
+      .values(priced.map((line) => ({ ...line, purchaseOrderId: order.id })))
       .execute()
 
     return order.id
@@ -215,7 +244,7 @@ export async function updateDraftById(
       .where('id', '=', data.supplierId)
       .executeTakeFirst()
     if (!supplier) throw new Error('Supplier not found.')
-    const lines = await orderLines(transaction, id, data.items)
+    const lines = await orderLines(transaction, id, data.supplierId, data.items)
 
     // Note: Draft lines have never been received, so replacing them loses no stock history.
     await transaction.deleteFrom('purchaseOrderItems').where('purchaseOrderId', '=', id).execute()
@@ -226,7 +255,7 @@ export async function updateDraftById(
         supplierId: data.supplierId,
         expectedAt: data.expectedAt,
         notes: data.notes,
-        totalAmount: data.items.reduce((total, item) => total + item.quantity * item.unitCost, 0),
+        totalAmount: lineTotal(lines),
         updatedAt: sql`CURRENT_TIMESTAMP`
       })
       .where('id', '=', id)
@@ -237,6 +266,9 @@ export async function updateDraftById(
   return (await findOneById(id)) as PurchaseOrderWithDetails
 }
 
+const statusLabel = (status: string): string =>
+  status.replaceAll('_', ' ').replace(/^./, (letter) => letter.toUpperCase())
+
 export async function updateStatusById(
   id: number,
   status: PurchaseOrderStatus,
@@ -244,12 +276,47 @@ export async function updateStatusById(
 ): Promise<PurchaseOrderWithDetails> {
   const current = await db
     .selectFrom('purchaseOrders')
-    .select('status')
+    .select(['status', 'orderNumber'])
     .where('id', '=', id)
     .executeTakeFirstOrThrow()
   const changed = current.status !== status
   const now = new Date().toISOString()
-  await db
+  await db.transaction().execute(async (transaction) => {
+  if (changed && status === 'submitted') {
+    // Note: The order goes to the supplier at the agreed price in effect on the day it is sent.
+    const order = await transaction
+      .selectFrom('purchaseOrders')
+      .select('supplierId')
+      .where('id', '=', id)
+      .executeTakeFirstOrThrow()
+    const lines = await transaction
+      .selectFrom('purchaseOrderItems')
+      .select(['id', 'packId', 'quantity', 'unitCost'])
+      .where('purchaseOrderId', '=', id)
+      .execute()
+    if (lines.some((line) => line.packId === null))
+      throw new Error(
+        'This draft was made before the supplier price list. Edit it and pick each pack from the price list, then submit.'
+      )
+    const priced = await orderLines(
+      transaction,
+      id,
+      order.supplierId,
+      lines.map((line) => ({ packId: line.packId!, quantity: line.quantity }))
+    )
+    for (const [index, line] of lines.entries())
+      await transaction
+        .updateTable('purchaseOrderItems')
+        .set({ unitCost: priced[index].unitCost })
+        .where('id', '=', line.id)
+        .execute()
+    await transaction
+      .updateTable('purchaseOrders')
+      .set({ totalAmount: lineTotal(priced) })
+      .where('id', '=', id)
+      .execute()
+  }
+  await transaction
     .updateTable('purchaseOrders')
     .set({
       status,
@@ -261,6 +328,13 @@ export async function updateStatusById(
     .where('id', '=', id)
     .where('status', '=', current.status)
     .executeTakeFirstOrThrow()
+  })
+  // Note: The activity log shows the status before and after (L9).
+  if (changed)
+    noteAudit({
+      summary: `Purchase order ${current.orderNumber}: ${statusLabel(current.status)} → ${statusLabel(status)}`,
+      changes: [{ field: 'Status', from: statusLabel(current.status), to: statusLabel(status) }]
+    })
 
   return (await findOneById(id)) as PurchaseOrderWithDetails
 }
@@ -333,32 +407,65 @@ export async function recordDelivery(
           `Only ${item.quantity - item.receivedQuantity} ${item.unit === 'box' ? 'box(es)' : 'piece(s)'} remain to be received for this line. Over-receiving is not allowed.`
         )
       }
-      const drug = await transaction
-        .selectFrom('drugs')
-        .select(['piecesPerBox'])
-        .where('id', '=', item.drugId)
-        .executeTakeFirstOrThrow()
-      const boxSellPrice = deliveredItem.boxSellPrice ?? null
-      if (boxSellPrice !== null && drug.piecesPerBox <= 1)
+      // Note: Received and rejected boxes in one delivery together cannot exceed what is still
+      // open on the line (L5): a 2-box line cannot arrive as 2 good and 1 damaged.
+      const open = item.quantity - item.receivedQuantity
+      if (deliveredItem.receivedQuantity + deliveredItem.rejectedQuantity > open) {
+        const unit = item.unit === 'box' ? 'box(es)' : 'piece(s)'
         throw new Error(
-          'A box price needs a product with more than one piece per box. Set pieces per box on the product first.'
+          `Received and rejected together cannot exceed the ${open} ${unit} still open on this line (${deliveredItem.receivedQuantity} received + ${deliveredItem.rejectedQuantity} rejected).`
+        )
+      }
+      // Note: Rejected boxes never enter stock and are not owed to the supplier, so the line
+      // stays open for a replacement delivery.
+      if (deliveredItem.rejectedQuantity > 0)
+        await transaction
+          .insertInto('supplierDeliveryRejections')
+          .values({
+            deliveryId: delivery.id,
+            purchaseOrderItemId: item.id,
+            drugId: item.drugId,
+            quantity: deliveredItem.rejectedQuantity,
+            reason: deliveredItem.rejectionReason
+          })
+          .execute()
+      if (deliveredItem.receivedQuantity === 0) continue
+
+      // Note: What actually arrived. A different box size or invoice cost needs a reason; the
+      // administrator reviews these differences against the price list.
+      const piecesPerBox =
+        item.unit === 'box' ? (deliveredItem.piecesPerBox ?? item.piecesPerUnit) : 1
+      const unitCost = deliveredItem.unitCost ?? item.unitCost
+      const differs =
+        piecesPerBox !== item.piecesPerUnit || Math.abs(unitCost - item.unitCost) > PRICE_TOLERANCE
+      if (differs && deliveredItem.differenceReason.length < 5)
+        throw new Error(
+          `Batch ${deliveredItem.batchNumber}: the box size or invoice cost differs from the order. Enter the reason (at least 5 characters).`
+        )
+      const boxSellPrice = deliveredItem.boxSellPrice ?? null
+      if (boxSellPrice !== null && piecesPerBox <= 1)
+        throw new Error(
+          `Batch ${deliveredItem.batchNumber}: a box price needs boxes of more than one piece.`
         )
       // Note: Stock and batch prices are per piece; a box line converts here.
-      const receivedPieces = deliveredItem.receivedQuantity * item.piecesPerUnit
-      const buyPrice = item.unitCost / item.piecesPerUnit
-      if (deliveredItem.expiresAt <= data.deliveredAt) {
-        throw new Error('Delivered stock must expire after the delivery date.')
-      }
+      const receivedPieces = deliveredItem.receivedQuantity * piecesPerBox
+      const buyPrice = unitCost / piecesPerBox
+      const sellPrice = deliveredItem.sellPrice!
       // Note: Compare like with like: piece price to cost per piece, box price to cost per box.
-      if (deliveredItem.sellPrice < buyPrice - PRICE_TOLERANCE) {
+      if (sellPrice < buyPrice - PRICE_TOLERANCE) {
         throw new Error(
           `Batch ${deliveredItem.batchNumber}: the selling price cannot be lower than the unit cost of ₱${buyPrice.toFixed(2)} per piece.`
         )
       }
-      const boxCost = buyPrice * drug.piecesPerBox
-      if (boxSellPrice !== null && boxSellPrice < boxCost - PRICE_TOLERANCE) {
+      if (boxSellPrice !== null && boxSellPrice < unitCost - PRICE_TOLERANCE) {
         throw new Error(
-          `Batch ${deliveredItem.batchNumber}: the box price cannot be lower than the cost of ₱${boxCost.toFixed(2)} per box.`
+          `Batch ${deliveredItem.batchNumber}: the box price cannot be lower than the cost of ₱${unitCost.toFixed(2)} per box.`
+        )
+      }
+      const wholesalePrice = deliveredItem.wholesaleBoxPrice ?? null
+      if (wholesalePrice !== null && wholesalePrice < unitCost - PRICE_TOLERANCE) {
+        throw new Error(
+          `Batch ${deliveredItem.batchNumber}: the wholesale price cannot be lower than the cost of ₱${unitCost.toFixed(2)} per box.`
         )
       }
 
@@ -373,8 +480,10 @@ export async function recordDelivery(
           existingBatch.drugId !== item.drugId && 'product',
           existingBatch.supplierId !== order.supplierId && 'supplier',
           Math.abs(existingBatch.buyPrice - buyPrice) > PRICE_TOLERANCE && 'unit cost',
-          existingBatch.sellPrice !== deliveredItem.sellPrice && 'selling price',
+          existingBatch.piecesPerBox !== piecesPerBox && 'box size',
+          existingBatch.sellPrice !== sellPrice && 'selling price',
           (existingBatch.boxSellPrice ?? null) !== boxSellPrice && 'box price',
+          (existingBatch.wholesaleBoxPrice ?? null) !== wholesalePrice && 'wholesale price',
           String(existingBatch.expiresAt) !== deliveredItem.expiresAt && 'expiry date'
         ].filter(Boolean)
         if (differences.length > 0)
@@ -398,8 +507,10 @@ export async function recordDelivery(
             supplierId: order.supplierId,
             physicalTag: deliveredItem.batchNumber,
             buyPrice,
-            sellPrice: deliveredItem.sellPrice,
+            sellPrice,
             boxSellPrice,
+            wholesaleBoxPrice: wholesalePrice,
+            piecesPerBox,
             initialStock: receivedPieces,
             currentStock: receivedPieces,
             expiresAt: deliveredItem.expiresAt
@@ -422,7 +533,10 @@ export async function recordDelivery(
           purchaseOrderItemId: item.id,
           drugId: item.drugId,
           batchId,
-          quantity: deliveredItem.receivedQuantity
+          quantity: deliveredItem.receivedQuantity,
+          unitCost,
+          piecesPerUnit: piecesPerBox,
+          differenceReason: differs ? deliveredItem.differenceReason : null
         })
         .executeTakeFirstOrThrow()
     }

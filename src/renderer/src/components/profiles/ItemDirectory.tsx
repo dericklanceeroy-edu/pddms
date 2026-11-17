@@ -1,10 +1,6 @@
 import DashboardShell from '@renderer/components/dashboard/DashboardShell'
-import {
-  getItemStock,
-  getSellableStock,
-  getStockStatus,
-  type ItemProfile
-} from '@renderer/data/profiles'
+import InfoTip from '@renderer/components/ui/InfoTip'
+import { getItemStock, getSellableStock, getStockStatus } from '@renderer/data/profiles'
 import { useAccount } from '@renderer/hooks/useAccount'
 import { exportInventory } from '@renderer/services/inventory'
 import { useProfileStore } from '@renderer/stores/useProfileStore'
@@ -15,40 +11,23 @@ import {
   FiAlertTriangle,
   FiArchive,
   FiChevronRight,
+  FiClipboard,
   FiLayers,
   FiPlus,
   FiRefreshCw,
   FiSearch
 } from 'react-icons/fi'
 import InventoryReport from './InventoryReport'
+import StockCount from './StockCount'
+import {
+  matchesFilter,
+  matchesSearch,
+  stockFilters,
+  stockLabel,
+  type StockFilter
+} from './stockFilters'
 
 const expiryDate = new Intl.DateTimeFormat('en-PH', { dateStyle: 'medium' })
-
-type StockFilter = 'all' | 'attention' | 'low-stock' | 'out-of-stock' | 'near-expiry' | 'expired'
-
-const stockFilters: Array<{ id: StockFilter; label: string }> = [
-  { id: 'all', label: 'All Products' },
-  { id: 'attention', label: 'Needs Attention' },
-  { id: 'low-stock', label: 'Low Stock' },
-  { id: 'out-of-stock', label: 'Out of Stock' },
-  { id: 'near-expiry', label: 'Expiring Soon' },
-  { id: 'expired', label: 'Expired Stock on Hand' }
-]
-
-function matchesFilter(item: ItemProfile, filter: StockFilter): boolean {
-  if (filter === 'all') return true
-  if (filter === 'attention') return getStockStatus(item) !== 'in-stock'
-  if (filter === 'low-stock' || filter === 'out-of-stock') return getStockStatus(item) === filter
-  return item.batches.some(
-    (batch) => batch.stock > 0 && getExpiryStatus(batch.expiresAt) === filter
-  )
-}
-
-const statusLabels = {
-  'in-stock': 'In Stock',
-  'low-stock': 'Low Stock',
-  'out-of-stock': 'Out of Stock'
-}
 
 export default function ItemDirectory(): ReactElement {
   const { account } = useAccount()
@@ -57,6 +36,7 @@ export default function ItemDirectory(): ReactElement {
   const loadError = useProfileStore((state) => state.error)
   const isLoading = useProfileStore((state) => state.isLoading)
   const [report, setReport] = useState(false)
+  const [counting, setCounting] = useState(false)
   const [message, setMessageState] = useState<{ text: string; tone: 'success' | 'error' } | null>(
     null
   )
@@ -68,16 +48,7 @@ export default function ItemDirectory(): ReactElement {
   const [filter, setFilter] = useState<StockFilter>('all')
 
   const filteredItems = useMemo(() => {
-    const search = query.trim().toLowerCase()
-
-    return items.filter(
-      (item) =>
-        matchesFilter(item, filter) &&
-        (!search ||
-          `${item.genericName} ${item.brandName} ${item.category} ${item.formulation}`
-            .toLowerCase()
-            .includes(search))
-    )
+    return items.filter((item) => matchesFilter(item, filter) && matchesSearch(item, query))
   }, [items, query, filter])
 
   const inventoryMetrics = useMemo(() => {
@@ -111,19 +82,21 @@ export default function ItemDirectory(): ReactElement {
   }, [loadItems])
 
   return (
-    <DashboardShell pageTitle="Inventory">
+    <DashboardShell pageTitle="Inventory & Expiry">
       <div className="space-y-5 sm:space-y-6">
         <section className="page-intro">
           <div className="page-intro-content flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
             <div className="max-w-2xl min-w-0">
               <p className="eyebrow">Stock & purchasing</p>
-              <h2 className="page-title mt-0.5">
-                Inventory &amp; Expiry ({inventoryMetrics.products})
-              </h2>
-              <p className="page-subtitle">
-                Every medicine with its stock on hand and nearest expiry. Open a product to see its
-                batches, prices and generic equivalents.
-              </p>
+              <div className="flex items-center gap-1.5">
+                <h1 className="page-title mt-0.5">
+                  Inventory &amp; Expiry ({inventoryMetrics.products})
+                </h1>
+                <InfoTip label="Inventory & Expiry">
+                  Every medicine with its stock on hand and nearest expiry. Open a product to see
+                  its batches, prices and generic equivalents.
+                </InfoTip>
+              </div>
             </div>
             <div className="flex shrink-0 flex-wrap items-center gap-2">
               <button
@@ -167,6 +140,15 @@ export default function ItemDirectory(): ReactElement {
                   {exporting ? 'Exporting…' : 'Export CSV'}
                 </button>
               )}
+              {account?.role === 'master' && (
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => setCounting(true)}
+                >
+                  <FiClipboard aria-hidden="true" /> Stock Count
+                </button>
+              )}
               {(account?.role === 'master' || account?.role === 'staff') && (
                 <Link to="/items/$itemId" params={{ itemId: 'new' }} className="primary-button">
                   <FiPlus /> Add Product
@@ -185,15 +167,27 @@ export default function ItemDirectory(): ReactElement {
           </p>
         )}
         {report && !loadError && <InventoryReport items={items} />}
+        {counting && (
+          <StockCount
+            items={items}
+            close={() => setCounting(false)}
+            changed={async () => {
+              await loadItems(true)
+              setMessage('Stock count completed. Batch stock now matches the shelves.')
+            }}
+          />
+        )}
 
         <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_18rem]">
           <section className="panel min-w-0 overflow-hidden">
             <header className="flex flex-col gap-4 border-b border-slate-200 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
               <div>
-                <h3 className="section-title">List of Medicines</h3>
-                <p className="mt-1 text-sm text-slate-500">
-                  Search or filter, then open a product to see its batches and expiry dates.
-                </p>
+                <div className="flex items-center gap-1.5">
+                  <h3 className="section-title">List of Medicines</h3>
+                  <InfoTip label="List of Medicines">
+                    Search or filter, then open a product to see its batches and expiry dates.
+                  </InfoTip>
+                </div>
               </div>
               <span className="border-brand-100 bg-brand-50/80 text-brand-700 w-fit rounded-full border px-3 py-1 text-xs font-semibold">
                 {filteredItems.length} shown
@@ -261,7 +255,7 @@ export default function ItemDirectory(): ReactElement {
                         <span
                           className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${status === 'in-stock' ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : status === 'low-stock' ? 'border-amber-300 bg-amber-50 text-amber-800' : 'border-rose-300 bg-rose-50 text-rose-800'}`}
                         >
-                          {statusLabels[status]}
+                          {stockLabel(item)}
                         </span>
                       </div>
                       <p className="mt-1 truncate text-sm text-slate-500">

@@ -23,7 +23,9 @@ const manifestSchema = z.strictObject({
   format: z.literal('pddms-backup-v1'),
   createdAt: z.string().datetime(),
   database: z.string().regex(/^[a-f0-9]{64}$/),
-  invoices: z.array(fileSchema)
+  invoices: z.array(fileSchema),
+  // Note: Invoice files that were already missing when the backup was made; their records are kept.
+  missingInvoices: z.array(safeName).default([])
 })
 async function digest(path: string): Promise<string> {
   const details = await lstat(path)
@@ -53,6 +55,24 @@ function invoiceNames(connection: SQLite.Database): string[] {
     )
   ]
 }
+/** "INV-001 (Supplier name)" for each stored invoice file, so a missing file can be found. */
+function invoiceLabels(connection: SQLite.Database): Map<string, string> {
+  const rows = connection
+    .prepare(
+      `SELECT i.stored_filename AS name, i.invoice_number AS number, s.organization AS supplier
+       FROM supplier_invoices i LEFT JOIN suppliers s ON s.id = i.supplier_id`
+    )
+    .all() as Array<{ name: string; number: string; supplier: string | null }>
+  return new Map(rows.map((row) => [row.name, `${row.number} (${row.supplier ?? 'unknown supplier'})`]))
+}
+const isMissing = async (path: string): Promise<boolean> => {
+  try {
+    return !(await lstat(path)).isFile()
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return true
+    throw error
+  }
+}
 export async function createBackup(parent = backupDirectory()): Promise<BackupInfo> {
   await mkdir(parent, { recursive: true })
   const directory = await mkdtemp(join(parent, 'pddms-backup-'))
@@ -60,15 +80,24 @@ export async function createBackup(parent = backupDirectory()): Promise<BackupIn
   await database.backup(target)
   const snapshot = new SQLite(target, { readonly: true, fileMustExist: true })
   let names: string[]
+  let labels: Map<string, string>
   try {
     names = invoiceNames(snapshot)
+    labels = invoiceLabels(snapshot)
   } finally {
     snapshot.close()
   }
   await mkdir(join(directory, 'invoices'))
   const invoices: Array<{ name: string; sha256: string }> = []
+  // Note: One missing invoice file must not block every backup. The data is still backed up and
+  // the missing files are named so they can be attached again.
+  const missing: string[] = []
   for (const name of names) {
     const source = join(invoiceDirectory(), name)
+    if (await isMissing(source)) {
+      missing.push(name)
+      continue
+    }
     const sha256 = await digest(source)
     await copyFile(source, join(directory, 'invoices', name))
     if ((await digest(join(directory, 'invoices', name))) !== sha256)
@@ -79,13 +108,24 @@ export async function createBackup(parent = backupDirectory()): Promise<BackupIn
   await writeFile(
     join(directory, 'manifest.json'),
     JSON.stringify(
-      { format: 'pddms-backup-v1', createdAt, database: await digest(target), invoices },
+      {
+        format: 'pddms-backup-v1',
+        createdAt,
+        database: await digest(target),
+        invoices,
+        missingInvoices: missing
+      },
       null,
       2
     ),
     { flag: 'wx' }
   )
-  return { directory, createdAt, invoiceCount: invoices.length }
+  return {
+    directory,
+    createdAt,
+    invoiceCount: invoices.length,
+    missingInvoices: missing.map((name) => labels.get(name) ?? name)
+  }
 }
 /**
  * Upgrades a copied backup database to the current schema in place. Backups made before a later
@@ -102,6 +142,70 @@ async function upgradeSnapshot(path: string): Promise<void> {
     await migrate(upgrade)
   } finally {
     await upgrade.destroy()
+  }
+  matchCurrentLayout(path)
+}
+
+/**
+ * After an upgrade, a table can hold the right columns in a different order than a database made
+ * by this version (a column added back by a later step lands at the end). Such tables are copied
+ * once into the current layout, column by column by name, so the exact schema check that follows
+ * still applies. Tables that already match are left alone.
+ */
+function matchCurrentLayout(path: string): void {
+  const connection = new SQLite(path, { fileMustExist: true })
+  try {
+    const definitions = (target: SQLite.Database, type: string): Map<string, string> =>
+      new Map(
+        (
+          target
+            .prepare(
+              "SELECT name, sql FROM sqlite_master WHERE type = ? AND sql IS NOT NULL AND name NOT LIKE 'sqlite_%' AND name NOT IN ('kysely_migration', 'kysely_migration_lock')"
+            )
+            .all(type) as { name: string; sql: string }[]
+        ).map((row) => [row.name, row.sql])
+      )
+    const current = definitions(database, 'table')
+    const staged = definitions(connection, 'table')
+    const quote = (value: string): string => `"${value.replaceAll('"', '""')}"`
+    const columns = (table: string): string[] =>
+      (connection.prepare(`PRAGMA table_info(${quote(table)})`).all() as { name: string }[]).map(
+        (column) => column.name
+      )
+    const indexes = (
+      database
+        .prepare(
+          "SELECT name, tbl_name AS tableName, sql FROM sqlite_master WHERE type = 'index' AND sql IS NOT NULL"
+        )
+        .all() as { name: string; tableName: string; sql: string }[]
+    )
+    connection.pragma('foreign_keys = OFF')
+    connection.exec('BEGIN IMMEDIATE')
+    try {
+      for (const [table, definition] of staged) {
+        const target = current.get(table)
+        if (!target || target === definition) continue
+        const names = columns(table).map(quote).join(', ')
+        const old = `${table}__before_upgrade`
+        // Note: The legacy rename leaves other tables' references alone, and the table is then
+        // created again from this version's exact definition.
+        connection.pragma('legacy_alter_table = ON')
+        connection.exec(`ALTER TABLE ${quote(table)} RENAME TO ${quote(old)}`)
+        connection.pragma('legacy_alter_table = OFF')
+        connection.exec(target)
+        connection.exec(`INSERT INTO ${quote(table)} (${names}) SELECT ${names} FROM ${quote(old)}`)
+        connection.exec(`DROP TABLE ${quote(old)}`)
+        for (const index of indexes.filter((item) => item.tableName === table))
+          connection.exec(index.sql)
+      }
+      connection.exec('COMMIT')
+    } catch (error) {
+      connection.exec('ROLLBACK')
+      throw error
+    }
+  } finally {
+    connection.pragma('foreign_keys = ON')
+    connection.close()
   }
 }
 
@@ -146,7 +250,12 @@ export async function validateBackup(
       .get()
     if (!master) throw new Error('Backup must contain an active verified master account.')
     const names = invoiceNames(snapshot).sort()
-    if (JSON.stringify(names) !== JSON.stringify(manifest.invoices.map((item) => item.name).sort()))
+    if (
+      JSON.stringify(names) !==
+      JSON.stringify(
+        [...manifest.invoices.map((item) => item.name), ...manifest.missingInvoices].sort()
+      )
+    )
       throw new Error('Backup invoice references do not match.')
     if ((await lstat(join(directory, 'invoices'))).isSymbolicLink())
       throw new Error('Unsafe invoice directory.')
@@ -263,7 +372,7 @@ export async function restoreBackup(source: string): Promise<{ safety: BackupInf
       database.exec(`INSERT INTO main.${quote(table)} SELECT * FROM recovery.${quote(table)}`)
     }
     database.exec(
-      'INSERT OR IGNORE INTO main.audit_logs (event_id, actor_id, actor_name, action, resource, target_id, result, created_at) SELECT event_id, actor_id, actor_name, action, resource, target_id, result, created_at FROM recovery.audit_logs'
+      'INSERT OR IGNORE INTO main.audit_logs (event_id, actor_id, actor_name, action, resource, target_id, result, created_at, details) SELECT event_id, actor_id, actor_name, action, resource, target_id, result, created_at, details FROM recovery.audit_logs'
     )
     if (
       (database.pragma('foreign_key_check') as unknown[]).length ||

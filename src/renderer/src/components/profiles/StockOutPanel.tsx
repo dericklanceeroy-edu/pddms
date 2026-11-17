@@ -1,14 +1,17 @@
 import FormField from '@renderer/components/ui/FormField'
+import InfoTip from '@renderer/components/ui/InfoTip'
 import { splitErrors, type FieldErrors } from '@renderer/components/ui/fieldErrors'
 import type { ItemProfile } from '@renderer/data/profiles'
 import { getStockOuts, recordStockOut } from '@renderer/services/inventory'
 import { useProfileStore } from '@renderer/stores/useProfileStore'
-import type { StockOutRecord } from '@shared/inventory'
+import { expiryDateLabel, getExpiryStatus, type StockOutRecord } from '@shared/inventory'
+import { writeOffReasons, type WriteOffReason } from '@shared/types'
 import { useEffect, useState, type FormEvent, type ReactElement } from 'react'
 
 export default function StockOutPanel({ item }: { item: ItemProfile }): ReactElement {
   const [batchId, setBatchId] = useState('')
   const [quantity, setQuantity] = useState('')
+  const [reasonCode, setReasonCode] = useState<WriteOffReason | ''>('')
   const [reason, setReason] = useState('')
   const [records, setRecords] = useState<StockOutRecord[]>([])
   const [saving, setSaving] = useState(false)
@@ -42,10 +45,27 @@ export default function StockOutPanel({ item }: { item: ItemProfile }): ReactEle
       setSaving(false)
       return
     }
+    const chosen = item.batches.find((batch) => batch.id === Number(batchId))
     try {
-      await recordStockOut({ batchId: Number(batchId), quantity: Number(quantity), reason })
+      if (!reasonCode) {
+        setFieldErrors({ reasonCode: 'Choose why the stock is written off.' })
+        return
+      }
+      if (reasonCode === 'expired' && chosen && getExpiryStatus(chosen.expiresAt) !== 'expired') {
+        setFieldErrors({
+          reasonCode: `This batch has not expired yet (expires ${expiryDateLabel(chosen.expiresAt)}). Choose another reason.`
+        })
+        return
+      }
+      await recordStockOut({
+        batchId: Number(batchId),
+        quantity: Number(quantity),
+        reasonCode,
+        reason
+      })
       setBatchId('')
       setQuantity('')
+      setReasonCode('')
       setReason('')
       setMessage('Stock-out recorded.')
       await loadItems(true)
@@ -61,10 +81,14 @@ export default function StockOutPanel({ item }: { item: ItemProfile }): ReactEle
 
   return (
     <section className="panel min-w-0 space-y-4 p-5">
-      <h3 className="section-title text-lg">Stock-Out Adjustments</h3>
-      <p className="text-sm text-slate-500">
-        Record damaged, expired, returned, or missing units removed from a batch.
-      </p>
+      <div className="flex items-center gap-1.5">
+        <h3 className="section-title text-lg">Write Off Stock</h3>
+        <InfoTip label="Write Off Stock">
+          Record expired, damaged, lost or recalled pieces removed from a batch. Write-offs are
+          added up by reason in Reports, Write-offs and Losses. Stock sent back to a supplier is
+          recorded under Suppliers &amp; Purchasing, Returns &amp; Credits instead.
+        </InfoTip>
+      </div>
       <form
         noValidate
         onSubmit={(event) => void submit(event)}
@@ -82,7 +106,8 @@ export default function StockOutPanel({ item }: { item: ItemProfile }): ReactEle
               .filter((batch) => batch.stock > 0)
               .map((batch) => (
                 <option key={batch.id} value={batch.id}>
-                  {batch.batchNumber} · {batch.stock} on hand
+                  {batch.batchNumber} · {batch.stock} on hand · expires{' '}
+                  {expiryDateLabel(batch.expiresAt)}
                 </option>
               ))}
           </select>
@@ -99,18 +124,35 @@ export default function StockOutPanel({ item }: { item: ItemProfile }): ReactEle
             onChange={(event) => setQuantity(event.target.value)}
           />
         </FormField>
-        <FormField label="Reason" required error={fieldErrors.reason} className="sm:col-span-2">
-          <textarea
+        <FormField label="Reason" required error={fieldErrors.reasonCode}>
+          <select
+            className="field w-full"
+            value={reasonCode}
+            onChange={(event) => setReasonCode(event.target.value as WriteOffReason | '')}
+          >
+            <option value="">Select reason</option>
+            {(Object.keys(writeOffReasons) as WriteOffReason[]).map((code) => (
+              <option key={code} value={code}>
+                {writeOffReasons[code]}
+              </option>
+            ))}
+          </select>
+        </FormField>
+        <FormField
+          label={reasonCode === 'other' ? 'Describe the Reason' : 'Notes'}
+          required={reasonCode === 'other'}
+          hint={reasonCode === 'other' ? undefined : 'Optional, e.g. found broken on shelf 3.'}
+          error={fieldErrors.reason}
+        >
+          <input
             className="field"
-            required
-            minLength={3}
-            maxLength={500}
+            maxLength={300}
             value={reason}
             onChange={(event) => setReason(event.target.value)}
           />
         </FormField>
         <button className="primary-button w-fit" disabled={saving || !batchId}>
-          {saving ? 'Saving…' : 'Record Stock-Out'}
+          {saving ? 'Saving…' : 'Record Write-Off'}
         </button>
       </form>
       {error && (
@@ -125,23 +167,22 @@ export default function StockOutPanel({ item }: { item: ItemProfile }): ReactEle
       )}
       <details>
         <summary className="cursor-pointer text-sm font-semibold">
-          Stock-out history ({records.length})
+          Write-off history ({records.length})
         </summary>
         <ul className="mt-3 max-h-80 space-y-3 overflow-y-auto text-sm">
           {records.map((record) => (
             <li key={record.id} className="rounded-md bg-slate-50 p-3 break-words">
               <p className="font-medium">
-                {record.batchNumber} · {record.quantity} units removed
+                {record.batchNumber} · {record.quantity} pcs written off ·{' '}
+                {writeOffReasons[record.reasonCode ?? 'other']}
               </p>
-              <p>{record.reason}</p>
+              {record.reason && <p>{record.reason}</p>}
               <p className="text-xs text-slate-500">
                 {record.createdAt} · {record.recordedByName}
               </p>
             </li>
           ))}
-          {!records.length && (
-            <li className="text-slate-500">No stock-out adjustments recorded.</li>
-          )}
+          {!records.length && <li className="text-slate-500">No write-offs recorded.</li>}
         </ul>
       </details>
     </section>

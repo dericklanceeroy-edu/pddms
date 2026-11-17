@@ -5,15 +5,11 @@ import { createFileRoute, Navigate } from '@tanstack/react-router'
 import { useEffect, type ReactElement } from 'react'
 
 export const Route = createFileRoute('/customers/$customerId')({
-  validateSearch: (search: Record<string, unknown>): { type?: 'pharmacy' } => ({
-    type: search.type === 'pharmacy' ? 'pharmacy' : undefined
-  }),
   component: RouteComponent
 })
 
 function RouteComponent(): ReactElement {
   const { customerId } = Route.useParams()
-  const { type } = Route.useSearch()
   const isLoaded = useProfileStore((state) => state.areCustomersLoaded)
   const error = useProfileStore((state) => state.error)
   const loadCustomers = useProfileStore((state) => state.loadCustomers)
@@ -26,10 +22,12 @@ function RouteComponent(): ReactElement {
   if (error) return <DashboardShell pageTitle="Customer Profile">{error}</DashboardShell>
   if (!isLoaded)
     return <DashboardShell pageTitle="Customer Profile">Loading customer…</DashboardShell>
-  if (customerId === 'new')
-    return <CustomerProfileView customer={null} initialType={type ?? 'retail'} key={type} />
+  if (customerId === 'new') return <CustomerProfileView customer={null} clientType="retail" />
+  // Note: Pharmacy clients are managed in Wholesale & Deliveries, apart from retail customers.
+  if (customer?.clientType === 'pharmacy')
+    return <Navigate to="/wholesale/clients/$clientId" params={{ clientId: customerId }} />
   return customer ? (
-    <CustomerProfileView customer={customer} key={customer.id} />
+    <CustomerProfileView customer={customer} clientType="retail" key={customer.id} />
   ) : (
     <Navigate to="/customers" />
   )

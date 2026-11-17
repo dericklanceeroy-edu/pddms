@@ -1,13 +1,20 @@
 import DashboardShell from '@renderer/components/dashboard/DashboardShell'
+import { useConfirm } from '@renderer/components/ui/ConfirmDialog'
+import { splitErrors, type FieldErrors } from '@renderer/components/ui/fieldErrors'
 import FilteredInput from '@renderer/components/ui/FilteredInput'
 import FormField, { RequiredNote } from '@renderer/components/ui/FormField'
-import { splitErrors, type FieldErrors } from '@renderer/components/ui/fieldErrors'
+import InfoTip from '@renderer/components/ui/InfoTip'
+import Modal from '@renderer/components/ui/Modal'
+import { removeOrArchive } from '@renderer/components/ui/removeOrArchive'
 import {
   type ClientType,
   type CustomerDiscount,
   type CustomerProfile
 } from '@renderer/data/profiles'
+import { useAccount } from '@renderer/hooks/useAccount'
+import { mergeCustomers, RequestError } from '@renderer/services/controls'
 import { useProfileStore } from '@renderer/stores/useProfileStore'
+import { customerDetail, type DuplicateMatch } from '@shared/controls'
 import { localDate } from '@shared/inventory'
 import { newCustomerSchema } from '@shared/schemas'
 import { validationIssues } from '@shared/validation'
@@ -18,6 +25,7 @@ import {
   FiCheckCircle,
   FiCreditCard,
   FiEdit2,
+  FiGitMerge,
   FiMapPin,
   FiPhone,
   FiShield,
@@ -36,6 +44,7 @@ const emptyCustomer: CustomerProfile = {
   phone: '',
   email: '',
   address: '',
+  tin: '',
   discountType: 'none',
   discountId: '',
   discountExpiresAt: null,
@@ -45,27 +54,36 @@ const emptyCustomer: CustomerProfile = {
 
 export default function CustomerProfileView({
   customer,
-  initialType = 'retail'
+  clientType
 }: {
   customer: CustomerProfile | null
-  /** Client type for a new profile, e.g. when opened from the wholesale order form. */
-  initialType?: ClientType
+  /**
+   * Retail customers live under Customers; pharmacy clients (wholesale buyers) live under
+   * Wholesale & Deliveries. The type is fixed by where the profile is opened.
+   */
+  clientType: ClientType
 }): ReactElement {
   const saveCustomer = useProfileStore((state) => state.saveCustomer)
   const removeCustomer = useProfileStore((state) => state.removeCustomer)
+  const archive = useProfileStore((state) => state.archive)
+  const allCustomers = useProfileStore((state) => state.customers)
+  const { account } = useAccount()
+  const isAdmin = account?.role === 'master'
+  const [confirmDialog, confirm] = useConfirm()
+  const [duplicates, setDuplicates] = useState<DuplicateMatch[]>([])
+  const [merging, setMerging] = useState(false)
   const navigate = useNavigate()
   const isNew = customer === null
 
-  const [draft, setDraft] = useState(customer ?? { ...emptyCustomer, clientType: initialType })
+  const [draft, setDraft] = useState(customer ?? { ...emptyCustomer, clientType })
   const [editing, setEditing] = useState(isNew)
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
   const [success, setSuccess] = useState('')
   const [isSaving, setIsSaving] = useState(false)
-  const [confirmRemove, setConfirmRemove] = useState(false)
-  const [isRemoving, setIsRemoving] = useState(false)
   const [touched, setTouched] = useState<Record<string, boolean>>({})
-  const pharmacy = draft.clientType === 'pharmacy'
+  const pharmacy = clientType === 'pharmacy'
+  const home = pharmacy ? '/wholesale' : '/customers'
   // Note: Problems show as soon as a field is left (or changed after that), not only on Save.
   const liveErrors = useMemo(() => {
     const result = newCustomerSchema.safeParse({
@@ -75,6 +93,7 @@ export default function CustomerProfileView({
       phone: draft.phone,
       email: draft.email.trim() || null,
       address: draft.address.trim() || null,
+      tin: draft.clientType === 'pharmacy' ? draft.tin.trim() || null : null,
       discountType: draft.discountType,
       discountId: draft.discountType === 'none' ? null : draft.discountId || null,
       discountExpiresAt: draft.discountType === 'none' ? null : draft.discountExpiresAt
@@ -107,8 +126,8 @@ export default function CustomerProfileView({
       ? 'No discount ID registered'
       : `${draft.discountId || 'No discount ID registered'}${draft.discountExpiresAt ? ` · Expires ${date.format(new Date(draft.discountExpiresAt))}` : ''}`
 
-  const save = async (event: FormEvent): Promise<void> => {
-    event.preventDefault()
+  const save = async (event: FormEvent | null, confirmDuplicate = false): Promise<void> => {
+    event?.preventDefault()
 
     const fullName = draft.fullName.trim()
     const phone = draft.phone.trim()
@@ -118,6 +137,7 @@ export default function CustomerProfileView({
     setIsSaving(true)
     setError('')
     setFieldErrors({})
+    setDuplicates([])
     try {
       const saved = await saveCustomer(
         {
@@ -127,11 +147,13 @@ export default function CustomerProfileView({
           phone,
           email,
           address: draft.address.trim(),
+          tin: pharmacy ? draft.tin.trim() : '',
           discountType: draft.discountType,
           discountId: draft.discountType === 'none' ? '' : discountId,
           discountExpiresAt: draft.discountType === 'none' ? null : draft.discountExpiresAt
         },
-        isNew ? undefined : draft.id
+        isNew ? undefined : draft.id,
+        confirmDuplicate
       )
 
       setDraft(saved)
@@ -147,12 +169,14 @@ export default function CustomerProfileView({
             : 'Customer information updated.'
       )
       if (isNew) {
-        await navigate({
-          to: '/customers/$customerId',
-          params: { customerId: String(saved.id) }
-        })
+        await (pharmacy
+          ? navigate({ to: '/wholesale/clients/$clientId', params: { clientId: String(saved.id) } })
+          : navigate({ to: '/customers/$customerId', params: { customerId: String(saved.id) } }))
       }
     } catch (cause) {
+      // Note: A similar saved record is a warning: open it, or save anyway if it is a different
+      // person (or another branch of the pharmacy).
+      if (cause instanceof RequestError && cause.duplicates.length) setDuplicates(cause.duplicates)
       const { fields, form } = splitErrors(cause, 'Unable to save the customer.')
       setFieldErrors(fields)
       setError(form)
@@ -162,16 +186,25 @@ export default function CustomerProfileView({
   }
 
   const remove = async (): Promise<void> => {
-    setIsRemoving(true)
+    setError('')
+    setSuccess('')
     try {
-      await removeCustomer(draft.id)
-      await navigate({ to: '/customers' })
+      const done = await removeOrArchive({
+        confirm,
+        name: draft.fullName,
+        noun: pharmacy ? 'pharmacy client' : 'customer',
+        remove: () => removeCustomer(draft.id),
+        archive: () => archive('customer', draft.id)
+      })
+      if (done) await navigate({ to: home })
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Unable to remove the customer.')
-      setConfirmRemove(false)
-      setIsRemoving(false)
     }
   }
+  const openRecord = (id: number): Promise<void> =>
+    pharmacy
+      ? navigate({ to: '/wholesale/clients/$clientId', params: { clientId: String(id) } })
+      : navigate({ to: '/customers/$customerId', params: { customerId: String(id) } })
 
   return (
     <DashboardShell
@@ -187,10 +220,10 @@ export default function CustomerProfileView({
     >
       <div className="space-y-5 sm:space-y-6">
         <Link
-          to="/customers"
-          className="hover:text-brand-700 inline-flex items-center gap-2 rounded-lg px-1 text-sm font-medium text-slate-500 transition"
+          to={home}
+          className="hover:text-brand-700 inline-flex items-center gap-2 rounded-lg px-1 text-sm font-medium text-slate-700 transition"
         >
-          <FiArrowLeft /> Back to Customers
+          <FiArrowLeft /> {pharmacy ? 'Back to Wholesale & Deliveries' : 'Back to Customers'}
         </Link>
 
         {success && (
@@ -208,50 +241,26 @@ export default function CustomerProfileView({
             <form noValidate onSubmit={save} className="panel space-y-6 p-6 sm:p-7">
               <div>
                 <p className="eyebrow">{pharmacy ? 'Pharmacy Client' : 'Customer Details'}</p>
-                <h2 className="section-title mt-2 text-2xl">
-                  {isNew
-                    ? pharmacy
-                      ? 'Add Pharmacy Client'
-                      : 'Add Customer Profile'
-                    : pharmacy
-                      ? 'Edit Pharmacy Client'
-                      : 'Edit Customer Profile'}
-                </h2>
-                <p className="section-subtitle">
-                  {pharmacy
-                    ? 'Pharmacies that buy from Med Prix by the box. They appear as clients in Wholesale & Deliveries.'
-                    : 'Keep contact and eligibility information accurate for a smoother dispensing workflow.'}
-                </p>
+                <div className="mt-2 flex items-center gap-1.5">
+                  <h2 className="section-title text-2xl">
+                    {isNew
+                      ? pharmacy
+                        ? 'Add Pharmacy Client'
+                        : 'Add Customer Profile'
+                      : pharmacy
+                        ? 'Edit Pharmacy Client'
+                        : 'Edit Customer Profile'}
+                  </h2>
+                  <InfoTip label={pharmacy ? 'Pharmacy Client' : 'Customer Profile'}>
+                    {pharmacy
+                      ? 'Another pharmacy that buys from Med Prix by the box. Pharmacy clients are kept separate from retail customers and appear only in Wholesale & Deliveries.'
+                      : 'Keep contact and eligibility information accurate for a smoother dispensing workflow.'}
+                  </InfoTip>
+                </div>
               </div>
               <RequiredNote />
 
               <div className="grid gap-5 sm:grid-cols-2">
-                <FormField
-                  label="Client Type"
-                  required
-                  hint={
-                    pharmacy
-                      ? 'Another pharmacy that places wholesale orders.'
-                      : 'A person who buys at the counter.'
-                  }
-                >
-                  <select
-                    className="field"
-                    value={draft.clientType}
-                    onChange={(event) => {
-                      const clientType = event.target.value as ClientType
-                      change({
-                        clientType,
-                        ...(clientType === 'pharmacy'
-                          ? { discountType: 'none', discountId: '', discountExpiresAt: null }
-                          : { contactPerson: '' })
-                      })
-                    }}
-                  >
-                    <option value="retail">Retail Customer</option>
-                    <option value="pharmacy">Pharmacy Client (Wholesale)</option>
-                  </select>
-                </FormField>
                 <FormField
                   label={pharmacy ? 'Pharmacy Name' : 'Full Name'}
                   required
@@ -263,7 +272,6 @@ export default function CustomerProfileView({
                   }
                 >
                   <FilteredInput
-                    key={draft.clientType}
                     rule={pharmacy ? 'catalogText' : 'personName'}
                     required
                     maxLength={120}
@@ -328,10 +336,34 @@ export default function CustomerProfileView({
                     </select>
                   </FormField>
                 )}
+                {pharmacy && (
+                  <FormField
+                    label="TIN"
+                    error={shown('tin')}
+                    info="Tax identification number, e.g. 123-456-789-000."
+                  >
+                    <input
+                      className="field"
+                      maxLength={20}
+                      inputMode="numeric"
+                      placeholder="e.g. 123-456-789-000"
+                      value={draft.tin}
+                      onBlur={() => touch('tin')}
+                      onChange={(event) =>
+                        change({ tin: event.target.value.replace(/[^\d-]/g, '') })
+                      }
+                    />
+                  </FormField>
+                )}
                 <FormField
                   label={pharmacy ? 'Delivery Address' : 'Address'}
+                  required={pharmacy}
                   error={shown('address')}
-                  hint={pharmacy ? 'Filled in automatically on new wholesale orders.' : undefined}
+                  hint={
+                    pharmacy
+                      ? 'Required. A pharmacy with the same name is saved as a separate branch only at a different address. Filled in automatically on new wholesale orders.'
+                      : undefined
+                  }
                   className="sm:col-span-2"
                 >
                   <input
@@ -349,7 +381,7 @@ export default function CustomerProfileView({
                       label="Discount ID"
                       required
                       error={shown('discountId')}
-                      hint="Letters and numbers only, at least 4 characters."
+                      info="Letters and numbers only, at least 4 characters."
                     >
                       <FilteredInput
                         rule="discountId"
@@ -387,12 +419,42 @@ export default function CustomerProfileView({
               </div>
 
               {error && (
-                <p
+                <div
                   role="alert"
-                  className="rounded-lg border border-rose-200/80 bg-rose-50/80 px-4 py-3 text-sm text-rose-700"
+                  className={`rounded-lg border px-4 py-3 text-sm ${duplicates.length ? 'border-amber-300 bg-amber-50 text-amber-900' : 'border-rose-200/80 bg-rose-50/80 text-rose-700'}`}
                 >
-                  {error}
-                </p>
+                  <p className={duplicates.length ? 'font-semibold' : ''}>{error}</p>
+                  {duplicates.length > 0 && (
+                    <>
+                      <ul className="mt-2 space-y-1.5">
+                        {duplicates.map((match) => (
+                          <li key={match.id} className="flex flex-wrap items-center gap-2">
+                            <span>
+                              {match.fullName} · {match.detail}
+                            </span>
+                            <button
+                              type="button"
+                              className="secondary-button h-8 text-xs"
+                              onClick={() => void openRecord(match.id)}
+                            >
+                              Open Existing Profile
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                      <button
+                        type="button"
+                        className="primary-button mt-3 h-9 text-xs"
+                        disabled={isSaving}
+                        onClick={() => void save(null, true)}
+                      >
+                        {pharmacy
+                          ? 'Save Anyway (Different Client)'
+                          : 'Save Anyway (Different Person)'}
+                      </button>
+                    </>
+                  )}
+                </div>
               )}
 
               <div className="flex flex-wrap justify-end gap-2 border-t border-slate-200 pt-5">
@@ -400,7 +462,7 @@ export default function CustomerProfileView({
                   <button
                     type="button"
                     onClick={() => {
-                      setDraft(customer ?? emptyCustomer)
+                      setDraft(customer ?? { ...emptyCustomer, clientType })
                       setError('')
                       setFieldErrors({})
                       setTouched({})
@@ -425,8 +487,9 @@ export default function CustomerProfileView({
                   </div>
                   <p className="card-title mt-5">Profile Setup</p>
                   <p className="mt-2 text-sm leading-6 text-slate-500">
-                    Capture the customer’s preferred contact details first, then record discount
-                    eligibility when applicable.
+                    {pharmacy
+                      ? 'Record who to call about orders and where deliveries go. The address fills in new wholesale orders.'
+                      : 'Capture the customer’s preferred contact details first, then record discount eligibility when applicable.'}
                   </p>
                 </div>
               </section>
@@ -434,10 +497,13 @@ export default function CustomerProfileView({
                 <div className="bg-brand-50/80 text-brand-700 grid size-11 place-items-center rounded-lg">
                   <FiShield />
                 </div>
-                <p className="card-title mt-5">Eligibility Details</p>
+                <p className="card-title mt-5">
+                  {pharmacy ? 'Wholesale Pricing' : 'Eligibility Details'}
+                </p>
                 <p className="mt-2 text-sm leading-6 text-slate-500">
-                  Senior Citizen and PWD profiles require a valid discount ID before checkout
-                  discounts can be applied.
+                  {pharmacy
+                    ? 'Pharmacy clients order by the box and never receive Senior Citizen or PWD discounts.'
+                    : 'Senior Citizen and PWD profiles require a valid discount ID before checkout discounts can be applied.'}
                 </p>
               </section>
             </aside>
@@ -454,7 +520,7 @@ export default function CustomerProfileView({
                     {pharmacy ? 'Pharmacy client' : 'Customer'} since{' '}
                     {date.format(new Date(draft.createdAt))}
                   </p>
-                  <h2 className="page-title mt-2 truncate text-2xl">{draft.fullName}</h2>
+                  <h1 className="page-title mt-2 truncate text-2xl">{draft.fullName}</h1>
                   {pharmacy && draft.contactPerson && (
                     <p className="mt-1 text-sm font-medium text-slate-700">
                       Contact: {draft.contactPerson}
@@ -470,10 +536,18 @@ export default function CustomerProfileView({
 
             <section className="glass-surface relative overflow-hidden rounded-lg p-5 sm:p-6 xl:col-span-4">
               <div className="relative">
-                <p className="card-title">Profile Actions</p>
-                <p className="mt-2 text-sm leading-6 text-slate-500">
-                  Make changes to this record or remove it from the active list.
-                </p>
+                <div className="flex items-center gap-1.5">
+                  <p className="card-title">Profile Actions</p>
+                  <InfoTip label="Profile Actions">
+                    Edit this record, merge it into a duplicate, or remove it. Records with history
+                    are archived instead of deleted.
+                  </InfoTip>
+                </div>
+                {error && !editing && (
+                  <p role="alert" className="mt-3 text-sm font-medium text-rose-700">
+                    {error}
+                  </p>
+                )}
                 <div className="mt-5 grid gap-2">
                   <button
                     onClick={() => {
@@ -484,8 +558,13 @@ export default function CustomerProfileView({
                   >
                     <FiEdit2 /> Edit Profile
                   </button>
-                  <button onClick={() => setConfirmRemove(true)} className="danger-button w-full">
-                    <FiTrash2 /> {pharmacy ? 'Remove Client' : 'Remove Customer'}
+                  {isAdmin && (
+                    <button onClick={() => setMerging(true)} className="secondary-button w-full">
+                      <FiGitMerge /> Merge Duplicate Into…
+                    </button>
+                  )}
+                  <button onClick={() => void remove()} className="danger-button w-full">
+                    <FiTrash2 /> Delete or Archive
                   </button>
                 </div>
               </div>
@@ -518,100 +597,86 @@ export default function CustomerProfileView({
               value={draft.address || 'No address recorded'}
               description={
                 pharmacy
-                  ? 'Default address for wholesale deliveries'
+                  ? `Default address for wholesale deliveries${draft.tin ? ` · TIN ${draft.tin}` : ''}`
                   : 'Used for the customer record'
               }
             />
 
-            <section className="panel min-w-0 overflow-hidden xl:col-span-12">
-              <header className="flex flex-col gap-3 border-b border-slate-200 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-                <div>
-                  <h3 className="section-title">Transaction History</h3>
-                  <p className="mt-1 text-sm text-slate-500">
-                    {pharmacy
-                      ? 'Counter purchases recorded for this client. Wholesale orders are listed in Wholesale & Deliveries.'
-                      : 'Recorded purchases associated with this customer.'}
-                  </p>
-                </div>
-                <span className="w-fit rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600">
-                  {draft.transactions.length} records
-                </span>
-              </header>
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[560px] text-sm">
-                  <thead className="surface-header text-left">
-                    <tr>
-                      <th className="px-5 py-3 sm:px-6">Receipt</th>
-                      <th className="px-5 py-3">Date</th>
-                      <th className="px-5 py-3">Items</th>
-                      <th className="px-5 py-3 text-right sm:px-6">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {draft.transactions.map((transaction) => (
-                      <tr key={transaction.id} className="transition hover:bg-white">
-                        <td className="px-5 py-4 font-medium sm:px-6">{transaction.id}</td>
-                        <td className="px-5 py-4 text-slate-500">
-                          {date.format(new Date(transaction.purchasedAt))}
-                        </td>
-                        <td className="px-5 py-4">{transaction.itemCount}</td>
-                        <td className="px-5 py-4 text-right font-medium sm:px-6">
-                          {currency.format(transaction.total)}
-                        </td>
+            {!pharmacy && (
+              <section className="panel min-w-0 overflow-hidden xl:col-span-12">
+                <header className="flex flex-col gap-3 border-b border-slate-200 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+                  <div>
+                    <h3 className="section-title">Transaction History</h3>
+                    <p className="mt-1 text-sm text-slate-500">
+                      Recorded purchases associated with this customer.
+                    </p>
+                  </div>
+                  <span className="w-fit rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600">
+                    {draft.transactions.length} records
+                  </span>
+                </header>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[560px] text-sm">
+                    <thead className="surface-header text-left">
+                      <tr>
+                        <th className="px-5 py-3 sm:px-6">Receipt</th>
+                        <th className="px-5 py-3">Date</th>
+                        <th className="px-5 py-3">Items</th>
+                        <th className="px-5 py-3 text-right sm:px-6">Total</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {draft.transactions.length === 0 && (
-                  <p className="p-12 text-center text-sm text-slate-500">
-                    No transactions recorded.
-                  </p>
-                )}
-              </div>
-            </section>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {draft.transactions.map((transaction) => (
+                        <tr
+                          key={transaction.id}
+                          className={`transition hover:bg-white ${transaction.voided ? 'text-slate-500' : ''}`}
+                        >
+                          <td className="px-5 py-4 font-medium sm:px-6">
+                            {transaction.id}
+                            {transaction.voided && (
+                              <span className="ml-2 rounded border border-rose-300 px-1.5 py-0.5 text-xs font-semibold text-rose-700">
+                                VOID
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-5 py-4 text-slate-500">
+                            {date.format(new Date(transaction.purchasedAt))}
+                          </td>
+                          <td className="px-5 py-4">{transaction.itemCount}</td>
+                          <td className="px-5 py-4 text-right font-medium sm:px-6">
+                            {currency.format(transaction.total)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {draft.transactions.length === 0 && (
+                    <p className="p-12 text-center text-sm text-slate-500">
+                      No transactions recorded.
+                    </p>
+                  )}
+                </div>
+              </section>
+            )}
           </div>
         )}
       </div>
 
-      {confirmRemove && (
-        <div className="fixed inset-0 z-[70] grid place-items-center bg-slate-950/55 p-4">
-          <button
-            className="absolute inset-0"
-            aria-label="Cancel customer removal"
-            onClick={() => setConfirmRemove(false)}
-          />
-          <section
-            role="alertdialog"
-            aria-modal="true"
-            aria-labelledby="remove-customer-title"
-            className="glass-surface relative z-10 w-full max-w-md rounded-lg p-6"
-          >
-            <h2 id="remove-customer-title" className="text-xl font-semibold">
-              {pharmacy ? 'Remove Pharmacy Client?' : 'Remove Customer?'}
-            </h2>
-            <p className="mt-2 text-sm leading-6 text-slate-500">
-              {draft.fullName} will be removed from the customer list. This action cannot be undone
-              from the database.
-            </p>
-            <div className="mt-6 flex justify-end gap-2">
-              <button
-                disabled={isRemoving}
-                onClick={() => setConfirmRemove(false)}
-                className="secondary-button disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                disabled={isRemoving}
-                onClick={() => void remove()}
-                className="danger-button disabled:cursor-wait disabled:opacity-60"
-              >
-                {isRemoving ? 'Removing…' : pharmacy ? 'Remove Client' : 'Remove Customer'}
-              </button>
-            </div>
-          </section>
-        </div>
+      {merging && (
+        <MergeDialog
+          source={draft}
+          candidates={allCustomers.filter(
+            (other) => other.id !== draft.id && other.clientType === draft.clientType
+          )}
+          close={() => setMerging(false)}
+          merged={async (targetId) => {
+            setMerging(false)
+            await useProfileStore.getState().loadCustomers(true)
+            await openRecord(targetId)
+          }}
+        />
       )}
+      {confirmDialog}
     </DashboardShell>
   )
 }
@@ -638,5 +703,104 @@ function ProfileDetail({
         <p className="mt-2 text-sm leading-6 break-words text-slate-500">{description}</p>
       </div>
     </section>
+  )
+}
+
+/** Administrator: moves this record's sales and orders to the kept record, then archives it. */
+function MergeDialog({
+  source,
+  candidates,
+  close,
+  merged
+}: {
+  source: CustomerProfile
+  candidates: CustomerProfile[]
+  close: VoidFunction
+  merged: (targetId: number) => Promise<void>
+}): ReactElement {
+  const [query, setQuery] = useState(source.fullName)
+  const [targetId, setTargetId] = useState(0)
+  const [error, setError] = useState('')
+  const [saving, setSaving] = useState(false)
+  const detail = (customer: CustomerProfile): string =>
+    customerDetail({
+      ...customer,
+      discountId: customer.discountId || null,
+      address: customer.address || null
+    })
+  const term = query.trim().toLowerCase()
+  const shown = candidates.filter(
+    (customer) =>
+      !term ||
+      customer.fullName.toLowerCase().includes(term) ||
+      customer.phone.includes(term) ||
+      customer.discountId.toLowerCase().includes(term)
+  )
+  const target = candidates.find((customer) => customer.id === targetId)
+  return (
+    <Modal
+      title={`Merge ${source.fullName}`}
+      info="Use this when the same person or pharmacy was saved twice."
+      close={close}
+      busy={saving}
+    >
+      <div className="space-y-4">
+        <p className="text-sm text-slate-600">
+          All sales and wholesale orders of <strong>{source.fullName}</strong> ({detail(source)})
+          move to the record you keep. This record is then archived and marked as merged, so old
+          receipts still read correctly. This cannot be undone.
+        </p>
+        <FormField label="Find the Record to Keep">
+          <input
+            className="field"
+            value={query}
+            placeholder="Name, mobile or ID"
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        </FormField>
+        <FormField label="Keep This Record" required>
+          <select
+            className="field"
+            value={targetId}
+            onChange={(event) => setTargetId(Number(event.target.value))}
+          >
+            <option value={0}>Select the record to keep</option>
+            {shown.map((customer) => (
+              <option key={customer.id} value={customer.id}>
+                {customer.fullName} · {detail(customer)}
+              </option>
+            ))}
+          </select>
+        </FormField>
+        {error && (
+          <p role="alert" className="text-sm font-medium text-rose-700">
+            {error}
+          </p>
+        )}
+        <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
+          <button type="button" className="secondary-button" onClick={close} disabled={saving}>
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="primary-button"
+            disabled={saving || !target}
+            onClick={() => {
+              if (!target) return
+              setSaving(true)
+              setError('')
+              void mergeCustomers(source.id, target.id)
+                .then(() => merged(target.id))
+                .catch((cause: unknown) => {
+                  setError(cause instanceof Error ? cause.message : 'Unable to merge the records.')
+                  setSaving(false)
+                })
+            }}
+          >
+            {saving ? 'Merging…' : target ? `Merge Into ${target.fullName}` : 'Merge'}
+          </button>
+        </div>
+      </div>
+    </Modal>
   )
 }

@@ -90,7 +90,7 @@ function EmptyTable({ colSpan, label }: { colSpan: number; label: string }): Rea
 function SeverityPill({ severity }: { severity: DashboardAlertSeverity }): ReactElement {
   return (
     <span
-      className={`inline-flex rounded-full px-2 py-1 text-[0.68rem] font-semibold ring-1 ${severityStyles[severity]}`}
+      className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ring-1 ${severityStyles[severity]}`}
     >
       {severityLabels[severity]}
     </span>
@@ -113,7 +113,7 @@ export function ExpiryWatchlist({ alerts }: { alerts: DashboardExpiryAlert[] }):
           aria-labelledby="expiry-watchlist-title"
           className="w-full min-w-[35rem] text-left text-sm"
         >
-          <thead className="border-b border-slate-200 bg-slate-50/60 text-[0.68rem] tracking-wide text-slate-500 uppercase">
+          <thead className="border-b border-slate-200 bg-slate-50/60 text-xs tracking-wide text-slate-500 uppercase">
             <tr>
               <th scope="col" className="px-5 py-3 font-semibold sm:px-6">
                 Product
@@ -189,7 +189,7 @@ export function LowStockWatchlist({ alerts }: { alerts: DashboardLowStockAlert[]
           aria-labelledby="low-stock-watchlist-title"
           className="w-full min-w-[34rem] text-left text-sm"
         >
-          <thead className="border-b border-slate-200 bg-slate-50/60 text-[0.68rem] tracking-wide text-slate-500 uppercase">
+          <thead className="border-b border-slate-200 bg-slate-50/60 text-xs tracking-wide text-slate-500 uppercase">
             <tr>
               <th scope="col" className="px-5 py-3 font-semibold sm:px-6">
                 Product
@@ -271,7 +271,7 @@ export function RecentTransactions({
           aria-labelledby="recent-transactions-title"
           className={`w-full text-left text-sm ${showCashier ? 'min-w-[58rem]' : 'min-w-[46rem]'}`}
         >
-          <thead className="border-b border-slate-200 bg-slate-50/60 text-[0.68rem] tracking-wide text-slate-500 uppercase">
+          <thead className="border-b border-slate-200 bg-slate-50/60 text-xs tracking-wide text-slate-500 uppercase">
             <tr>
               <th scope="col" className="px-5 py-3 font-semibold sm:px-6">
                 Receipt

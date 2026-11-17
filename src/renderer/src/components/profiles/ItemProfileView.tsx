@@ -1,20 +1,28 @@
 import DashboardShell from '@renderer/components/dashboard/DashboardShell'
+import { useConfirm } from '@renderer/components/ui/ConfirmDialog'
 import FilteredInput from '@renderer/components/ui/FilteredInput'
+import InfoTip from '@renderer/components/ui/InfoTip'
+import Modal from '@renderer/components/ui/Modal'
+import { removeOrArchive } from '@renderer/components/ui/removeOrArchive'
 import {
+  boxSizes,
   getItemStock,
   getSellableStock,
   getStockStatus,
   type ItemProfile
 } from '@renderer/data/profiles'
 import { useAccount } from '@renderer/hooks/useAccount'
+import { setWholesalePrice } from '@renderer/services/profiles'
 import { useProfileStore } from '@renderer/stores/useProfileStore'
+import { productKey } from '@shared/duplicates'
 import { expiryLabels, getExpiryStatus } from '@shared/inventory'
 import { MAX_REORDER_LEVEL } from '@shared/schemas'
-import { piecesLabel, unitSellPrice } from '@shared/units'
+import { piecesLabel, unitSellPrice, wholesaleBoxPrice } from '@shared/units'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { useState, type FormEvent, type ReactElement } from 'react'
 import { FiArrowLeft, FiEdit2, FiPackage, FiTrash2, FiX } from 'react-icons/fi'
 import StockOutPanel from './StockOutPanel'
+import { stockLabel } from './stockFilters'
 
 const currency = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' })
 const date = new Intl.DateTimeFormat('en-PH', { dateStyle: 'medium' })
@@ -28,7 +36,6 @@ const emptyItem: ItemProfile = {
   prescriptionRequired: false,
   controlled: false,
   reorderLevel: 0,
-  piecesPerBox: 1,
   genericEquivalentIds: [],
   batches: []
 }
@@ -46,9 +53,10 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
   )
   const [error, setError] = useState('')
   const [isSaving, setIsSaving] = useState(false)
-  const [confirmRemove, setConfirmRemove] = useState(false)
-  const [isRemoving, setIsRemoving] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
+  const [confirmDialog, confirm] = useConfirm()
+  const archive = useProfileStore((state) => state.archive)
+  const [pricing, setPricing] = useState<ItemProfile['batches'][number] | null>(null)
   const canEdit = account?.role === 'master' || account?.role === 'staff'
 
   if (isNew) {
@@ -68,8 +76,8 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
       if (
         items.some(
           (value) =>
-            value.brandName.toLowerCase() === brandName.toLowerCase() &&
-            value.formulation.toLowerCase() === formulation.toLowerCase()
+            productKey(value.brandName) === productKey(brandName) &&
+            productKey(value.formulation) === productKey(formulation)
         )
       ) {
         setError('A product with this brand and formulation already exists.')
@@ -86,8 +94,7 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
           formulation,
           prescriptionRequired: draft.prescriptionRequired,
           controlled: draft.controlled,
-          reorderLevel: draft.reorderLevel,
-          piecesPerBox: draft.piecesPerBox
+          reorderLevel: draft.reorderLevel
         })
         await navigate({ to: '/items/$itemId', params: { itemId: String(saved.id) } })
       } catch (cause) {
@@ -101,24 +108,27 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
         <div className="space-y-5 sm:space-y-6">
           <Link
             to="/inventory"
-            className="hover:text-brand-700 inline-flex items-center gap-2 rounded-lg px-1 text-sm font-medium text-slate-500 transition"
+            className="hover:text-brand-700 inline-flex items-center gap-2 rounded-lg px-1 text-sm font-medium text-slate-700 transition"
           >
             <FiArrowLeft /> Back to Inventory
           </Link>
           <form noValidate onSubmit={save} className="panel mx-auto max-w-3xl space-y-6 p-6 sm:p-7">
             <div>
               <p className="eyebrow">Inventory</p>
-              <h2 className="page-title mt-0.5">Add New Product</h2>
-              <p className="page-subtitle">
-                Create the product record first. Stock, batch numbers and expiry dates are added
-                when you receive products against a purchase order.
-              </p>
+              <div className="flex items-center gap-1.5">
+                <h1 className="page-title mt-0.5">Add New Product</h1>
+                <InfoTip label="Add New Product">
+                  Create the product record first. Stock, batch numbers and expiry dates are added
+                  when you receive products against a purchase order.
+                </InfoTip>
+              </div>
               <p className="mt-3 text-xs text-slate-500">
                 Fields marked <span className="text-rose-600">*</span> are required.
               </p>
             </div>
             <ProductFields
               draft={draft}
+              locked={{ prescriptionRequired: false, controlled: false }}
               update={(field, value) => setDraft((current) => ({ ...current, [field]: value }))}
             />
             {error && (
@@ -147,16 +157,21 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
   const stock = getItemStock(item)
   const status = getStockStatus(item)
   const remove = async (): Promise<void> => {
-    setIsRemoving(true)
+    setError('')
     try {
-      await removeItem(item.id)
-      await navigate({ to: '/inventory' })
+      const done = await removeOrArchive({
+        confirm,
+        name: item.brandName,
+        noun: 'product',
+        remove: () => removeItem(item.id),
+        archive: () => archive('product', item.id)
+      })
+      if (done) await navigate({ to: '/inventory' })
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Unable to remove the product.')
-      setConfirmRemove(false)
-      setIsRemoving(false)
     }
   }
+  const sizes = boxSizes(item)
 
   const saveEdit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault()
@@ -168,8 +183,8 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
       items.some(
         (value) =>
           value.id !== item.id &&
-          value.brandName.toLowerCase() === brandName.toLowerCase() &&
-          value.formulation.toLowerCase() === formulation.toLowerCase()
+          productKey(value.brandName) === productKey(brandName) &&
+          productKey(value.formulation) === productKey(formulation)
       )
     ) {
       setError('A product with this brand and formulation already exists.')
@@ -185,8 +200,7 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
         formulation,
         prescriptionRequired: draft.prescriptionRequired,
         controlled: draft.controlled,
-        reorderLevel: draft.reorderLevel,
-        piecesPerBox: draft.piecesPerBox
+        reorderLevel: draft.reorderLevel
       })
       setDraft({ ...saved, batches: item.batches })
       setIsEditing(false)
@@ -202,7 +216,7 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
       <div className="space-y-5 sm:space-y-6">
         <Link
           to="/inventory"
-          className="hover:text-brand-700 inline-flex items-center gap-2 rounded-lg px-1 text-sm font-medium text-slate-500 transition"
+          className="hover:text-brand-700 inline-flex items-center gap-2 rounded-lg px-1 text-sm font-medium text-slate-700 transition"
         >
           <FiArrowLeft /> Back to Inventory
         </Link>
@@ -214,12 +228,12 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
                 <span
                   className={`rounded-full border px-2.5 py-1 text-xs font-semibold capitalize ${status === 'in-stock' ? 'border-emerald-100 bg-emerald-50/80 text-emerald-700' : status === 'low-stock' ? 'border-amber-100 bg-amber-50/80 text-amber-700' : 'border-rose-100 bg-rose-50/80 text-rose-700'}`}
                 >
-                  {status.replaceAll('-', ' ')}
+                  {stockLabel(item)}
                 </span>
               </div>
-              <h2 className="mt-3 text-2xl font-semibold tracking-tight text-slate-900">
+              <h1 className="mt-3 text-2xl font-semibold tracking-tight text-slate-900">
                 {item.brandName}
-              </h2>
+              </h1>
               <p className="mt-3 text-sm text-slate-600 sm:text-base">
                 {item.genericName} · {item.formulation}
               </p>
@@ -253,10 +267,10 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
               {account?.role === 'master' && (
                 <button
                   type="button"
-                  onClick={() => setConfirmRemove(true)}
+                  onClick={() => void remove()}
                   className="danger-button whitespace-nowrap"
                 >
-                  <FiTrash2 /> Remove Product
+                  <FiTrash2 /> Delete or Archive
                 </button>
               )}
             </div>
@@ -289,6 +303,10 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
             </div>
             <ProductFields
               draft={draft}
+              locked={{
+                prescriptionRequired: account?.role !== 'master' && !!item?.prescriptionRequired,
+                controlled: account?.role !== 'master' && !!item?.controlled
+              }}
               update={(field, value) => setDraft((current) => ({ ...current, [field]: value }))}
             />
             {error && (
@@ -316,11 +334,16 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
         <section className="grid gap-5 md:grid-cols-3">
           <Metric
             label="Stock on Hand / Sellable"
-            value={`${piecesLabel(stock, item.piecesPerBox)} / ${getSellableStock(item)} sellable`}
+            value={`${stock} pcs / ${getSellableStock(item)} sellable`}
           />
           <Metric
             label="Reorder Level"
-            value={`${item.reorderLevel} pieces${item.piecesPerBox > 1 ? ` · ${item.piecesPerBox} pieces per box` : ' · sold by the piece'}`}
+            value={`${item.reorderLevel} pieces`}
+            hint={
+              sizes.length
+                ? `Boxes in stock: ${sizes.map((size) => `${size} pcs`).join(', ')}`
+                : 'In stock by the piece only'
+            }
           />
           <Metric
             label="Current Price"
@@ -334,11 +357,12 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
               description="Stock received through supplier deliveries. Expired batches are not sellable."
             />
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[620px] text-sm">
+              <table className="w-full min-w-[720px] text-sm">
                 <thead className="surface-header text-left">
                   <tr>
                     <th className="px-5 py-3">Batch</th>
                     <th className="px-5 py-3">Supplier</th>
+                    <th className="px-5 py-3">Box Size</th>
                     <th className="px-5 py-3">Stock</th>
                     <th className="px-5 py-3">Price</th>
                     <th className="px-5 py-3">Expiry</th>
@@ -359,21 +383,45 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
                       <td className="max-w-48 px-5 py-4 break-words text-slate-500">
                         {batch.supplier}
                       </td>
-                      <td className="px-5 py-4">{piecesLabel(batch.stock, item.piecesPerBox)}</td>
+                      <td className="px-5 py-4 whitespace-nowrap">
+                        {batch.piecesPerBox > 1 ? `${batch.piecesPerBox} pcs` : 'Piece only'}
+                      </td>
+                      <td className="px-5 py-4">{piecesLabel(batch.stock, batch.piecesPerBox)}</td>
                       <td className="px-5 py-4">
                         {currency.format(batch.sellPrice)} / piece
-                        {item.piecesPerBox > 1 && (
+                        {batch.piecesPerBox > 1 && (
                           <p className="text-xs text-slate-500">
                             {currency.format(
                               unitSellPrice(
                                 'box',
                                 batch.sellPrice,
                                 batch.boxSellPrice,
-                                item.piecesPerBox
+                                batch.piecesPerBox
                               )
                             )}{' '}
                             / box
                           </p>
+                        )}
+                        <p className="text-xs text-slate-600">
+                          Wholesale{' '}
+                          {currency.format(
+                            wholesaleBoxPrice(
+                              batch.sellPrice,
+                              batch.boxSellPrice,
+                              batch.wholesaleBoxPrice,
+                              batch.piecesPerBox
+                            )
+                          )}{' '}
+                          / box{batch.wholesaleBoxPrice === null ? ' (same as retail)' : ''}
+                        </p>
+                        {canEdit && (
+                          <button
+                            type="button"
+                            className="text-brand-700 mt-1 text-xs font-semibold underline"
+                            onClick={() => setPricing(batch)}
+                          >
+                            Set Wholesale Price
+                          </button>
                         )}
                       </td>
                       <td className="px-5 py-4">
@@ -430,14 +478,16 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
         )}
         {account?.role === 'master' && <StockOutPanel item={item} />}
       </div>
-      {confirmRemove && (
-        <ConfirmationDialog
-          title="Remove product?"
-          description={`${item.brandName} will be removed from the active product catalog.`}
-          confirmLabel={isRemoving ? 'Removing…' : 'Remove Product'}
-          disabled={isRemoving}
-          close={() => setConfirmRemove(false)}
-          confirm={() => void remove()}
+      {confirmDialog}
+      {pricing && (
+        <WholesalePriceDialog
+          batch={pricing}
+          piecesPerBox={pricing.piecesPerBox}
+          close={() => setPricing(null)}
+          saved={async () => {
+            setPricing(null)
+            await useProfileStore.getState().loadItems(true)
+          }}
         />
       )}
     </DashboardShell>
@@ -472,15 +522,17 @@ type EditableProductField =
   | 'category'
   | 'formulation'
   | 'reorderLevel'
-  | 'piecesPerBox'
   | 'prescriptionRequired'
   | 'controlled'
 
 function ProductFields({
   draft,
+  locked,
   update
 }: {
   draft: ItemProfile
+  /** Flags only the administrator may switch off (M5): ticked flags stay ticked for staff. */
+  locked: { prescriptionRequired: boolean; controlled: boolean }
   update: (field: EditableProductField, value: string | number | boolean) => void
 }): ReactElement {
   return (
@@ -525,7 +577,7 @@ function ProductFields({
           onValueChange={(value) => update('formulation', value)}
         />
       </Field>
-      <Field label="Reorder Level" hint="A low-stock alert appears when stock falls to this level.">
+      <Field label="Reorder Level" hint="Low-stock alert at this level.">
         <input
           required
           type="number"
@@ -543,36 +595,23 @@ function ProductFields({
           }
         />
       </Field>
-      <Field
-        label="Pieces Per Box"
-        hint="Purchase and wholesale orders are by the box. Use 1 if one box (or bottle) holds one piece. Stock is always counted in pieces."
-      >
-        <input
-          required
-          type="number"
-          min="1"
-          max="10000"
-          step="1"
-          className="field"
-          placeholder={'e.g. 100'}
-          value={draft.piecesPerBox}
-          onChange={(event) =>
-            update(
-              'piecesPerBox',
-              event.target.value === '' ? Number.NaN : Number(event.target.value)
-            )
-          }
-        />
-      </Field>
+      <p className="flex items-center gap-1 self-end text-xs leading-5 text-slate-500">
+        Stock is counted in pieces.
+        <InfoTip label="Stock units">
+          Box sizes come from each supplier&apos;s price list and are recorded per batch when stock
+          is received, so one product can have boxes of 50 and 100.
+        </InfoTip>
+      </p>
       <section className="rounded-md border border-slate-200 bg-slate-50 p-4 sm:col-span-2">
         <p className="text-sm font-medium text-slate-700">
-          Dispensing Controls <span className="text-xs font-normal text-slate-400">(optional)</span>
+          Dispensing Controls <span className="text-xs font-normal text-slate-600">(optional)</span>
         </p>
         <div className="mt-3 flex flex-wrap gap-x-6 gap-y-3">
           <label className="flex items-center gap-3 text-sm text-slate-700">
             <input
               type="checkbox"
               checked={draft.prescriptionRequired}
+              disabled={locked.prescriptionRequired}
               onChange={(event) => update('prescriptionRequired', event.target.checked)}
               className="text-brand-700 size-4 rounded border-slate-300"
             />
@@ -582,69 +621,38 @@ function ProductFields({
             <input
               type="checkbox"
               checked={draft.controlled}
+              disabled={locked.controlled}
               onChange={(event) => update('controlled', event.target.checked)}
               className="text-brand-700 size-4 rounded border-slate-300"
             />
             Controlled Medicine
           </label>
         </div>
+        {(locked.prescriptionRequired || locked.controlled) && (
+          <p className="mt-2 text-xs text-slate-600">
+            Only the administrator can remove the prescription or controlled flag from a medicine.
+          </p>
+        )}
       </section>
     </div>
   )
 }
 
-function ConfirmationDialog({
-  title,
-  description,
-  confirmLabel,
-  disabled,
-  close,
-  confirm
+function Metric({
+  label,
+  value,
+  hint
 }: {
-  title: string
-  description: string
-  confirmLabel: string
-  disabled: boolean
-  close: VoidFunction
-  confirm: VoidFunction
+  label: string
+  value: string
+  hint?: string
 }): ReactElement {
-  return (
-    <div className="fixed inset-0 z-[70] grid place-items-center bg-slate-950/55 p-4">
-      <button className="absolute inset-0" aria-label="Cancel removal" onClick={close} />
-      <section
-        role="alertdialog"
-        aria-modal="true"
-        className="glass-surface relative z-10 w-full max-w-md rounded-lg p-6"
-      >
-        <h2 className="text-xl font-semibold">{title}</h2>
-        <p className="mt-2 text-sm leading-6 text-slate-500">{description}</p>
-        <div className="mt-6 flex justify-end gap-2">
-          <button
-            disabled={disabled}
-            onClick={close}
-            className="secondary-button disabled:opacity-50"
-          >
-            Cancel
-          </button>
-          <button
-            disabled={disabled}
-            onClick={confirm}
-            className="danger-button disabled:cursor-wait disabled:opacity-60"
-          >
-            {confirmLabel}
-          </button>
-        </div>
-      </section>
-    </div>
-  )
-}
-
-function Metric({ label, value }: { label: string; value: string }): ReactElement {
   return (
     <div className="panel relative overflow-hidden p-5 sm:p-6">
       <div className="relative">
         <p className="text-sm text-slate-500">{label}</p>
         <p className="mt-2 text-2xl font-semibold tracking-tight">{value}</p>
+        {hint && <p className="mt-1 text-xs text-slate-500">{hint}</p>}
       </div>
     </div>
   )
@@ -656,5 +664,88 @@ function Header({ title, description }: { title: string; description: string }):
       <h3 className="section-title text-lg">{title}</h3>
       <p className="mt-1 text-sm text-slate-500">{description}</p>
     </header>
+  )
+}
+
+/** Price of one box for pharmacy clients on one batch; empty uses the retail box price. */
+function WholesalePriceDialog({
+  batch,
+  piecesPerBox,
+  close,
+  saved
+}: {
+  batch: ItemProfile['batches'][number]
+  piecesPerBox: number
+  close: VoidFunction
+  saved: () => Promise<void>
+}): ReactElement {
+  const [value, setValue] = useState(
+    batch.wholesaleBoxPrice === null ? '' : String(batch.wholesaleBoxPrice)
+  )
+  const [error, setError] = useState('')
+  const [saving, setSaving] = useState(false)
+  const retail = unitSellPrice(
+    'box',
+    batch.sellPrice,
+    batch.boxSellPrice,
+    Math.max(1, piecesPerBox)
+  )
+  return (
+    <Modal
+      title={`Wholesale Price for Batch ${batch.batchNumber}`}
+      description={`Pharmacy clients pay this price per box. Leave it empty to use the retail box price of ${currency.format(retail)}.`}
+      close={close}
+      size="sm"
+      busy={saving}
+    >
+      <form
+        noValidate
+        className="space-y-4"
+        onSubmit={(event) => {
+          event.preventDefault()
+          const price = value.trim() === '' ? null : Number(value)
+          if (price !== null && (!/^\d+(\.\d{1,2})?$/.test(value.trim()) || price < 0.01)) {
+            setError('Enter a price of at least ₱0.01 with at most two decimal places.')
+            return
+          }
+          setSaving(true)
+          setError('')
+          void setWholesalePrice(batch.id, price)
+            .then(saved)
+            .catch((cause) => {
+              setError(cause instanceof Error ? cause.message : 'Unable to save the price.')
+              setSaving(false)
+            })
+        }}
+      >
+        <label className="field-label block">
+          Wholesale Price per Box (₱)
+          <input
+            className="field mt-1.5"
+            type="number"
+            min="0.01"
+            step="0.01"
+            inputMode="decimal"
+            placeholder={retail.toFixed(2)}
+            aria-invalid={error ? true : undefined}
+            value={value}
+            onChange={(event) => setValue(event.target.value)}
+          />
+        </label>
+        {error && (
+          <p role="alert" className="text-sm font-medium text-rose-700">
+            {error}
+          </p>
+        )}
+        <div className="flex justify-end gap-2">
+          <button type="button" className="secondary-button" disabled={saving} onClick={close}>
+            Cancel
+          </button>
+          <button className="primary-button" disabled={saving}>
+            {saving ? 'Saving…' : 'Save Price'}
+          </button>
+        </div>
+      </form>
+    </Modal>
   )
 }

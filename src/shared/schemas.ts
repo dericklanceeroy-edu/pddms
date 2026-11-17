@@ -1,6 +1,6 @@
 import z from 'zod'
 import { roles } from './constants'
-import { localDate } from './inventory'
+import { localDate, yearsFromToday } from './inventory'
 import type {
   Account,
   AccountUpdate,
@@ -12,7 +12,8 @@ import type {
   NewSupplier,
   ProductUpdate
 } from './types'
-import { boxOnlyUnitSchema, piecesPerBoxSchema } from './units'
+import { writeOffReasons, type WriteOffReason } from './types'
+import { piecesPerBoxSchema } from './units'
 
 export const accountSchema = z.strictObject({
   failedAttempts: z.number().int().nonnegative(),
@@ -23,6 +24,7 @@ export const accountSchema = z.strictObject({
   username: z.string().min(4),
   fullName: z.string().min(2),
   email: z.string().nullable(),
+  phone: z.string().nullable(),
   password: z.string().min(8),
   isArchived: z.union([z.literal(0), z.literal(1)]),
   isVerified: z.union([z.literal(0), z.literal(1)]),
@@ -50,7 +52,23 @@ const PASSWORD_MAX = 128
 const EMAIL_MAX = 254
 
 /** Payment methods offered for supplier payments and wholesale receivables. */
-export const paymentMethods = ['Cash', 'Bank transfer', 'Check', 'E-wallet', 'Other'] as const
+// Note: GCash and Maya are listed on their own; "E-wallet" stays for other wallets and for
+// payments already recorded with it.
+export const paymentMethods = [
+  'Cash',
+  'GCash',
+  'Maya',
+  'Bank transfer',
+  'Check',
+  'E-wallet',
+  'Other'
+] as const
+/** How a stored payment method reads in forms and tables. */
+export const paymentMethodLabel = (method: string): string =>
+  method === 'E-wallet' ? 'Other E-Wallet' : method === 'Bank transfer' ? 'Bank Transfer' : method
+/** Payment methods that always leave a reference number (e-wallet, bank transfer or check). */
+export const referenceRequired = (method: string): boolean =>
+  ['GCash', 'Maya', 'Bank transfer', 'Check', 'E-wallet'].includes(method)
 export const paymentMethodSchema = z.enum(paymentMethods, {
   error: 'Select a payment method from the list.'
 })
@@ -73,16 +91,29 @@ export function normalizeMobile(value: string): string {
 }
 
 const mobileSchema = z.string().transform(normalizeMobile).pipe(z.string().regex(phonePattern))
+const accountPhone = z
+  .string({ error: 'Mobile number is required.' })
+  .transform(normalizeMobile)
+  .pipe(
+    z
+      .string()
+      .regex(phonePattern, 'Mobile number must be 11 digits starting with 09, e.g. 09171234567.')
+  )
 // Note: A password must contain something besides spaces; the cap keeps hashing input bounded.
+// Note: A letter and a number keep out the weakest passwords such as "aaaaaaaa" or "12345678".
 const newPasswordSchema = z
   .string()
   .min(8, 'Password must have at least 8 characters.')
   .max(PASSWORD_MAX, `Password must be ${PASSWORD_MAX} characters or fewer.`)
   .refine((value) => value.trim().length > 0, 'Password cannot be only spaces.')
+  .refine(
+    (value) => /\p{L}/u.test(value) && /\d/.test(value),
+    'Password must include at least one letter and one number.'
+  )
 const isoDatePattern = /^\d{4}-\d{2}-\d{2}$/
 // Note: No reference format is specified by the business; allow common document characters only.
 const referencePattern = /^[A-Za-z0-9][A-Za-z0-9 ./#_()-]*$/
-const referenceText = (max: number): z.ZodString =>
+export const referenceText = (max: number): z.ZodString =>
   z.string().trim().min(1).max(max).regex(referencePattern)
 // Note: Whole-unit quantities stored as SQLite integers; the bound only prevents unsafe totals.
 const MAX_LINE_QUANTITY = 1_000_000_000
@@ -103,7 +134,7 @@ export const isoDateSchema = (message: string): z.ZodType<string> =>
 
 // Note: Upper bound keeps peso amounts well inside exact floating-point cents.
 export const MAX_CURRENCY_AMOUNT = 10_000_000
-const currencyAmount = z
+export const currencyAmount = z
   .number()
   .nonnegative()
   .max(MAX_CURRENCY_AMOUNT)
@@ -128,6 +159,7 @@ export const newAccountSchema = z.strictObject({
     .max(32)
     .regex(usernamePattern),
   email: accountEmail,
+  phone: accountPhone,
   password: newPasswordSchema
 }) satisfies z.ZodType<NewAccount>
 
@@ -136,6 +168,7 @@ export const accountUpdateSchema = z.strictObject({
   fullName: z.string().trim().min(2).max(NAME_MAX).regex(namePattern).optional(),
   username: z.string().trim().toLowerCase().min(4).max(32).regex(usernamePattern).optional(),
   email: accountEmail.optional(),
+  phone: accountPhone.optional(),
   password: newPasswordSchema.optional()
 }) satisfies z.ZodType<AccountUpdate>
 
@@ -147,6 +180,7 @@ export const credentialsSchema = z.strictObject({
 export const profileUpdateSchema = z.strictObject({
   fullName: z.string().trim().min(2).max(NAME_MAX).regex(namePattern),
   username: z.string().trim().toLowerCase().min(4).max(32).regex(usernamePattern),
+  phone: accountPhone.nullable().optional(),
   currentPassword: z.string().min(1).max(256),
   password: newPasswordSchema.optional()
 })
@@ -154,7 +188,8 @@ export const profileUpdateSchema = z.strictObject({
 export const masterSetupSchema = credentialsSchema.extend({
   password: newAccountSchema.shape.password,
   fullName: newAccountSchema.shape.fullName,
-  email: accountEmail
+  email: accountEmail,
+  phone: accountPhone
 })
 
 export const clientTypes = ['retail', 'pharmacy'] as const
@@ -171,7 +206,15 @@ const customerFields = {
   address: z.string().trim().max(ADDRESS_MAX).nullable(),
   discountType: z.enum(['none', 'senior', 'pwd']),
   discountId: z.string().trim().max(40).transform(normalizeDiscountId).nullable(),
-  discountExpiresAt: isoDateSchema('Enter a valid discount expiry date.').nullable()
+  discountExpiresAt: isoDateSchema('Enter a valid discount expiry date.').nullable(),
+  // Note: Tax identification number of a pharmacy client, e.g. 123-456-789-000.
+  tin: z
+    .string()
+    .trim()
+    .regex(/^(\d{3}-?\d{3}-?\d{3}(-?\d{3,5})?)?$/, 'Enter the TIN as 9 to 14 digits, e.g. 123-456-789-000.')
+    .transform((value) => value || null)
+    .nullable()
+    .default(null)
 }
 
 const customerSchema = z.strictObject(customerFields).superRefine((value, context) => {
@@ -190,6 +233,18 @@ const customerSchema = z.strictObject(customerFields).superRefine((value, contex
       path: ['contactPerson'],
       message:
         'Contact person may use only letters, spaces, periods, commas, apostrophes or hyphens.'
+    })
+  if (pharmacy && !value.address)
+    context.addIssue({
+      code: 'custom',
+      path: ['address'],
+      message: 'Enter the delivery address of this pharmacy (branch).'
+    })
+  if (!pharmacy && value.tin)
+    context.addIssue({
+      code: 'custom',
+      path: ['tin'],
+      message: 'A TIN is recorded for pharmacy clients only.'
     })
   if (pharmacy && value.discountType !== 'none')
     context.addIssue({
@@ -217,6 +272,13 @@ const customerSchema = z.strictObject(customerFields).superRefine((value, contex
       message: 'Enter the PWD ID expiry date printed on the ID.'
     })
   }
+  if (value.discountExpiresAt && value.discountExpiresAt > yearsFromToday(10)) {
+    context.addIssue({
+      code: 'custom',
+      path: ['discountExpiresAt'],
+      message: 'Check the expiry date: it is more than 10 years away. Enter the date printed on the ID.'
+    })
+  }
   if (value.discountExpiresAt && value.discountExpiresAt < localDate()) {
     context.addIssue({
       code: 'custom',
@@ -236,17 +298,37 @@ export const newDrugSchema = z.strictObject({
   formulation: z.string().trim().min(1).max(NAME_MAX).regex(catalogTextPattern),
   isPrescribed: z.boolean(),
   isControlled: z.boolean(),
-  reorderLevel: z.number().int().nonnegative().max(MAX_REORDER_LEVEL),
-  piecesPerBox: piecesPerBoxSchema.default(1)
+  reorderLevel: z.number().int().nonnegative().max(MAX_REORDER_LEVEL)
 }) satisfies z.ZodType<NewProduct>
 
+// Note: A product is a medicine counted in pieces. Box sizes belong to supplier packs and batches.
 export const productUpdateSchema = newDrugSchema.partial() satisfies z.ZodType<ProductUpdate>
 
-export const stockOutSchema = z.strictObject({
+/** Price of one box for pharmacy clients on one batch; null goes back to the retail box price. */
+export const batchWholesalePriceSchema = z.strictObject({
   batchId: z.number().int().positive(),
-  quantity: z.number().int().positive(),
-  reason: z.string().trim().min(3, 'Enter a stock-out reason (at least 3 characters).').max(500)
+  wholesaleBoxPrice: currencyAmount
+    .refine((value) => value >= 0.01, 'Wholesale price must be at least ₱0.01.')
+    .nullable()
 })
+
+export const stockOutSchema = z
+  .strictObject({
+    batchId: z.number().int().positive(),
+    quantity: z.number().int().positive(),
+    reasonCode: z.enum(Object.keys(writeOffReasons) as [WriteOffReason, ...WriteOffReason[]], {
+      error: 'Choose why the stock is written off.'
+    }),
+    reason: z.string().trim().max(500).default('')
+  })
+  .superRefine((value, context) => {
+    if (value.reasonCode === 'other' && value.reason.length < 3)
+      context.addIssue({
+        code: 'custom',
+        path: ['reason'],
+        message: 'Describe what happened (at least 3 characters).'
+      })
+  })
 
 const supplierFields = {
   organization: z.string().trim().min(2).max(NAME_MAX).regex(catalogTextPattern),
@@ -261,7 +343,15 @@ const supplierFields = {
   postalCode: z
     .string()
     .trim()
-    .regex(/^\d{4}$/)
+    .regex(/^\d{4}$/),
+  pdeaLicense: z
+    .string()
+    .trim()
+    .max(60)
+    .regex(/^([A-Za-z0-9][A-Za-z0-9 ./#_()-]*)?$/, 'License number may use letters, numbers and - / . # _ ( ).')
+    .transform((value) => value || null)
+    .nullable()
+    .default(null)
 }
 
 const supplierSchema = z.strictObject(supplierFields)
@@ -276,13 +366,12 @@ export const purchaseOrderStatusSchema = z.enum([
   'cancelled'
 ])
 
+// Note: A line names a pack from the supplier's price list and a number of boxes. The cost per
+// box and box size come from the price list in the main process; whoever places the order cannot
+// type them.
 const purchaseOrderLineSchema = z.strictObject({
-  drugId: z.number().int().positive(),
-  quantity: z.number().int().positive().max(MAX_LINE_QUANTITY),
-  unitCost: currencyAmount,
-  // Note: Supplier orders are per box only; quantity and unit cost are per box and stock is
-  // received in pieces. Lines saved before this rule keep their stored unit.
-  unit: boxOnlyUnitSchema.default('box')
+  packId: z.number({ error: 'Select a pack from the price list.' }).int().positive('Select a pack from the price list.'),
+  quantity: z.number().int().positive().max(MAX_LINE_QUANTITY)
 })
 
 const purchaseOrderFields = {
@@ -293,26 +382,28 @@ const purchaseOrderFields = {
 }
 
 const checkOrderLines = (
-  value: { items: Array<{ drugId: number; quantity: number; unitCost: number }> },
+  value: {
+    expectedAt?: string | null
+    items: Array<{ packId: number; quantity: number }>
+  },
   context: z.RefinementCtx
 ): void => {
-  const seen = new Set<number>()
-  value.items.forEach((item, index) => {
-    if (seen.has(item.drugId))
-      context.addIssue({
-        code: 'custom',
-        path: ['items', index, 'drugId'],
-        message: 'This product is already on the order. Combine the quantities into one line.'
-      })
-    seen.add(item.drugId)
-  })
-  const total = value.items.reduce((sum, item) => sum + item.quantity * item.unitCost, 0)
-  if (!Number.isSafeInteger(Math.round(total * 100)))
+  if (value.expectedAt && value.expectedAt > yearsFromToday(1))
     context.addIssue({
       code: 'custom',
-      path: ['items'],
-      message: 'The order total is too large to store accurately. Split it into smaller orders.'
+      path: ['expectedAt'],
+      message: 'The expected delivery date must be within one year of today.'
     })
+  const seen = new Set<number>()
+  value.items.forEach((item, index) => {
+    if (seen.has(item.packId))
+      context.addIssue({
+        code: 'custom',
+        path: ['items', index, 'packId'],
+        message: 'This pack is already on the order. Combine the quantities into one line.'
+      })
+    seen.add(item.packId)
+  })
 }
 
 export const newPurchaseOrderSchema = z
@@ -350,18 +441,34 @@ export const purchaseOrderDeliverySchema = z
       .array(
         z.strictObject({
           itemId: z.number().int().positive(),
-          receivedQuantity: z.number().int().positive().max(MAX_LINE_QUANTITY),
-          batchNumber: referenceText(80),
-          sellPrice: currencyAmount.refine(
-            (value) => value >= 0.01,
-            'Selling price must be at least ₱0.01.'
-          ),
+          // Note: Good boxes added to stock. A line may hold only rejected boxes (0 received).
+          receivedQuantity: z.number().int().nonnegative().max(MAX_LINE_QUANTITY),
+          // Note: Damaged or wrong boxes refused at the door: not stocked and not owed.
+          rejectedQuantity: z.number().int().nonnegative().max(MAX_LINE_QUANTITY).default(0),
+          rejectionReason: z.string().trim().max(300).default(''),
+          // Note: What actually arrived; empty means the same as the order.
+          piecesPerBox: piecesPerBoxSchema.nullable().default(null),
+          unitCost: currencyAmount
+            .refine((value) => value >= 0.01, 'Invoice cost must be at least ₱0.01.')
+            .nullable()
+            .default(null),
+          differenceReason: z.string().trim().max(300).default(''),
+          batchNumber: z.string().trim().max(80).regex(/^([A-Za-z0-9][A-Za-z0-9 ./#_()-]*)?$/).default(''),
+          sellPrice: currencyAmount
+            .refine((value) => value >= 0.01, 'Selling price must be at least ₱0.01.')
+            .nullable()
+            .default(null),
           // Note: Optional box price; without one a box sells at piece price × pieces per box.
           boxSellPrice: currencyAmount
             .refine((value) => value >= 0.01, 'Box price must be at least ₱0.01.')
             .nullable()
             .optional(),
-          expiresAt: isoDateSchema('Enter a valid expiry date.')
+          // Note: Optional price per box for pharmacy clients; without one wholesale uses the box price.
+          wholesaleBoxPrice: currencyAmount
+            .refine((value) => value >= 0.01, 'Wholesale price must be at least ₱0.01.')
+            .nullable()
+            .optional(),
+          expiresAt: isoDateSchema('Enter a valid expiry date.').or(z.literal('')).default('')
         })
       )
       .min(1)
@@ -374,12 +481,18 @@ export const purchaseOrderDeliverySchema = z
         message: 'The delivery date cannot be in the future.'
       })
     value.items.forEach((item, index) => {
-      if (item.expiresAt <= value.deliveredAt)
-        context.addIssue({
-          code: 'custom',
-          path: ['items', index, 'expiresAt'],
-          message: 'The expiry date must be after the delivery date.'
-        })
+      const issue = (field: string, message: string): void =>
+        context.addIssue({ code: 'custom', path: ['items', index, field], message })
+      if (item.receivedQuantity === 0 && item.rejectedQuantity === 0)
+        issue('receivedQuantity', 'Enter the boxes received or rejected.')
+      if (item.rejectedQuantity > 0 && item.rejectionReason.length < 3)
+        issue('rejectionReason', 'Say why the boxes were rejected, e.g. crushed, wet, wrong item.')
+      if (item.receivedQuantity === 0) return
+      if (!item.batchNumber) issue('batchNumber', 'Enter the batch or lot number from the package.')
+      if (item.sellPrice === null) issue('sellPrice', 'Enter the selling price per piece.')
+      if (!item.expiresAt) issue('expiresAt', 'Enter the expiry date printed on the package.')
+      else if (item.expiresAt <= value.deliveredAt)
+        issue('expiresAt', 'The expiry date must be after the delivery date.')
     })
   })
 
@@ -414,4 +527,8 @@ export const supplierPaymentSchema = z
   .refine((value) => value.paidAt <= localDate(), {
     path: ['paidAt'],
     message: 'The payment date cannot be in the future.'
+  })
+  .refine((value) => !referenceRequired(value.method) || !!value.referenceNumber?.trim(), {
+    path: ['referenceNumber'],
+    message: 'Enter the reference number for this payment method (transaction, transfer or check number).'
   })

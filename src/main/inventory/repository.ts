@@ -3,40 +3,90 @@ import { findAll } from '@main/product/repository'
 import type { StockOutRecord, StockOutValues } from '@shared/inventory'
 import { expiryLabels, getExpiryStatus, isBatchSellable } from '@shared/inventory'
 import { stockOutSchema } from '@shared/schemas'
-import type { Database } from '@shared/types'
+import { noteAudit } from '@main/audit/repository'
+import { writeOffReasons, type Database, type StockOutKind, type WriteOffReason } from '@shared/types'
 import type { Transaction } from 'kysely'
 
+/** Writes off stock (expired, damaged, lost, recalled or other) from one batch. */
 export async function recordStockOut(input: StockOutValues, recordedBy: number): Promise<void> {
   const data = stockOutSchema.parse(input)
-  await db.transaction().execute((transaction) => deductBatchStock(transaction, data, recordedBy))
+  await db.transaction().execute(async (transaction) => {
+    const batch = await transaction
+      .selectFrom('batches')
+      .innerJoin('drugs', 'drugs.id', 'batches.drugId')
+      .select(['batches.physicalTag', 'batches.id', 'batches.expiresAt', 'drugs.brandName'])
+      .where('batches.id', '=', data.batchId)
+      .executeTakeFirst()
+    // Note: "Expired" is only for a batch past its expiry date, so losses land under the right
+    // reason (L6). Stock taken off early because it expires soon is "Other" with a note.
+    if (batch && data.reasonCode === 'expired' && getExpiryStatus(String(batch.expiresAt)) !== 'expired')
+      throw new Error(
+        `Batch ${batch.physicalTag ?? batch.id} has not expired yet (expires ${String(batch.expiresAt).slice(0, 10)}). Choose another reason, such as Damaged, or return it to the supplier.`
+      )
+    await deductBatchStock(
+      transaction,
+      {
+        batchId: data.batchId,
+        quantity: data.quantity,
+        kind: 'write_off',
+        reasonCode: data.reasonCode,
+        reason: data.reason || writeOffReasons[data.reasonCode]
+      },
+      recordedBy
+    )
+    noteAudit({
+      summary: `Wrote off ${data.quantity} piece(s) of ${batch?.brandName ?? 'product'}, batch ${batch?.physicalTag ?? data.batchId}`,
+      reason: `${writeOffReasons[data.reasonCode]}${data.reason ? `: ${data.reason}` : ''}`
+    })
+  })
 }
 
+/**
+ * Takes pieces out of one batch and records the movement. Every stock decrease goes through here:
+ * sales, wholesale deliveries, write-offs and returns to suppliers.
+ */
 export async function deductBatchStock(
   transaction: Transaction<Database>,
-  input: StockOutValues,
+  input: {
+    batchId: number
+    quantity: number
+    reason: string
+    kind: StockOutKind
+    reasonCode?: WriteOffReason | null
+  },
   recordedBy: number
-): Promise<void> {
-  const data = stockOutSchema.parse(input)
+): Promise<number> {
+  if (!Number.isInteger(input.quantity) || input.quantity <= 0)
+    throw new Error('Enter a whole quantity greater than zero.')
   const batch = await transaction
     .selectFrom('batches')
     .select(['id', 'currentStock'])
-    .where('id', '=', data.batchId)
+    .where('id', '=', input.batchId)
     .executeTakeFirst()
   if (!batch) throw new Error('Inventory batch not found.')
-  if (data.quantity > batch.currentStock)
+  if (input.quantity > batch.currentStock)
     throw new Error('Stock-out quantity exceeds current batch stock.')
   const result = await transaction
     .updateTable('batches')
-    .set((expression) => ({ currentStock: expression('currentStock', '-', data.quantity) }))
+    .set((expression) => ({ currentStock: expression('currentStock', '-', input.quantity) }))
     .where('id', '=', batch.id)
-    .where('currentStock', '>=', data.quantity)
+    .where('currentStock', '>=', input.quantity)
     .executeTakeFirstOrThrow()
   if (Number(result.numUpdatedRows) !== 1)
     throw new Error('Batch stock changed. Reload and try again.')
-  await transaction
+  const record = await transaction
     .insertInto('stockOuts')
-    .values({ ...data, recordedBy })
+    .values({
+      batchId: input.batchId,
+      quantity: input.quantity,
+      reason: input.reason,
+      kind: input.kind,
+      reasonCode: input.kind === 'write_off' ? (input.reasonCode ?? 'other') : null,
+      recordedBy
+    })
+    .returning('id')
     .executeTakeFirstOrThrow()
+  return record.id
 }
 
 export async function findStockOuts(drugId: number): Promise<StockOutRecord[]> {
@@ -49,11 +99,13 @@ export async function findStockOuts(drugId: number): Promise<StockOutRecord[]> {
       'stockOuts.batchId',
       'stockOuts.quantity',
       'stockOuts.reason',
+      'stockOuts.reasonCode',
       'stockOuts.createdAt',
       'accounts.fullName as recordedByName',
       'batches.physicalTag'
     ])
     .where('batches.drugId', '=', drugId)
+    .where('stockOuts.kind', '=', 'write_off')
     .orderBy('stockOuts.id', 'desc')
     .execute()
   return rows.map(({ physicalTag, ...row }) => ({

@@ -1,6 +1,20 @@
 import z from 'zod'
 import { localDate } from './inventory'
-import { cartLineSchema, centsSchema, lineText, money, type SaleLine } from './sales'
+import {
+  barcodeSvg,
+  business,
+  businessContact,
+  businessTin,
+  center,
+  escapeHtml,
+  pad,
+  receiptCss,
+  receiptLine,
+  WIDTH,
+  wrap,
+  type ReceiptLine
+} from './receipt'
+import { cartLineSchema, centsSchema, money, type SaleLine } from './sales'
 import { isoDateSchema, paymentMethodSchema } from './schemas'
 import { boxOnlyUnitSchema } from './units'
 
@@ -47,6 +61,10 @@ export const wholesaleOrderSchema = z
   .refine((value) => value.scheduledDate >= localDate(), {
     path: ['scheduledDate'],
     message: 'The delivery date cannot be before the order date (today).'
+  })
+  .refine((value) => value.dueDate >= value.scheduledDate, {
+    path: ['dueDate'],
+    message: 'The payment due date cannot be before the delivery date.'
   })
 export const wholesaleScheduleSchema = z.strictObject({
   orderId: id,
@@ -122,6 +140,8 @@ export interface WholesaleOrder {
   receivedByName: string | null
   cancelledByName: string | null
   cancelledAt: string | null
+  /** Why the order needs attention, e.g. it was placed for a retail customer by an older version. */
+  reviewNote: string | null
 }
 export interface WholesalePayment extends Omit<WholesalePaymentInput, 'paymentId'> {
   id: number
@@ -162,28 +182,136 @@ export function receivable(
     deadlineStatus: remainingCents === 0 ? 'paid' : dueDate < today ? 'overdue' : 'upcoming'
   }
 }
-export function deliveryReceiptText(order: WholesaleDetails): string {
+/** Short delivery receipt number, e.g. DR00000012. The full order reference is printed too. */
+export const deliveryReceiptNumber = (order: Pick<WholesaleOrder, 'id'>): string =>
+  `DR${String(order.id).padStart(8, '0')}`
+
+export interface DeliveryReceiptModel {
+  number: string
+  reference: string
+  orderDate: string
+  deliveredDate: string
+  deliveredTime: string
+  client: string
+  contact: string
+  address: string
+  lines: ReceiptLine[]
+  total: string
+  dueDate: string
+  /** "Label: value" rows for who handled the order. */
+  handlers: Array<{ label: string; value: string }>
+  notes: string
+  /** Signature blocks: the driver who delivered and the client staff who received. */
+  signatures: Array<{ label: string; name: string }>
+}
+
+const shortDate = (value: string): string => {
+  const date = new Date(/^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T00:00:00` : value)
+  return Number.isNaN(date.getTime())
+    ? value
+    : date.toLocaleDateString('en-PH', { year: 'numeric', month: '2-digit', day: '2-digit' })
+}
+
+/** Everything a delivery receipt shows, in print order. Used by the screen, the PDF and the text file. */
+export function deliveryReceiptModel(order: WholesaleDetails): DeliveryReceiptModel {
   if (order.status !== 'delivered' || !order.deliveredAt)
     throw new WholesaleError('Record delivery before generating proof of delivery.')
+  const delivered = new Date(order.deliveredAt)
+  return {
+    number: deliveryReceiptNumber(order),
+    reference: order.reference,
+    orderDate: shortDate(order.orderDate),
+    deliveredDate: shortDate(order.deliveredAt),
+    deliveredTime: delivered.toLocaleTimeString('en-PH'),
+    client: order.customerName,
+    contact: order.customerPhone,
+    address: order.deliveryAddress,
+    lines: order.items.map(receiptLine),
+    total: money(order.totalCents),
+    dueDate: shortDate(order.dueDate),
+    handlers: [
+      { label: 'Order created by', value: order.createdByName },
+      { label: 'Scheduled by', value: order.scheduledByName ?? 'Not recorded' },
+      { label: 'Delivery recorded by', value: order.deliveredByName ?? 'Not recorded' }
+    ],
+    notes: order.deliveryNotes || 'None',
+    signatures: [
+      { label: 'Delivered by', name: order.driverName ?? 'Not recorded' },
+      { label: 'Received by', name: order.receivedByName ?? 'Not recorded' }
+    ]
+  }
+}
+
+/** Fixed-width (40 column) delivery receipt, laid out like the sales receipt. */
+export function deliveryReceiptText(order: WholesaleDetails): string {
+  const model = deliveryReceiptModel(order)
+  const dashed = '-'.repeat(WIDTH)
   return [
-    'Med Prix Distributor and Pharmacy',
-    'G Mesa St, General Santos City (Dadiangas), South Cotabato',
-    'DELIVERY RECEIPT',
-    `DR-${order.reference}`,
-    `Order: ${order.reference}`,
-    `Client: ${order.customerName}`,
-    `Contact: ${order.customerPhone}`,
-    `Delivery address: ${order.deliveryAddress}`,
-    `Delivered: ${new Date(order.deliveredAt).toLocaleString('en-PH')}`,
-    `Status: ${order.status}`,
-    ...order.items.map((item) => lineText(item)),
-    `Order total: ${money(order.totalCents)}`,
-    `Delivery notes: ${order.deliveryNotes || '—'}`,
-    `Order created by: ${order.createdByName}`,
-    `Scheduled by: ${order.scheduledByName ?? 'Not recorded'}`,
-    `Delivery recorded by: ${order.deliveredByName}`,
-    `Delivered by: ${order.driverName ?? 'Not recorded'} / signature: ____________________`,
-    `Received by: ${order.receivedByName ?? 'Not recorded'} / signature: ____________________`,
-    'Proof of delivery — not a payment receipt.'
-  ].join('\n\n')
+    center(business.name.toUpperCase()),
+    center(business.address),
+    center(businessContact),
+    center(businessTin),
+    center('DELIVERY RECEIPT'),
+    dashed,
+    pad(`DR NO: ${model.number}`, `ORDER: ${model.orderDate}`),
+    wrap(`REF: ${model.reference}`),
+    pad(`DELIVERED: ${model.deliveredDate}`, model.deliveredTime),
+    dashed,
+    wrap(`CLIENT: ${model.client}`),
+    wrap(`CONTACT: ${model.contact}`),
+    wrap(`DELIVER TO: ${model.address}`),
+    dashed,
+    ...model.lines.flatMap((line) => [
+      wrap(line.name),
+      pad(`  ${line.quantity}`, line.amount),
+      wrap(`  ${line.meta}`)
+    ]),
+    '='.repeat(WIDTH),
+    pad('ORDER TOTAL', model.total),
+    pad('PAYMENT DUE', model.dueDate),
+    dashed,
+    wrap(`Delivery notes: ${model.notes}`),
+    ...model.handlers.map((row) => wrap(`${row.label}: ${row.value}`)),
+    ...model.signatures.flatMap((row) => ['', wrap(`${row.label}: ${row.name}`), 'Signature: ____________________']),
+    dashed,
+    center(`*${model.number}*`),
+    center('Proof of delivery. Not an official receipt.')
+  ].join('\n')
+}
+
+/** Print-ready 80 mm delivery receipt for PDF export; same content as the text and screen versions. */
+export function deliveryReceiptHtml(order: WholesaleDetails): string {
+  const model = deliveryReceiptModel(order)
+  const row = (label: string, amount: string, className = ''): string =>
+    `<div class="row ${className}"><span>${escapeHtml(label)}</span><span>${escapeHtml(amount)}</span></div>`
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(model.number)}</title>
+<style>
+${receiptCss}
+</style></head><body>
+<div class="center"><div class="logo">+</div><div class="name">${escapeHtml(business.name)}</div><div>${escapeHtml(business.address)}</div><div>${escapeHtml(businessContact)}</div><div>${escapeHtml(businessTin)}</div><div><b>DELIVERY RECEIPT</b></div></div>
+<div class="rule"></div>
+${row(`DR NO: ${model.number}`, `ORDER: ${model.orderDate}`)}
+<div class="wrap muted">REF: ${escapeHtml(model.reference)}</div>
+${row(`DELIVERED: ${model.deliveredDate}`, model.deliveredTime)}
+<div class="rule"></div>
+<div>CLIENT: ${escapeHtml(model.client)}</div>
+<div>CONTACT: ${escapeHtml(model.contact)}</div>
+<div>DELIVER TO: ${escapeHtml(model.address)}</div>
+<div class="rule"></div>
+${model.lines
+  .map(
+    (line) =>
+      `<div class="item"><b>${escapeHtml(line.name)}</b>${row(line.quantity, line.amount)}<div class="muted">${escapeHtml(line.meta)}</div></div>`
+  )
+  .join('')}
+<div class="solid"></div>
+${row('ORDER TOTAL', model.total, 'total')}
+${row('PAYMENT DUE', model.dueDate)}
+<div class="rule"></div>
+<div>Delivery notes: ${escapeHtml(model.notes)}</div>
+${model.handlers.map((item) => `<div>${escapeHtml(item.label)}: ${escapeHtml(item.value)}</div>`).join('')}
+${model.signatures.map((item) => `<div class="sign"><div>${escapeHtml(item.label)}: ${escapeHtml(item.name)}</div><div class="line">Signature</div></div>`).join('')}
+<div class="rule"></div>
+<div class="center">${barcodeSvg(model.number, 44)}<div>${escapeHtml(model.number)}</div><div style="margin-top:6px">Proof of delivery. Not an official receipt.</div></div>
+</body></html>`
 }

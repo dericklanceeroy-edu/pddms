@@ -17,8 +17,16 @@ function RouteComponent(): ReactElement {
   const [error, setError] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const submit = async (credentials: MasterSetup): Promise<void> => {
+  const submit = async ({
+    confirmPassword,
+    ...credentials
+  }: MasterSetup & { confirmPassword: string }): Promise<void> => {
     setError('')
+    // Note: There is no password recovery for the Master account, so the password is typed twice.
+    if (credentials.password !== confirmPassword) {
+      setError('The passwords do not match. Type the same password in both fields.')
+      return
+    }
     setIsSubmitting(true)
     const result = await createMaster(credentials)
 
@@ -38,7 +46,11 @@ function RouteComponent(): ReactElement {
         title="Set Up the Master Account"
         description="This first account controls system access and administration."
       />
-      <Form<MasterSetup> noValidate onSubmit={submit} className="space-y-4">
+      <Form<MasterSetup & { confirmPassword: string }>
+        noValidate
+        onSubmit={submit}
+        className="space-y-4"
+      >
         <FormField label="Full Name" required>
           <Form.Text
             name="fullName"
@@ -51,7 +63,7 @@ function RouteComponent(): ReactElement {
             disabled={isSubmitting}
           />
         </FormField>
-        <FormField label="Email" required hint="Used to reach the account holder about the system.">
+        <FormField label="Email" required info="Used to reach the account holder about the system.">
           <Form.Text
             name="email"
             rule="email"
@@ -63,10 +75,22 @@ function RouteComponent(): ReactElement {
             disabled={isSubmitting}
           />
         </FormField>
+        <FormField label="Mobile Number" required hint="11 digits starting with 09.">
+          <Form.Text
+            name="phone"
+            rule="phone"
+            inputMode="numeric"
+            placeholder="e.g. 09171234567"
+            autoComplete="tel"
+            required
+            maxLength={11}
+            disabled={isSubmitting}
+          />
+        </FormField>
         <FormField
           label="Username"
           required
-          hint="At least 4 characters. You will use this to sign in."
+          info="At least 4 characters. You will use this to sign in."
         >
           <Form.Text
             name="username"
@@ -82,11 +106,23 @@ function RouteComponent(): ReactElement {
         <FormField
           label="Password"
           required
-          hint="At least 8 characters. Keep it private; this account controls the whole system."
+          info="At least 8 characters with a letter and a number. Keep it private; this account controls the whole system."
         >
           <Form.Password
             name="password"
             placeholder="At least 8 characters"
+            autoComplete="new-password"
+            show={BsEyeFill}
+            hide={BsEyeSlashFill}
+            required
+            minLength={8}
+            disabled={isSubmitting}
+          />
+        </FormField>
+        <FormField label="Confirm Password" required info="Type the same password again.">
+          <Form.Password
+            name="confirmPassword"
+            placeholder="Repeat the password"
             autoComplete="new-password"
             show={BsEyeFill}
             hide={BsEyeSlashFill}

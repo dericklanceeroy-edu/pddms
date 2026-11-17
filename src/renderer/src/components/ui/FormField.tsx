@@ -1,13 +1,19 @@
-import { cloneElement, useId, type ReactElement } from 'react'
+import { cloneElement, useId, type ReactElement, type ReactNode } from 'react'
+import InfoTip from './InfoTip'
 
 /**
  * Labelled form control with a consistent required marker, hint, and inline error.
+ *
+ * Note: `hint` is for short text worth seeing at a glance (a format such as "4 digits", or a live
+ * value such as an order total). Longer explanations go in `info`, behind an "i" button beside the
+ * label, so forms are not crowded with text.
  */
 export default function FormField({
   label,
   required = false,
   showOptional = true,
   hint,
+  info,
   error,
   children,
   className = ''
@@ -17,6 +23,8 @@ export default function FormField({
   /** Hide the "(optional)" marker, e.g. for read-only values. */
   showOptional?: boolean
   hint?: string
+  /** Longer explanation, shown from an "i" button beside the label. */
+  info?: ReactNode
   error?: string
   children: ReactElement
   className?: string
@@ -25,18 +33,21 @@ export default function FormField({
   const describedBy = [hint && `${id}-hint`, error && `${id}-error`].filter(Boolean).join(' ')
   return (
     <div className={`min-w-0 text-sm ${className}`}>
-      <label htmlFor={id} className="field-label">
-        {label}
-        {required ? (
-          <span className="required-mark" aria-hidden="true">
-            *
-          </span>
-        ) : (
-          showOptional && (
-            <span className="ml-1 text-xs font-normal text-slate-400">(optional)</span>
-          )
-        )}
-      </label>
+      <div className="flex items-center gap-1">
+        <label htmlFor={id} className="field-label">
+          {label}
+          {required ? (
+            <span className="required-mark" aria-hidden="true">
+              *
+            </span>
+          ) : (
+            showOptional && (
+              <span className="ml-1 text-xs font-normal text-slate-600">(optional)</span>
+            )
+          )}
+        </label>
+        {info && <InfoTip label={label}>{info}</InfoTip>}
+      </div>
       <div className="mt-1.5">
         {cloneElement(children as ReactElement<Record<string, unknown>>, {
           id,

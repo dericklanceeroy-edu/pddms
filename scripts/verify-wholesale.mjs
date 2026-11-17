@@ -42,6 +42,7 @@ if (!process.env.WHOLESALE_TEST_PHASE) {
   }
 } else {
   const { db } = await import('../src/main/db.ts')
+  const { packLines } = await import('./test-packs.mjs')
   const { initializeDatabase } = await import('../src/main/migrations.ts')
   const { state } = await import('../src/main/api/index.ts')
   const { channels } = await import('../src/shared/constants.ts')
@@ -83,7 +84,7 @@ if (!process.env.WHOLESALE_TEST_PHASE) {
         .executeTakeFirstOrThrow()
       state.session = { account: admin }
       const records = await ok(channels.wholesale.list, {})
-      assert.equal(records.length, 6)
+      assert.equal(records.length, 9)
       const delivered = await ok(channels.wholesale.get, records.at(-1).id)
       assert.equal(delivered.status, 'delivered')
       assert.equal(delivered.receivable.remainingCents, 0)
@@ -161,7 +162,11 @@ if (!process.env.WHOLESALE_TEST_PHASE) {
       const po = (
         await ok(channels.purchaseOrder.createOne, {
           supplierId: supplier.id,
-          items: products.map((product) => ({ drugId: product.id, quantity: 20, unitCost: 80 }))
+          items: await packLines(
+            db,
+            supplier.id,
+            products.map((product) => ({ drugId: product.id, quantity: 20, unitCost: 80 }))
+          )
         })
       ).order
       await ok(channels.purchaseOrder.updateStatusById, po.id, { status: 'submitted' })
@@ -223,6 +228,9 @@ if (!process.env.WHOLESALE_TEST_PHASE) {
       for (const channel of Object.values(channels.wholesale)) await bad(channel, draft)
       assert.equal(canAccessPath('cashier', '/wholesale'), false)
       assert.equal(canAccessPath('staff', '/wholesale'), true)
+      // Pharmacy clients are managed inside Wholesale & Deliveries, out of the cashier's reach.
+      assert.equal(canAccessPath('cashier', '/wholesale/clients/new'), false)
+      assert.equal(canAccessPath('staff', '/wholesale/clients/new'), true)
       state.session = { account: staff }
       const before = await stock()
       const retail = await db
@@ -278,9 +286,34 @@ if (!process.env.WHOLESALE_TEST_PHASE) {
         { items: [{ ...lines[0], unit: 'piece' }] },
         { scheduledDate: undefined },
         { scheduledDate: '2000-01-01' },
-        { scheduledDate: '2026-02-30' }
+        { scheduledDate: '2026-02-30' },
+        // The payment cannot fall due before the goods arrive.
+        { scheduledDate: '2099-01-02', dueDate: '2099-01-01' }
       ])
         await bad(channels.wholesale.create, { ...draft, requestId: randomUUID(), ...invalid })
+      // Pharmacy clients pay the batch's wholesale box price when one is set, never below cost.
+      const wholesalePrice = (value) =>
+        invoke(channels.product.setWholesalePrice, {
+          batchId: lines[0].batchId,
+          wholesaleBoxPrice: value
+        })
+      assert.equal((await wholesalePrice(79.99)).success, false)
+      assert.equal((await wholesalePrice(-1)).success, false)
+      assert.equal((await wholesalePrice(90)).success, true)
+      assert.equal(
+        (await ok(channels.product.getAll)).products.find((product) => product.id === products[0].id)
+          .batches[0].wholesaleBoxPrice,
+        90
+      )
+      await bad(channels.wholesale.create, { ...draft, requestId: randomUUID(), items: [lines[0]] })
+      const atWholesale = await ok(channels.wholesale.create, {
+        ...draft,
+        requestId: randomUUID(),
+        items: [{ ...lines[0], unitPriceCents: 9000 }]
+      })
+      assert.equal((await ok(channels.wholesale.get, atWholesale)).totalCents, 18000)
+      await ok(channels.wholesale.cancel, atWholesale)
+      assert.equal((await wholesalePrice(null)).success, true)
       // Note: Orders saved before scheduling moved into the order form are still "pending"; they
       // cannot be delivered until someone schedules them.
       await db
@@ -465,18 +498,33 @@ if (!process.env.WHOLESALE_TEST_PHASE) {
         (await ok(channels.wholesale.get, prepaid)).receivable.deadlineStatus,
         'upcoming'
       )
-      const concurrent = []
-      for (let index = 0; index < 2; index++) {
-        const orderId = await ok(channels.wholesale.create, {
-          ...draft,
-          requestId: randomUUID(),
-          items: [{ ...lines[1], quantity: 18 }]
-        })
-        await ok(channels.wholesale.schedule, { ...schedule, orderId })
-        concurrent.push(orderId)
-      }
+      // Boxes on an undelivered order are promised: a second order for the same stock is refused.
+      const promisedOrder = await ok(channels.wholesale.create, {
+        ...draft,
+        requestId: randomUUID(),
+        items: [{ ...lines[1], quantity: 18 }]
+      })
+      const overPromised = await bad(channels.wholesale.create, {
+        ...draft,
+        requestId: randomUUID(),
+        items: [{ ...lines[1], quantity: 1 }]
+      })
+      assert.match(overPromised.error, /already on other undelivered orders, so only 0 box/)
+      // QA Tests 3 rehearsal: the order form gets the promised pieces, so it shows no free boxes
+      // for this batch instead of offering boxes the save would refuse.
+      const promisedBatch = (await stock())[1]
+      const reserved = await ok(channels.wholesale.reserved)
+      assert.ok(reserved[promisedBatch.id] > 0)
+      const perBox = Math.max(1, promisedBatch.piecesPerBox)
+      assert.equal(
+        Math.floor((promisedBatch.currentStock - reserved[promisedBatch.id]) / perBox),
+        0
+      )
+      await ok(channels.wholesale.schedule, { ...schedule, orderId: promisedOrder })
       const results = await Promise.all(
-        concurrent.map((orderId) => invoke(channels.wholesale.deliver, handoff(orderId)))
+        [promisedOrder, promisedOrder].map((orderId) =>
+          invoke(channels.wholesale.deliver, handoff(orderId))
+        )
       )
       assert.equal(results.filter((result) => result.success).length, 1)
       assert.equal((await stock())[1].currentStock, 0)
@@ -495,6 +543,64 @@ if (!process.env.WHOLESALE_TEST_PHASE) {
       assert.equal((await ok(channels.wholesale.list, { status: 'delivered' })).length, 2)
       assert.equal((await ok(channels.wholesale.list, { beforeId: payRace })).length, 5)
       assert.equal((await ok(channels.wholesale.list, { search: 'no match' })).length, 0)
+      // Orders an older version placed for retail customers: unpaid and undelivered ones are
+      // voided, the rest are kept and flagged for review.
+      const { up: qaFixes } = await import('../migrations/1789001400000_qa_fixes_payments_prices.ts')
+      const oldRetail = await db
+        .insertInto('customers')
+        .values({
+          fullName: 'Old Retail Buyer',
+          phone: '09171234570',
+          email: null,
+          address: null,
+          discountType: 'none',
+          discountId: null,
+          discountExpiresAt: null
+        })
+        .returningAll()
+        .executeTakeFirstOrThrow()
+      const template = await db
+        .selectFrom('wholesaleOrders')
+        .selectAll()
+        .where('id', '=', prepaid)
+        .executeTakeFirstOrThrow()
+      const legacy = async (status) => {
+        const { id: templateId, ...values } = template
+        void templateId
+        return (
+          await db
+            .insertInto('wholesaleOrders')
+            .values({
+              ...values,
+              requestId: randomUUID(),
+              reference: `WHO-LEGACY-${randomUUID()}`,
+              customerId: oldRetail.id,
+              customerName: oldRetail.fullName,
+              status,
+              deliveredAt: status === 'delivered' ? new Date().toISOString() : null,
+              deliveredByName: status === 'delivered' ? 'Old Version' : null,
+              reviewNote: null
+            })
+            .returning('id')
+            .executeTakeFirstOrThrow()
+        ).id
+      }
+      const legacyUnpaid = await legacy('scheduled')
+      const legacyPaid = await legacy('scheduled')
+      const legacyDelivered = await legacy('delivered')
+      await ok(channels.wholesale.pay, payment(legacyPaid, 100))
+      await qaFixes(db)
+      await qaFixes(db)
+      const legacyOrder = (orderId) =>
+        db.selectFrom('wholesaleOrders').selectAll().where('id', '=', orderId).executeTakeFirstOrThrow()
+      assert.equal((await legacyOrder(legacyUnpaid)).status, 'cancelled')
+      assert.match((await legacyOrder(legacyUnpaid)).reviewNote, /^Voided/)
+      assert.equal((await legacyOrder(legacyPaid)).status, 'scheduled')
+      assert.match((await legacyOrder(legacyPaid)).reviewNote, /^Retail customer/)
+      assert.equal((await legacyOrder(legacyDelivered)).status, 'delivered')
+      assert.match((await legacyOrder(legacyDelivered)).reviewNote, /^Retail customer/)
+      assert.equal((await legacyOrder(prepaid)).reviewNote, null)
+      assert.match((await ok(channels.wholesale.get, legacyPaid)).reviewNote, /Review this order/)
       state.session = { account: staff }
       assert.equal((await ok(channels.wholesale.list, {}))[0].receivable, undefined)
       await db.updateTable('accounts').set({ isArchived: 1 }).where('id', '=', staff.id).execute()
@@ -509,7 +615,7 @@ if (!process.env.WHOLESALE_TEST_PHASE) {
       await bad(channels.wholesale.list, {})
       assert.equal(state.session, undefined)
       console.log(
-        'PASS: order validation/idempotency, live products, no stock at creation, schedule updates, full delivery, receipt/export failure, atomic rollback, expiry, oversell/over-delivery prevention, cancellation, partial/full/prepayments, overdue, duplicate references, concurrent payments, admin/staff/cashier/blocked authorization'
+        'PASS: order validation/idempotency, live products, no stock at creation, schedule updates, full delivery, receipt/export failure, atomic rollback, expiry, oversell/over-delivery prevention, stock promised to open orders, wholesale box prices, old retail-customer orders voided or flagged, cancellation, partial/full/prepayments, overdue, duplicate references, concurrent payments, admin/staff/cashier/blocked authorization'
       )
     }
   } finally {

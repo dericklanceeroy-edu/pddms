@@ -1,12 +1,12 @@
 import Modal from '@renderer/components/ui/Modal'
 import { exportReceipt } from '@renderer/services/sales'
-import { business, code128, receiptModel } from '@shared/receipt'
+import { business, businessContact, businessTin, code128, receiptModel } from '@shared/receipt'
 import type { SaleRecord } from '@shared/sales'
 import { useMemo, useState, type ReactElement } from 'react'
 import { FiDownload } from 'react-icons/fi'
 
 /** Code 128 barcode drawn with SVG rectangles. */
-function Barcode({ value }: { value: string }): ReactElement {
+export function Barcode({ value }: { value: string }): ReactElement {
   const { bars, width } = useMemo(() => code128(value), [value])
   return (
     <svg
@@ -40,8 +40,12 @@ export default function Receipt({
   const [saving, setSaving] = useState(false)
   return (
     <Modal
-      title="Sale Completed"
-      description="Check the receipt with the customer, then save it as a PDF or text file."
+      title={sale.status === 'voided' ? 'Voided Sale' : 'Sale Completed'}
+      description={
+        sale.status === 'voided'
+          ? 'This sale was voided. It stays in history marked VOID and is left out of totals.'
+          : 'Check the receipt with the customer, then save it as a PDF or text file.'
+      }
       close={close}
       size="sm"
       busy={saving}
@@ -97,8 +101,17 @@ export function ReceiptSlip({ sale }: { sale: SaleRecord }): ReactElement {
         </div>
         <p className="text-[13px] font-bold tracking-wide uppercase">{business.name}</p>
         <p>{business.address}</p>
+        <p>{businessContact}</p>
+        <p>{businessTin}</p>
         <p className="mt-1 font-bold">SALES RECEIPT</p>
       </header>
+      {model.voidNote && (
+        <>
+          <Rule />
+          <p className="text-center text-[15px] font-bold tracking-widest">*** VOID ***</p>
+          <p className="break-words">{model.voidNote}</p>
+        </>
+      )}
       <Rule />
       <Row left={`DATE: ${model.date}`} right={`TIME: ${model.time}`} />
       <p>RECEIPT NO: {model.number}</p>
@@ -131,6 +144,11 @@ export function ReceiptSlip({ sale }: { sale: SaleRecord }): ReactElement {
         <Row key={row.label} left={row.label.toUpperCase()} right={row.amount} />
       ))}
       <Rule />
+      {model.vat.map((row) => (
+        <Row key={row.label} left={row.label.toUpperCase()} right={row.amount} />
+      ))}
+      {model.signature && <p className="mt-3 break-words">{model.signature}</p>}
+      <Rule />
       <div className="text-center">
         <Barcode value={model.number} />
         <p className="mt-0.5 tracking-widest">{model.number}</p>
@@ -140,11 +158,11 @@ export function ReceiptSlip({ sale }: { sale: SaleRecord }): ReactElement {
   )
 }
 
-function Rule(): ReactElement {
+export function Rule(): ReactElement {
   return <div className="my-2 border-t border-dashed border-black" aria-hidden="true" />
 }
 
-function Row({
+export function Row({
   left,
   right,
   className = ''

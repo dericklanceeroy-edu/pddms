@@ -8,7 +8,9 @@ import { formatValidationError } from '@shared/validation'
 import { isId } from '@shared/validators'
 import { hash, verify } from 'argon2'
 import {
+  accountDeleteBlock,
   findAll,
+  findOneByEmail,
   findOneById,
   findOneByUsername,
   insertOne,
@@ -29,6 +31,9 @@ ipcMain.handle(channels.account.createOne, async (_, payload: unknown) => {
     }
     if (await findOneByUsername(data.username)) {
       return { success: false, error: 'That username is already in use.' }
+    }
+    if (await findOneByEmail(data.email)) {
+      return { success: false, error: 'That email is already used by another account.' }
     }
     const newAccount = await insertOne({
       ...data,
@@ -136,6 +141,12 @@ ipcMain.handle(channels.account.updateOneById, async (_, id: unknown, payload: u
         return { success: false, error: 'That username is already in use.' }
       }
     }
+    if (data.email) {
+      const existing = await findOneByEmail(data.email)
+      if (existing && existing.id !== id) {
+        return { success: false, error: 'That email is already used by another account.' }
+      }
+    }
 
     await updateOneById(id, {
       ...data,
@@ -171,6 +182,7 @@ ipcMain.handle(channels.account.updateProfile, async (_, payload: unknown) => {
     await updateOneById(id, {
       fullName: data.fullName,
       username: data.username,
+      ...(data.phone !== undefined ? { phone: data.phone } : {}),
       ...(data.password ? { password: await hash(data.password) } : {})
     })
     state.session = undefined
@@ -218,8 +230,26 @@ ipcMain.handle(channels.account.removeOneById, async (_, id: unknown) => {
     if (account.role === 'master') {
       return { success: false, error: 'Master accounts cannot be deleted.' }
     }
+    const block = await accountDeleteBlock(id)
+    if (block) return { success: false, error: block, archivable: true }
 
-    await removeOneById(id)
+    try {
+      await removeOneById(id)
+    } catch (error) {
+      // Note: Any other record still pointing at the account also keeps it; block it instead.
+      if (
+        error instanceof Error &&
+        'code' in error &&
+        String(error.code).startsWith('SQLITE_CONSTRAINT')
+      )
+        return {
+          success: false,
+          error:
+            'This account is linked to saved records, so it is kept for them. Block it instead: it can no longer sign in.',
+          archivable: true
+        }
+      throw error
+    }
     state.database.stale = true
     return { success: true }
   } catch (error) {

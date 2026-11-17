@@ -1,6 +1,7 @@
 import { splitErrors, type FieldErrors } from '@renderer/components/ui/fieldErrors'
 import FilteredInput from '@renderer/components/ui/FilteredInput'
 import FormField, { FormError, RequiredNote } from '@renderer/components/ui/FormField'
+import InfoTip from '@renderer/components/ui/InfoTip'
 import Modal from '@renderer/components/ui/Modal'
 import type {
   InvoiceRecord,
@@ -14,7 +15,7 @@ import type {
 import { deadlineLabels, deadlineTone, orderStatusLabels } from '@renderer/data/supplierOrders'
 import type { SupplierOrdersState } from '@renderer/hooks/useSupplierOrders'
 import { localDate } from '@shared/inventory'
-import { paymentMethods } from '@shared/schemas'
+import { paymentMethodLabel, paymentMethods, referenceRequired } from '@shared/schemas'
 import { useMemo, useRef, useState, type FormEvent, type ReactElement } from 'react'
 import {
   FiAlertCircle,
@@ -32,6 +33,94 @@ const currency = new Intl.NumberFormat('en-PH', { style: 'currency', currency: '
 const date = new Intl.DateTimeFormat('en-PH', { dateStyle: 'medium' })
 
 const today = (): string => localDate()
+
+/** Supplier, date-range and type filters for the Receiving and History tabs. */
+interface RecordFilter {
+  supplier: string
+  from: string
+  to: string
+  type: string
+}
+const emptyFilter: RecordFilter = { supplier: '', from: '', to: '', type: '' }
+const inRange = (value: string, filter: RecordFilter): boolean => {
+  const day = value.slice(0, 10)
+  return (!filter.from || day >= filter.from) && (!filter.to || day <= filter.to)
+}
+
+function FilterBar({
+  filter,
+  setFilter,
+  suppliers,
+  types
+}: {
+  filter: RecordFilter
+  setFilter: (filter: RecordFilter) => void
+  suppliers: string[]
+  types?: string[]
+}): ReactElement {
+  const active = Object.values(filter).some(Boolean)
+  return (
+    <div className="flex flex-wrap items-end gap-3 border-b border-slate-200 px-4 py-3 sm:px-5">
+      <label className="field-label min-w-48 flex-1 sm:max-w-64">
+        Supplier
+        <select
+          className="field mt-1.5 font-normal"
+          value={filter.supplier}
+          onChange={(event) => setFilter({ ...filter, supplier: event.target.value })}
+        >
+          <option value="">All Suppliers</option>
+          {suppliers.map((name) => (
+            <option key={name} value={name}>
+              {name}
+            </option>
+          ))}
+        </select>
+      </label>
+      {types && (
+        <label className="field-label min-w-40">
+          Type
+          <select
+            className="field mt-1.5 font-normal"
+            value={filter.type}
+            onChange={(event) => setFilter({ ...filter, type: event.target.value })}
+          >
+            <option value="">All Types</option>
+            {types.map((type) => (
+              <option key={type} value={type}>
+                {type}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      <label className="field-label">
+        From
+        <input
+          type="date"
+          className="field mt-1.5 font-normal"
+          max={filter.to || undefined}
+          value={filter.from}
+          onChange={(event) => setFilter({ ...filter, from: event.target.value })}
+        />
+      </label>
+      <label className="field-label">
+        To
+        <input
+          type="date"
+          className="field mt-1.5 font-normal"
+          min={filter.from || undefined}
+          value={filter.to}
+          onChange={(event) => setFilter({ ...filter, to: event.target.value })}
+        />
+      </label>
+      {active && (
+        <button type="button" className="secondary-button" onClick={() => setFilter(emptyFilter)}>
+          Clear Filters
+        </button>
+      )}
+    </div>
+  )
+}
 const toNumber = (value: string): number => (value.trim() === '' ? Number.NaN : Number(value))
 
 export default function ProcurementRecords({
@@ -51,6 +140,11 @@ export default function ProcurementRecords({
     invoice?: InvoiceRecord
   } | null>(null)
   const normalized = query.trim().toLowerCase()
+  const [filter, setFilter] = useState<RecordFilter>(emptyFilter)
+  const supplierNames = useMemo(
+    () => procurement.suppliers.map((supplier) => supplier.organization).sort(),
+    [procurement.suppliers]
+  )
   const invoices = procurement.invoices.filter((invoice) =>
     `${invoice.invoiceNumber} ${invoice.orderNumber} ${invoice.supplierName} ${invoice.status}`
       .toLowerCase()
@@ -58,10 +152,25 @@ export default function ProcurementRecords({
   )
 
   if (view === 'history') {
-    return <TransactionHistory procurement={procurement} query={normalized} />
+    return (
+      <>
+        <FilterBar
+          filter={filter}
+          setFilter={setFilter}
+          suppliers={supplierNames}
+          types={['Purchase order', 'Delivery', 'Invoice', 'Payment']}
+        />
+        <TransactionHistory procurement={procurement} query={normalized} filter={filter} />
+      </>
+    )
   }
   if (view === 'receiving') {
-    return <ReceivingReports procurement={procurement} query={normalized} />
+    return (
+      <>
+        <FilterBar filter={filter} setFilter={setFilter} suppliers={supplierNames} />
+        <ReceivingReports procurement={procurement} query={normalized} filter={filter} />
+      </>
+    )
   }
 
   const overdue = procurement.invoices.filter((invoice) => invoice.deadlineStatus === 'overdue')
@@ -100,11 +209,13 @@ export default function ProcurementRecords({
       </div>
       <section className="border-b border-slate-200 p-4">
         <div className="mb-3">
-          <h3 className="section-title text-lg">Balances Owed to Suppliers</h3>
-          <p className="section-subtitle">
-            Based on the products actually received for each purchase order. You can record a
-            payment before the supplier invoice is added.
-          </p>
+          <div className="flex items-center gap-1.5">
+            <h3 className="section-title text-lg">Balances Owed to Suppliers</h3>
+            <InfoTip label="Balances Owed to Suppliers">
+              Based on the products actually received for each purchase order. You can record a
+              payment before the supplier invoice is added.
+            </InfoTip>
+          </div>
         </div>
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {procurement.paymentSummaries.map((summary) => (
@@ -155,6 +266,11 @@ export default function ProcurementRecords({
                   </dd>
                 </div>
               </dl>
+              {summary.creditAmount > 0 && (
+                <p className="mt-2 text-xs text-sky-800">
+                  Includes {currency.format(summary.creditAmount)} supplier credit applied.
+                </p>
+              )}
               {summary.outstandingAmount > 0 && (
                 <button
                   type="button"
@@ -175,10 +291,12 @@ export default function ProcurementRecords({
         </div>
       </section>
       <div className="border-b border-slate-200 px-4 py-3">
-        <h3 className="section-title text-lg">Supplier Invoices</h3>
-        <p className="section-subtitle">
-          Invoice documents attached to purchase orders, with their due dates and amounts paid.
-        </p>
+        <div className="flex items-center gap-1.5">
+          <h3 className="section-title text-lg">Supplier Invoices</h3>
+          <InfoTip label="Supplier Invoices">
+            Invoice documents attached to purchase orders, with their due dates and amounts paid.
+          </InfoTip>
+        </div>
       </div>
       <div className="min-w-0 overflow-x-auto">
         <table className="w-full min-w-[850px] table-fixed text-sm">
@@ -319,7 +437,7 @@ export default function ProcurementRecords({
         {!procurement.isLoading && invoices.length === 0 && (
           <p className="p-10 text-center text-sm text-slate-500">
             {procurement.invoices.length === 0
-              ? 'No supplier invoices yet. Use Add supplier invoice once the supplier sends one.'
+              ? 'No supplier invoices yet. Use Add Supplier Invoice once the supplier sends one.'
               : 'No invoices match this search.'}
           </p>
         )}
@@ -356,26 +474,33 @@ export default function ProcurementRecords({
 
 function ReceivingReports({
   procurement,
-  query
+  query,
+  filter
 }: {
   procurement: SupplierOrdersState
   query: string
+  filter: RecordFilter
 }): ReactElement {
-  const deliveries = procurement.deliveries.filter((delivery) =>
-    `${delivery.orderNumber} ${delivery.supplierName} ${delivery.recordedByName} ${delivery.items
-      .map((item) => `${item.productName} ${item.batchNumber} ${item.expiresAt}`)
-      .join(' ')}`
-      .toLowerCase()
-      .includes(query)
+  const deliveries = procurement.deliveries.filter(
+    (delivery) =>
+      (!filter.supplier || delivery.supplierName === filter.supplier) &&
+      inRange(delivery.deliveredAt, filter) &&
+      `${delivery.orderNumber} ${delivery.supplierName} ${delivery.recordedByName} ${delivery.deliveredByName ?? ''} ${delivery.checkedByName ?? ''} ${delivery.items
+        .map((item) => `${item.productName} ${item.batchNumber} ${item.expiresAt}`)
+        .join(' ')}`
+        .toLowerCase()
+        .includes(query)
   )
 
   return (
     <div className="space-y-4 p-4 sm:p-5">
       <div>
-        <h3 className="section-title text-lg">Receiving Reports</h3>
-        <p className="section-subtitle">
-          Each report is one recorded delivery and the inventory batches it added stock to.
-        </p>
+        <div className="flex items-center gap-1.5">
+          <h3 className="section-title text-lg">Receiving Reports</h3>
+          <InfoTip label="Receiving Reports">
+            Each report is one recorded delivery and the inventory batches it added stock to.
+          </InfoTip>
+        </div>
       </div>
       {deliveries.map((delivery) => {
         const order = procurement.orders.find((record) => record.id === delivery.purchaseOrderId)
@@ -386,10 +511,10 @@ function ReceivingReports({
           >
             <header className="flex flex-col gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0">
-                <p className="truncate font-semibold text-slate-900">
+                <p className="font-semibold break-all text-slate-900">
                   Receiving report #{delivery.id} · {delivery.orderNumber}
                 </p>
-                <p className="truncate text-sm text-slate-500">{delivery.supplierName}</p>
+                <p className="text-sm break-words text-slate-600">{delivery.supplierName}</p>
               </div>
               <div className="shrink-0 text-sm sm:text-right">
                 <p>{date.format(new Date(delivery.deliveredAt))}</p>
@@ -424,6 +549,17 @@ function ReceivingReports({
                         {item.unit === 'box' &&
                           ` (${item.quantity * item.piecesPerUnit} pcs into stock)`}
                       </p>
+                      {(item.piecesPerUnit !== item.orderedPiecesPerUnit ||
+                        Math.abs(item.unitCost - item.orderedUnitCost) > 0.000001) && (
+                        <p className="mt-1 rounded bg-amber-50 px-2 py-1 text-xs text-amber-900">
+                          Differs from the order:{' '}
+                          {item.piecesPerUnit !== item.orderedPiecesPerUnit &&
+                            `box of ${item.piecesPerUnit} (ordered ${item.orderedPiecesPerUnit}) `}
+                          {Math.abs(item.unitCost - item.orderedUnitCost) > 0.000001 &&
+                            `invoice ${currency.format(item.unitCost)} (ordered ${currency.format(item.orderedUnitCost)}) `}
+                          {item.differenceReason && `· ${item.differenceReason}`}
+                        </p>
+                      )}
                     </div>
                     <div className="min-w-0 text-sm">
                       <p className="text-xs text-slate-500">Inventory batch</p>
@@ -446,6 +582,18 @@ function ReceivingReports({
                 )
               })}
             </div>
+            {delivery.rejections.length > 0 && (
+              <div className="border-t border-slate-100 bg-rose-50/60 px-4 py-3 text-sm text-rose-900">
+                <p className="font-semibold">Rejected at delivery (not stocked, not owed)</p>
+                <ul className="mt-1 list-disc pl-5 text-xs">
+                  {delivery.rejections.map((rejection) => (
+                    <li key={rejection.id}>
+                      {rejection.productName}: {rejection.quantity} · {rejection.reason}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             {delivery.notes && (
               <p className="border-t border-slate-100 px-4 py-3 text-sm break-words text-slate-600">
                 {delivery.notes}
@@ -458,7 +606,7 @@ function ReceivingReports({
         <p className="py-10 text-center text-sm text-slate-500">
           {procurement.deliveries.length === 0
             ? 'No deliveries recorded yet. Receive products against a submitted purchase order above.'
-            : 'No receiving reports match this search.'}
+            : 'No receiving reports match this search and these filters.'}
         </p>
       )}
     </div>
@@ -467,10 +615,12 @@ function ReceivingReports({
 
 function TransactionHistory({
   procurement,
-  query
+  query,
+  filter
 }: {
   procurement: SupplierOrdersState
   query: string
+  filter: RecordFilter
 }): ReactElement {
   const transactions = useMemo(() => {
     const rows = [
@@ -481,6 +631,7 @@ function TransactionHistory({
         reference: order.orderNumber,
         supplier: order.supplierName,
         details: `${order.items.reduce((total, item) => total + item.quantity * item.piecesPerUnit, 0)} pcs · ${orderStatusLabels[order.status]}`,
+        products: order.items.map((item) => item.productName).join(' '),
         handledBy: [
           `Created by ${order.createdByName}`,
           order.submittedByName && `submitted by ${order.submittedByName}`,
@@ -498,6 +649,7 @@ function TransactionHistory({
         reference: delivery.orderNumber,
         supplier: delivery.supplierName,
         details: `${delivery.items.reduce((total, item) => total + item.quantity * item.piecesPerUnit, 0)} pcs · ${delivery.items.map((item) => item.batchNumber).join(', ')}`,
+        products: delivery.items.map((item) => item.productName).join(' '),
         handledBy: `Delivered by ${delivery.deliveredByName ?? 'not recorded'} · checked by ${delivery.checkedByName ?? 'not recorded'} · recorded by ${delivery.recordedByName}`,
         amount: null,
         icon: <FiTruck />
@@ -509,6 +661,7 @@ function TransactionHistory({
         reference: invoice.invoiceNumber,
         supplier: invoice.supplierName,
         details: `${invoice.orderNumber} · ${deadlineLabels[invoice.deadlineStatus]}`,
+        products: '',
         handledBy: `Uploaded by ${invoice.uploadedByName}`,
         amount: invoice.amount,
         icon: <FiFilePlus />
@@ -519,17 +672,22 @@ function TransactionHistory({
         type: 'Payment',
         reference: payment.referenceNumber || `Payment #${payment.id}`,
         supplier: payment.supplierName,
-        details: `${payment.invoiceNumber ?? payment.orderNumber} · ${payment.method}`,
+        details: `${payment.invoiceNumber ?? payment.orderNumber} · ${paymentMethodLabel(payment.method)}`,
+        products: '',
         handledBy: `Recorded by ${payment.recordedByName}`,
         amount: payment.amount,
         icon: <FiCreditCard />
       }))
     ]
     return rows
-      .filter((row) =>
-        `${row.type} ${row.reference} ${row.supplier} ${row.details} ${row.handledBy}`
-          .toLowerCase()
-          .includes(query)
+      .filter(
+        (row) =>
+          (!filter.supplier || row.supplier === filter.supplier) &&
+          (!filter.type || row.type === filter.type) &&
+          inRange(row.occurredAt, filter) &&
+          `${row.type} ${row.reference} ${row.supplier} ${row.details} ${row.products} ${row.handledBy}`
+            .toLowerCase()
+            .includes(query)
       )
       .sort((left, right) => right.occurredAt.localeCompare(left.occurredAt))
   }, [
@@ -537,7 +695,8 @@ function TransactionHistory({
     procurement.invoices,
     procurement.orders,
     procurement.payments,
-    query
+    query,
+    filter
   ])
 
   return (
@@ -579,7 +738,7 @@ function TransactionHistory({
       </table>
       {!procurement.isLoading && transactions.length === 0 && (
         <p className="p-10 text-center text-sm text-slate-500">
-          No supplier transactions match this search.
+          No supplier transactions match this search and these filters.
         </p>
       )}
     </div>
@@ -662,7 +821,7 @@ function InvoiceDialog({
   return (
     <Modal
       title="Add Supplier Invoice"
-      description="Record the supplier's invoice and attach the document they provided."
+      info="Record the supplier's invoice and attach the document they provided."
       close={close}
       busy={saving || choosing}
     >
@@ -673,8 +832,9 @@ function InvoiceDialog({
         )}
         <FormField label="Purchase Order" required error={errors.purchaseOrderId}>
           <select
-            className="field"
+            className="field truncate pr-8"
             value={purchaseOrderId}
+            title={eligibleOrders.find((order) => order.id === purchaseOrderId)?.orderNumber}
             onChange={(event) => {
               const id = Number(event.target.value)
               setPurchaseOrderId(id)
@@ -737,7 +897,7 @@ function InvoiceDialog({
           <FormField
             label="Payment Due Date"
             required
-            hint="On or after the invoice date."
+            info="On or after the invoice date."
             error={errors.dueDate}
           >
             <input
@@ -755,7 +915,7 @@ function InvoiceDialog({
         <FormField
           label="Invoice Document"
           required
-          hint="PDF, PNG, JPEG or WebP. A copy is stored with the record."
+          info="PDF, PNG, JPEG or WebP. A copy is stored with the record."
           error={errors.fileToken}
         >
           <div className="flex min-w-0 flex-wrap items-center gap-3">
@@ -871,7 +1031,7 @@ function PaymentDialog({
   return (
     <Modal
       title="Record Supplier Payment"
-      description="Payments are recorded against the value of stock already delivered. Linking an invoice is optional."
+      info="Payments are recorded against the value of stock already delivered. Linking an invoice is optional."
       close={close}
       busy={saving}
     >
@@ -901,10 +1061,20 @@ function PaymentDialog({
               ))}
             </select>
           </FormField>
-          <FormField label="Purchase Order" required error={errors.purchaseOrderId}>
+          <FormField
+            label="Purchase Order"
+            required
+            error={errors.purchaseOrderId}
+            hint={
+              selectedSummary
+                ? `${currency.format(selectedSummary.outstandingAmount)} remaining on this order.`
+                : undefined
+            }
+          >
             <select
-              className="field"
+              className="field truncate pr-8"
               value={purchaseOrderId}
+              title={selectedSummary?.orderNumber}
               onChange={(event) => {
                 const id = Number(event.target.value)
                 const nextSummary = payableSummaries.find(
@@ -919,14 +1089,14 @@ function PaymentDialog({
               <option value={0}>Select purchase order</option>
               {supplierSummaries.map((summary) => (
                 <option key={summary.purchaseOrderId} value={summary.purchaseOrderId}>
-                  {summary.orderNumber} · {currency.format(summary.outstandingAmount)} remaining
+                  {summary.orderNumber}
                 </option>
               ))}
             </select>
           </FormField>
           <FormField
             label="Supplier Invoice"
-            hint="Link the invoice this payment settles, if any."
+            info="Link the invoice this payment settles, if any."
             error={errors.invoiceId}
           >
             <select
@@ -998,13 +1168,21 @@ function PaymentDialog({
               onChange={(event) => setMethod(event.target.value)}
             >
               {paymentMethods.map((value) => (
-                <option key={value}>{value}</option>
+                <option key={value} value={value}>
+                  {paymentMethodLabel(value)}
+                </option>
               ))}
             </select>
           </FormField>
           <FormField
             label="Reference Number"
-            hint="Check, transfer or receipt number. Each reference can be used once."
+            required={referenceRequired(method)}
+            showOptional={!referenceRequired(method)}
+            hint={
+              referenceRequired(method)
+                ? `Required for ${paymentMethodLabel(method)}. Each reference can be used once.`
+                : 'Check, transfer or receipt number. Each reference can be used once.'
+            }
             error={errors.referenceNumber}
           >
             <FilteredInput

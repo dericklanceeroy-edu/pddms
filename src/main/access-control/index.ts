@@ -44,9 +44,17 @@ accessControl
   .readAny(resources.purchaseOrder)
   .updateAny(resources.purchaseOrder)
   .deleteAny(resources.purchaseOrder)
+  .createAny(resources.priceList)
+  .readAny(resources.priceList)
+  .updateAny(resources.priceList)
+  .createAny(resources.supplierReturn)
+  .readAny(resources.supplierReturn)
+  .createAny(resources.saleVoid)
+  .readAny(resources.cashCount)
 
 accessControl
   .grant(roles.staff)
+  .readAny(resources.priceList)
   .createAny(resources.wholesale)
   .readAny(resources.wholesale)
   .updateAny(resources.wholesale)

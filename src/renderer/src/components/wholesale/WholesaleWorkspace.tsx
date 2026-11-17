@@ -2,8 +2,10 @@ import DashboardShell from '@renderer/components/dashboard/DashboardShell'
 import { useConfirm } from '@renderer/components/ui/ConfirmDialog'
 import FilteredInput from '@renderer/components/ui/FilteredInput'
 import { RequiredNote } from '@renderer/components/ui/FormField'
+import InfoTip from '@renderer/components/ui/InfoTip'
 import Modal from '@renderer/components/ui/Modal'
 import type { FieldErrors } from '@renderer/components/ui/fieldErrors'
+import DeliveryReceiptSlip from '@renderer/components/wholesale/DeliveryReceipt'
 import type { CustomerProfile, ItemProfile } from '@renderer/data/profiles'
 import { useAccount } from '@renderer/hooks/useAccount'
 import { getCustomers, getProducts } from '@renderer/services/profiles'
@@ -15,17 +17,17 @@ import {
   getWholesale,
   listWholesale,
   payWholesale,
+  reservedWholesale,
   scheduleWholesale,
   wholesaleAlerts
 } from '@renderer/services/wholesale'
 import { useProfileStore } from '@renderer/stores/useProfileStore'
 import { getExpiryStatus, isBatchSellable, localDate } from '@shared/inventory'
 import { calculateSale, money, priceToCents, type CartLine } from '@shared/sales'
-import { paymentMethods } from '@shared/schemas'
-import { availableUnits, quantityLabel, unitSellPrice, unitWord } from '@shared/units'
+import { paymentMethodLabel, paymentMethods } from '@shared/schemas'
+import { availableUnits, quantityLabel, unitWord, wholesaleBoxPrice } from '@shared/units'
 import { FieldValidationError } from '@shared/validation'
 import {
-  deliveryReceiptText,
   orderStatuses,
   type WholesaleDetails,
   type WholesaleFilter,
@@ -41,7 +43,14 @@ import {
   type ReactElement,
   type ReactNode
 } from 'react'
-import { FiCheckCircle, FiPlus, FiSearch, FiTrash2 } from 'react-icons/fi'
+import {
+  FiAlertTriangle,
+  FiCheckCircle,
+  FiChevronRight,
+  FiPlus,
+  FiSearch,
+  FiTrash2
+} from 'react-icons/fi'
 
 /** Wholesale lines are always whole boxes. */
 type BoxLine = CartLine & { unit: 'box' }
@@ -57,6 +66,18 @@ const statusTone: Record<string, string> = {
   scheduled: 'bg-sky-50 text-sky-800',
   delivered: 'bg-emerald-50 text-emerald-800',
   cancelled: 'bg-slate-100 text-slate-700'
+}
+const dateFormat = new Intl.DateTimeFormat('en-PH', { dateStyle: 'medium' })
+const dateTimeFormat = new Intl.DateTimeFormat('en-PH', { dateStyle: 'medium', timeStyle: 'short' })
+/** Dates read the same as elsewhere in the app, e.g. "Nov 15, 2026". */
+const showDate = (value: string | null | undefined): string => {
+  if (!value) return ''
+  const date = new Date(/^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T00:00:00` : value)
+  return Number.isNaN(date.getTime()) ? value : dateFormat.format(date)
+}
+const showDateTime = (value: string): string => {
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? value : dateTimeFormat.format(date)
 }
 const paymentLabels: Record<string, string> = {
   paid: 'Paid',
@@ -203,11 +224,13 @@ export default function WholesaleWorkspace(): ReactElement {
         <header className="page-intro flex flex-wrap items-end justify-between gap-3">
           <div>
             <p className="eyebrow">Business</p>
-            <h2 className="page-title mt-0.5">Wholesale &amp; Deliveries</h2>
-            <p className="page-subtitle max-w-3xl">
-              Orders from pharmacy clients, sold by the box, with their delivery schedule and the
-              balances they owe.
-            </p>
+            <div className="flex items-center gap-1.5">
+              <h1 className="page-title mt-0.5">Wholesale &amp; Deliveries</h1>
+              <InfoTip label="Wholesale & Deliveries">
+                Orders from pharmacy clients, sold by the box, with their delivery schedule and the
+                balances they owe.
+              </InfoTip>
+            </div>
           </div>
           <div className="flex flex-wrap gap-2">
             <button
@@ -223,6 +246,13 @@ export default function WholesaleWorkspace(): ReactElement {
             >
               Refresh
             </button>
+            <Link
+              to="/wholesale/clients/$clientId"
+              params={{ clientId: 'new' }}
+              className="secondary-button"
+            >
+              <FiPlus aria-hidden="true" /> Add Pharmacy Client
+            </Link>
             <button className="primary-button" disabled={busy} onClick={() => setCreating(true)}>
               <FiPlus aria-hidden="true" /> New Wholesale Order
             </button>
@@ -265,10 +295,12 @@ export default function WholesaleWorkspace(): ReactElement {
         )}
         <section className="panel space-y-4 p-5 sm:p-6">
           <div>
-            <h3 className="section-title">Orders &amp; Delivery Schedule</h3>
-            <p className="section-subtitle">
-              The list updates as you type. Select View to open an order’s details.
-            </p>
+            <div className="flex items-center gap-1.5">
+              <h3 className="section-title">Orders &amp; Delivery Schedule</h3>
+              <InfoTip label="Orders & Delivery Schedule">
+                The list updates as you type. Select View to open an order’s details.
+              </InfoTip>
+            </div>
           </div>
           <div className="flex flex-wrap items-end gap-3">
             <label className="field-label min-w-0 flex-1">
@@ -344,16 +376,24 @@ export default function WholesaleWorkspace(): ReactElement {
                   <tr key={order.id}>
                     <td className="max-w-64 px-3 py-3 break-words">
                       <span className="font-semibold text-slate-900">{order.customerName}</span>
-                      <p className="text-xs break-all text-slate-500">{order.reference}</p>
+                      {order.reviewNote && (
+                        <span
+                          className="ml-2 inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-900"
+                          title={order.reviewNote}
+                        >
+                          <FiAlertTriangle aria-hidden="true" /> Retail Customer
+                        </span>
+                      )}
+                      <p className="text-xs break-all text-slate-600">{order.reference}</p>
                     </td>
                     <td className="px-3 py-3">
-                      {order.orderDate}
-                      <p className="text-xs text-slate-500">Due {order.dueDate}</p>
+                      {showDate(order.orderDate)}
+                      <p className="text-xs text-slate-600">Due {showDate(order.dueDate)}</p>
                     </td>
                     <td className="px-3 py-3">
                       <StatusBadge status={order.status} />
                       <p className="mt-1 text-xs text-slate-500">
-                        {order.scheduledDate ?? 'No delivery date'}
+                        {order.scheduledDate ? showDate(order.scheduledDate) : 'No delivery date'}
                       </p>
                     </td>
                     <td className="px-3 py-3 font-semibold tabular-nums">
@@ -424,6 +464,7 @@ export default function WholesaleWorkspace(): ReactElement {
             </button>
           )}
         </section>
+        <PharmacyClients clients={clients} />
       </div>
       {creating && (
         <OrderForm
@@ -517,7 +558,7 @@ function Label({
           *
         </span>
       ) : (
-        <span className="ml-1 text-xs font-normal text-slate-400">(optional)</span>
+        <span className="ml-1 text-xs font-normal text-slate-600">(optional)</span>
       )}
       <span className="mt-1.5 block font-normal">{children}</span>
     </label>
@@ -554,17 +595,32 @@ function OrderForm({
   const [saving, setSaving] = useState(false)
   const pending = useRef<{ fingerprint: string; id: string } | null>(null)
   const fields = useFieldErrors()
+  // Note: Stock leaves at delivery, so pieces already on other undelivered orders are promised.
+  // The picker shows only the boxes still free, matching the check made when the order is saved.
+  const [reserved, setReserved] = useState<Record<number, number>>({})
+  useEffect(() => {
+    let active = true
+    reservedWholesale()
+      .then((value) => active && setReserved(value))
+      .catch(() => undefined)
+    return () => {
+      active = false
+    }
+  }, [])
   const batches = useMemo(
     () =>
       products.flatMap((product) =>
         product.batches.map((batch) => ({
           ...batch,
           product,
-          // Note: A product without pieces per box set is sold as a box of 1.
-          perBox: Math.max(1, product.piecesPerBox)
+          // Note: Each batch keeps the box size it was delivered in (e.g. 50 or 100 pieces);
+          // a batch received loose is sold as a box of 1.
+          perBox: Math.max(1, batch.piecesPerBox),
+          reserved: reserved[batch.id] ?? 0,
+          free: Math.max(0, batch.stock - (reserved[batch.id] ?? 0))
         }))
       ),
-    [products]
+    [products, reserved]
   )
   const matches = useMemo(() => {
     const terms = query.toLowerCase().trim().split(/\s+/).filter(Boolean)
@@ -593,6 +649,43 @@ function OrderForm({
   } catch (cause) {
     totalError = cause instanceof Error ? cause.message : 'Invalid total.'
   }
+  /**
+   * Soonest-expiring sellable batch of the same product and box size: sold first (FEFO). Boxes of
+   * 50 and boxes of 100 are different packs, so each size has its own "sell first" batch.
+   */
+  const sellFirst = (batch: (typeof batches)[number]): (typeof batches)[number] | undefined =>
+    batches.find(
+      (value) =>
+        value.product.id === batch.product.id &&
+        value.perBox === batch.perBox &&
+        isBatchSellable(value.stock, value.expiresAt) &&
+        availableUnits(value.free, 'box', value.perBox) >= 1
+    )
+  const [confirmDialog, confirm] = useConfirm()
+  const pick = async (batchId: number): Promise<void> => {
+    const batch = batches.find((value) => value.id === batchId)
+    const first = batch && sellFirst(batch)
+    if (
+      batch &&
+      first &&
+      first.id !== batch.id &&
+      !lines.some((line) => line.batchId === batchId)
+    ) {
+      const accepted = await confirm({
+        title: 'Use a later-expiring batch?',
+        message: (
+          <>
+            Batch <strong>{first.batchNumber}</strong> (boxes of {first.perBox}) expires sooner,{' '}
+            {showDate(first.expiresAt)}, and should be sold first. Use this later batch only if the
+            client asked for a longer expiry.
+          </>
+        ),
+        confirmLabel: 'Use This Batch'
+      })
+      if (!accepted) return
+    }
+    add(batchId)
+  }
   const add = (batchId: number): void => {
     const batch = batches.find((value) => value.id === batchId)
     const quantity = Number(boxes[batchId] || '1')
@@ -606,10 +699,10 @@ function OrderForm({
     }
     const existing = lines.find((line) => line.batchId === batchId)
     const next = quantity + (existing?.quantity ?? 0)
-    const available = availableUnits(batch.stock, 'box', batch.perBox)
+    const available = availableUnits(batch.free, 'box', batch.perBox)
     if (next > available) {
       setLineError(
-        `Only ${available} full box${available === 1 ? '' : 'es'} of ${batch.product.brandName} (batch ${batch.batchNumber}) available.`
+        `Only ${available} full box${available === 1 ? '' : 'es'} of ${batch.product.brandName} (batch ${batch.batchNumber}) available${batch.reserved ? '; the rest is on other undelivered orders' : ''}.`
       )
       return
     }
@@ -618,7 +711,12 @@ function OrderForm({
       quantity: next,
       unit: 'box',
       unitPriceCents: priceToCents(
-        unitSellPrice('box', batch.sellPrice, batch.boxSellPrice, batch.perBox)
+        wholesaleBoxPrice(
+          batch.sellPrice,
+          batch.boxSellPrice,
+          batch.wholesaleBoxPrice,
+          batch.perBox
+        )
       )
     }
     setLines(
@@ -662,9 +760,9 @@ function OrderForm({
   return (
     <Modal
       title="New Wholesale Order"
-      description="Pick the pharmacy client and schedule the delivery, then add products by the box."
+      info="Pick the pharmacy client and schedule the delivery, then add products by the box."
       close={close}
-      size="xl"
+      size="lg"
       busy={saving}
     >
       <form
@@ -683,9 +781,8 @@ function OrderForm({
               No pharmacy clients yet. Wholesale orders are for other pharmacies, not retail
               customers.{' '}
               <Link
-                to="/customers/$customerId"
-                params={{ customerId: 'new' }}
-                search={{ type: 'pharmacy' }}
+                to="/wholesale/clients/$clientId"
+                params={{ clientId: 'new' }}
                 className="font-semibold underline"
               >
                 Add a Pharmacy Client
@@ -711,11 +808,24 @@ function OrderForm({
                 {clients.map((client) => (
                   <option key={client.id} value={client.id}>
                     {client.fullName}
-                    {client.contactPerson ? ` · ${client.contactPerson}` : ''}
+                    {client.address ? ` · ${client.address}` : ''}
                   </option>
                 ))}
               </select>
               {fields.error('customerId')}
+              {clients.length > 0 && (
+                <span className="mt-1 block text-xs font-normal text-slate-500">
+                  Not listed?{' '}
+                  <Link
+                    to="/wholesale/clients/$clientId"
+                    params={{ clientId: 'new' }}
+                    className="text-brand-700 font-semibold underline"
+                  >
+                    Add a Pharmacy Client
+                  </Link>{' '}
+                  first, then start the order.
+                </span>
+              )}
             </Label>
             <Label text="Delivery Address" required>
               <input
@@ -734,7 +844,12 @@ function OrderForm({
                 min={localDate()}
                 aria-invalid={fields.errors.scheduledDate ? true : undefined}
                 value={scheduledDate}
-                onChange={(event) => setScheduledDate(event.target.value)}
+                onChange={(event) => {
+                  setScheduledDate(event.target.value)
+                  // Note: Payment cannot fall due before the delivery, so move the due date along.
+                  if (event.target.value && dueDate < event.target.value)
+                    setDueDate(event.target.value)
+                }}
               />
               {fields.error('scheduledDate')}
             </Label>
@@ -742,7 +857,7 @@ function OrderForm({
               <input
                 type="date"
                 className="field"
-                min={localDate()}
+                min={scheduledDate || localDate()}
                 aria-invalid={fields.errors.dueDate ? true : undefined}
                 value={dueDate}
                 onChange={(event) => setDueDate(event.target.value)}
@@ -780,15 +895,18 @@ function OrderForm({
           </div>
         </fieldset>
         <fieldset disabled={saving} className="space-y-3">
-          <legend className="section-title text-lg">
-            2. Products (By the Box)
-            <span className="required-mark" aria-hidden="true">
-              *
+          <legend className="section-title flex items-center gap-1.5 text-lg">
+            <span>
+              2. Products (By the Box)
+              <span className="required-mark" aria-hidden="true">
+                *
+              </span>
             </span>
+            <InfoTip label="Products">
+              Search the catalog, enter the number of boxes, then select Add. Prices are per box of
+              that batch. Batches are listed soonest expiry first; sell the one marked “Sell first”.
+            </InfoTip>
           </legend>
-          <p className="text-sm text-slate-600">
-            Search the catalog, enter the number of boxes, then select Add. Prices are per box.
-          </p>
           <label className="relative block">
             <span className="sr-only">Search products</span>
             <FiSearch
@@ -812,21 +930,28 @@ function OrderForm({
                   </span>
                 </p>
                 {productBatches.map((batch) => {
-                  const available = availableUnits(batch.stock, 'box', batch.perBox)
+                  const available = availableUnits(batch.free, 'box', batch.perBox)
+                  const onOrders = Math.floor(batch.reserved / batch.perBox)
+                  const first = sellFirst(batch)?.id === batch.id
                   return (
                     <div
                       key={batch.id}
-                      className="mt-1.5 grid grid-cols-1 items-center gap-2 rounded-md border border-slate-200 bg-white p-2 sm:grid-cols-[minmax(0,1fr)_6rem_5.5rem]"
+                      className={`mt-1.5 grid grid-cols-1 items-center gap-2 rounded-md border bg-white p-2 sm:grid-cols-[minmax(0,1fr)_6rem_5.5rem] ${first ? 'border-brand-500' : 'border-slate-200'}`}
                     >
                       <div className="min-w-0 text-sm">
                         <p className="font-medium break-words text-slate-800">
+                          {first && (
+                            <span className="bg-brand-700 mr-1.5 rounded px-1.5 py-0.5 text-xs font-semibold text-white">
+                              Sell first
+                            </span>
+                          )}
                           Batch {batch.batchNumber} ·{' '}
                           {money(
                             priceToCents(
-                              unitSellPrice(
-                                'box',
+                              wholesaleBoxPrice(
                                 batch.sellPrice,
                                 batch.boxSellPrice,
+                                batch.wholesaleBoxPrice,
                                 batch.perBox
                               )
                             )
@@ -840,8 +965,10 @@ function OrderForm({
                               : 'text-slate-500'
                           }
                         >
-                          {available} full box{available === 1 ? '' : 'es'} available · Expires{' '}
-                          {batch.expiresAt}
+                          {available} full box{available === 1 ? '' : 'es'} available
+                          {batch.reserved > 0 &&
+                            ` (${onOrders > 0 ? `${onOrders} box${onOrders === 1 ? '' : 'es'}` : `${batch.reserved} pcs`} on other orders)`}{' '}
+                          · Expires {showDate(batch.expiresAt)}
                         </p>
                       </div>
                       <input
@@ -860,7 +987,7 @@ function OrderForm({
                         type="button"
                         className="secondary-button"
                         disabled={available < 1}
-                        onClick={() => add(batch.id)}
+                        onClick={() => void pick(batch.id)}
                       >
                         Add
                       </button>
@@ -932,15 +1059,25 @@ function OrderForm({
           </p>
         )}
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-4">
-          <p className="text-xl font-bold">
-            Order Total: <span className="tabular-nums">{money(total)}</span>
-          </p>
+          <div>
+            <p className="text-xl font-bold">
+              Order Total: <span className="tabular-nums">{money(total)}</span>
+            </p>
+            {(!lines.length || !clients.length) && (
+              <p id="save-order-hint" className="mt-1 text-sm text-slate-600">
+                {!clients.length
+                  ? 'Add a pharmacy client before saving an order.'
+                  : 'Add at least one product to save the order.'}
+              </p>
+            )}
+          </div>
           <div className="flex gap-2">
             <button type="button" className="secondary-button" disabled={saving} onClick={close}>
               Cancel
             </button>
             <button
               className="primary-button"
+              aria-describedby={!lines.length || !clients.length ? 'save-order-hint' : undefined}
               disabled={saving || !lines.length || !!totalError || !clients.length}
             >
               {saving ? 'Saving…' : 'Save Order'}
@@ -948,6 +1085,7 @@ function OrderForm({
           </div>
         </div>
       </form>
+      {confirmDialog}
     </Modal>
   )
 }
@@ -1016,444 +1154,58 @@ function OrderDetails({
             {notice}
           </p>
         )}
-        <div className="grid gap-3 sm:grid-cols-4">
+        {order.reviewNote && (
+          <p
+            role="note"
+            className="status-message flex items-start gap-2 border-amber-300 bg-amber-50 text-amber-900"
+          >
+            <FiAlertTriangle aria-hidden="true" className="mt-0.5 shrink-0" />
+            <span>
+              <span className="font-semibold">Retail customer. </span>
+              {order.reviewNote}
+            </span>
+          </p>
+        )}
+        {/* Note: Two balanced columns that use the full width: the order (where, what, delivery)
+            on the left; who handled it, the next actions and the money on the right. */}
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Fact label="Status">
             <StatusBadge status={order.status} />
           </Fact>
           <Fact label="Order Total">{money(order.totalCents)}</Fact>
-          <Fact label="Delivery Date">{order.scheduledDate ?? 'Not scheduled'}</Fact>
-          <Fact label="Payment Due">{order.dueDate}</Fact>
+          <Fact label="Delivery Date">
+            {order.scheduledDate ? showDate(order.scheduledDate) : 'Not scheduled'}
+          </Fact>
+          <Fact label="Payment Due">{showDate(order.dueDate)}</Fact>
         </div>
-        <div className="grid gap-3 text-sm sm:grid-cols-2">
-          <p className="break-words">
-            <span className="font-semibold text-slate-700">Delivery address: </span>
-            {order.deliveryAddress}
-          </p>
-          {order.deliveryNotes && (
-            <p className="break-words">
-              <span className="font-semibold text-slate-700">Delivery notes: </span>
-              {order.deliveryNotes}
-            </p>
-          )}
-          {order.notes && (
-            <p className="break-words">
-              <span className="font-semibold text-slate-700">Order notes: </span>
-              {order.notes}
-            </p>
-          )}
-        </div>
-        <HandledBy order={order} />
-        <div className="overflow-auto rounded-lg border border-slate-200">
-          <table className="data-table w-full min-w-[620px] text-left text-sm">
-            <thead>
-              <tr>
-                {['Product', 'Batch / Expiry', 'Quantity', 'Price', 'Total'].map((label) => (
-                  <th className="px-3 py-2.5" key={label}>
-                    {label}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {order.items.map((item) => (
-                <tr key={item.batchId}>
-                  <td className="max-w-72 px-3 py-2.5 font-medium break-words">
-                    {item.productName}
-                  </td>
-                  <td className="px-3 py-2.5">
-                    {item.batchNumber}
-                    <p className="text-xs text-slate-500">{item.expiresAt}</p>
-                  </td>
-                  <td className="px-3 py-2.5">
-                    {quantityLabel(item.quantity, item.unit, item.piecesPerUnit)}
-                  </td>
-                  <td className="px-3 py-2.5 tabular-nums">
-                    {money(item.unitPriceCents)}
-                    <p className="text-xs text-slate-500">
-                      per {unitWord(item.unit, item.piecesPerUnit)}
-                    </p>
-                  </td>
-                  <td className="px-3 py-2.5 font-semibold tabular-nums">
-                    {money(item.quantity * item.unitPriceCents)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {open && (
-          <section className="space-y-3 rounded-lg border border-slate-200 p-4">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <h4 className="card-title">Delivery Schedule</h4>
-              {order.status === 'scheduled' && (
-                <button
-                  type="button"
-                  className="secondary-button"
-                  disabled={busy}
-                  onClick={() => setRescheduling(!rescheduling)}
-                >
-                  {rescheduling ? 'Keep Current Schedule' : 'Change Schedule'}
-                </button>
-              )}
-            </div>
-            {order.status === 'pending' && (
-              <p className="text-sm font-medium text-amber-800">
-                This order was created before scheduling was part of the order form. Set its
-                delivery date to continue.
-              </p>
-            )}
-            {rescheduling && (
-              <form
-                noValidate
-                onSubmit={(event) => {
-                  event.preventDefault()
-                  schedule.clear()
-                  void act(async () => {
-                    try {
-                      await scheduleWholesale({
-                        orderId: order.id,
-                        scheduledDate: scheduleDate,
-                        deliveryAddress: scheduleAddress,
-                        deliveryNotes,
-                        driverName
-                      })
-                    } catch (cause) {
-                      schedule.capture(cause)
-                    }
-                    setRescheduling(false)
-                  }, 'Delivery schedule saved.')
-                }}
-              >
-                <fieldset disabled={busy} className="grid gap-3 md:grid-cols-2">
-                  <Label text="Delivery Date" required>
-                    <input
-                      className="field"
-                      type="date"
-                      min={order.orderDate}
-                      value={scheduleDate}
-                      onChange={(event) => setScheduleDate(event.target.value)}
-                    />
-                    {schedule.error('scheduledDate')}
-                  </Label>
-                  <Label text="Delivery Address" required>
-                    <input
-                      className="field"
-                      maxLength={500}
-                      value={scheduleAddress}
-                      onChange={(event) => setScheduleAddress(event.target.value)}
-                    />
-                    {schedule.error('deliveryAddress')}
-                  </Label>
-                  <Label text="Driver / Courier">
-                    <FilteredInput
-                      rule="personName"
-                      maxLength={120}
-                      value={driverName}
-                      onValueChange={setDriverName}
-                    />
-                    {schedule.error('driverName')}
-                  </Label>
-                  <Label text="Delivery Notes">
-                    <input
-                      className="field"
-                      maxLength={500}
-                      value={deliveryNotes}
-                      onChange={(event) => setDeliveryNotes(event.target.value)}
-                    />
-                  </Label>
-                  <div>
-                    <button className="primary-button">Save Schedule</button>
-                  </div>
-                </fieldset>
-              </form>
-            )}
-          </section>
-        )}
-        {order.status === 'scheduled' && (
-          <section className="space-y-3 rounded-lg border border-slate-200 p-4">
-            <h4 className="card-title">Proof of Delivery</h4>
-            <p className="text-sm text-slate-600">
-              Fill this in when the goods have reached the client. Recording the delivery deducts
-              the stock once.
-            </p>
-            <fieldset disabled={busy} className="grid gap-3 md:grid-cols-2">
-              <Label text="Delivered By (Driver / Courier)" required>
-                <FilteredInput
-                  rule="personName"
-                  maxLength={120}
-                  value={driverName}
-                  onValueChange={setDriverName}
-                />
-                {delivery.error('driverName')}
-              </Label>
-              <Label text="Received By (Client Side)" required>
-                <FilteredInput
-                  rule="personName"
-                  maxLength={120}
-                  value={receivedByName}
-                  onValueChange={setReceivedByName}
-                />
-                {delivery.error('receivedByName')}
-              </Label>
-            </fieldset>
-          </section>
-        )}
-        {order.status === 'delivered' && (
-          <section
-            role="status"
-            className="flex flex-wrap items-start gap-3 rounded-lg border border-emerald-300 bg-emerald-50 p-4 text-emerald-900"
-          >
-            <FiCheckCircle aria-hidden="true" className="mt-0.5 size-5 shrink-0" />
-            <div className="min-w-0 flex-1">
-              <p className="font-bold">Delivery Recorded</p>
-              <p className="text-sm">
-                Delivered {new Date(order.deliveredAt!).toLocaleString()} by{' '}
-                {order.driverName ?? 'the courier'}, received by{' '}
-                {order.receivedByName ?? 'the client'}. Recorded by {order.deliveredByName}. Stock
-                was deducted once.
-              </p>
-            </div>
-            <button
-              className="secondary-button"
-              disabled={busy}
-              onClick={() => setShowReceipt(!showReceipt)}
-            >
-              {showReceipt ? 'Hide Delivery Receipt' : 'View Delivery Receipt'}
-            </button>
-          </section>
-        )}
-        {order.status === 'delivered' && showReceipt && (
-          <div className="space-y-3 rounded-lg border border-slate-200 p-4">
-            <pre className="max-h-[50vh] overflow-auto text-sm break-words whitespace-pre-wrap">
-              {deliveryReceiptText(order)}
-            </pre>
-            <button
-              className="primary-button"
-              disabled={busy}
-              onClick={() =>
-                void act(
-                  async () => ((await exportDeliveryReceipt(order.id)) ? undefined : ''),
-                  'Delivery receipt saved.'
-                )
-              }
-            >
-              Save Delivery Receipt
-            </button>
-          </div>
-        )}
-        {open && (
-          <div className="flex flex-wrap gap-3">
-            {order.status === 'scheduled' && (
-              <button
-                className="primary-button"
-                disabled={busy}
-                onClick={async () => {
-                  delivery.clear()
-                  if (driverName.trim().length < 2 || receivedByName.trim().length < 2) {
-                    setError(
-                      'Enter who delivered the order and who received it at the client before recording delivery.'
-                    )
-                    return
-                  }
-                  const accepted = await confirm({
-                    title: 'Record Full Delivery?',
-                    message:
-                      'Confirm the full order has been delivered. This deducts the ordered stock once and cannot be undone here.',
-                    confirmLabel: 'Record Delivery'
-                  })
-                  if (!accepted) return
-                  await act(async () => {
-                    try {
-                      await deliverWholesale({ orderId: order.id, driverName, receivedByName })
-                    } catch (cause) {
-                      delivery.capture(cause)
-                    }
-                    await deliveryRecorded()
-                  }, 'Delivery recorded. Stock deducted once.')
-                }}
-              >
-                Record Full Delivery
-              </button>
-            )}
-            <button
-              className="danger-button"
-              disabled={busy}
-              onClick={async () => {
-                const accepted = await confirm({
-                  title: 'Cancel This Order?',
-                  message:
-                    'Cancel this undelivered order? Cancellation is permanent. Orders with payments cannot be cancelled.',
-                  confirmLabel: 'Cancel Order',
-                  cancelLabel: 'Keep Order',
-                  tone: 'danger'
-                })
-                if (accepted)
-                  await act(() => cancelWholesale(order.id), 'Order cancelled. No stock deducted.')
-              }}
-            >
-              Cancel Order
-            </button>
-          </div>
-        )}
-        {admin && order.receivable && (
-          <section className="space-y-4 border-t border-slate-200 pt-4">
-            <div>
-              <h4 className="section-title text-lg">Accounts Receivable</h4>
-              <p className="mt-1 text-sm font-semibold text-slate-700">
-                Paid {money(order.receivable.paidCents)} · Remaining{' '}
-                <span
-                  className={
-                    order.receivable.deadlineStatus === 'overdue' ? 'text-rose-700' : undefined
-                  }
-                >
-                  {money(order.receivable.remainingCents)}
-                </span>{' '}
-                · {paymentLabels[order.receivable.paymentStatus]}
-                {order.receivable.deadlineStatus === 'overdue' && (
-                  <span className="text-rose-700"> · Overdue</span>
+        <div className="grid gap-5 lg:grid-cols-2">
+          <div className="min-w-0 space-y-5">
+            <section className="space-y-2 rounded-lg border border-slate-200 p-4">
+              <h4 className="card-title">Order Details</h4>
+              <div className="grid gap-2 text-sm">
+                <p className="break-words">
+                  <span className="font-semibold text-slate-700">Delivery address: </span>
+                  {order.deliveryAddress}
+                </p>
+                {order.deliveryNotes && (
+                  <p className="break-words">
+                    <span className="font-semibold text-slate-700">Delivery notes: </span>
+                    {order.deliveryNotes}
+                  </p>
                 )}
-              </p>
-            </div>
-            {(order.receivable.remainingCents > 0 || editingPayment !== undefined) && (
-              <form
-                noValidate
-                className="space-y-3"
-                onSubmit={(event) => {
-                  event.preventDefault()
-                  payment.clear()
-                  void act(async () => {
-                    if (!/^\d+(\.\d{1,2})?$/.test(amount) || Number(amount) <= 0) {
-                      payment.capture(
-                        new FieldValidationError([
-                          {
-                            path: 'amountCents',
-                            field: 'amountCents',
-                            message:
-                              'Enter a payment greater than ₱0 with at most two decimal places.'
-                          }
-                        ])
-                      )
-                    }
-                    try {
-                      await payWholesale({
-                        paymentId: editingPayment,
-                        orderId: order.id,
-                        amountCents: priceToCents(Number(amount)),
-                        paidAt,
-                        reference,
-                        method: method as (typeof paymentMethods)[number],
-                        notes: paymentNotes
-                      })
-                    } catch (cause) {
-                      payment.capture(cause)
-                    }
-                    setEditingPayment(undefined)
-                    setAmount('')
-                    setReference('')
-                    setPaymentNotes('')
-                    setMethod('')
-                  }, 'Payment saved. Balance updated.')
-                }}
-              >
-                <RequiredNote />
-                <fieldset disabled={busy} className="grid gap-3 md:grid-cols-2">
-                  <Label text="Payment Amount (₱)" required>
-                    <input
-                      className="field"
-                      type="number"
-                      min="0.01"
-                      step="0.01"
-                      max={
-                        (order.receivable.remainingCents +
-                          (order.payments?.find((item) => item.id === editingPayment)
-                            ?.amountCents ?? 0)) /
-                        100
-                      }
-                      value={amount}
-                      onChange={(event) => setAmount(event.target.value)}
-                    />
-                    {payment.error('amountCents')}
-                  </Label>
-                  <Label text="Payment Date" required>
-                    <input
-                      className="field"
-                      type="date"
-                      min={order.orderDate}
-                      max={localDate()}
-                      value={paidAt}
-                      onChange={(event) => setPaidAt(event.target.value)}
-                    />
-                    {payment.error('paidAt')}
-                  </Label>
-                  <Label text="Payment Reference" required>
-                    <FilteredInput
-                      rule="reference"
-                      maxLength={120}
-                      placeholder="Unique, e.g. OR-1024 or a transfer number"
-                      value={reference}
-                      onValueChange={setReference}
-                    />
-                    {payment.error('reference')}
-                  </Label>
-                  <Label text="Payment Method" required>
-                    <select
-                      className="field"
-                      value={method}
-                      onChange={(event) => setMethod(event.target.value)}
-                    >
-                      <option value="">Select a method</option>
-                      {paymentMethods.map((value) => (
-                        <option key={value} value={value}>
-                          {value}
-                        </option>
-                      ))}
-                    </select>
-                    {payment.error('method')}
-                  </Label>
-                  <Label text="Payment Notes" className="md:col-span-2">
-                    <input
-                      className="field"
-                      maxLength={500}
-                      value={paymentNotes}
-                      onChange={(event) => setPaymentNotes(event.target.value)}
-                    />
-                  </Label>
-                  <div className="flex flex-wrap gap-2 md:col-span-2">
-                    <button className="primary-button">
-                      {editingPayment !== undefined ? 'Save Payment Correction' : 'Record Payment'}
-                    </button>
-                    {editingPayment !== undefined && (
-                      <button
-                        type="button"
-                        className="secondary-button"
-                        onClick={() => {
-                          setEditingPayment(undefined)
-                          setAmount('')
-                          setReference('')
-                          setPaymentNotes('')
-                          setMethod('')
-                        }}
-                      >
-                        Cancel Correction
-                      </button>
-                    )}
-                  </div>
-                </fieldset>
-              </form>
-            )}
-            <div className="max-h-64 overflow-auto rounded-lg border border-slate-200">
-              <table className="data-table w-full min-w-[550px] text-left text-sm">
+                {order.notes && (
+                  <p className="break-words">
+                    <span className="font-semibold text-slate-700">Order notes: </span>
+                    {order.notes}
+                  </p>
+                )}
+              </div>
+            </section>
+            <div className="overflow-auto rounded-lg border border-slate-200">
+              <table className="data-table w-full min-w-[480px] text-left text-sm">
                 <thead>
                   <tr>
-                    {[
-                      'Date',
-                      'Reference',
-                      'Method',
-                      'Amount',
-                      'Notes',
-                      'Recorded By',
-                      'Action'
-                    ].map((label) => (
+                    {['Product', 'Batch / Expiry', 'Quantity', 'Price', 'Total'].map((label) => (
                       <th className="px-3 py-2.5" key={label}>
                         {label}
                       </th>
@@ -1461,50 +1213,478 @@ function OrderDetails({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {order.payments?.map((item) => (
-                    <tr key={item.id}>
-                      <td className="px-3 py-2.5">{item.paidAt}</td>
-                      <td className="max-w-52 px-3 py-2.5 break-all">{item.reference}</td>
-                      <td className="px-3 py-2.5">{item.method}</td>
-                      <td className="px-3 py-2.5 tabular-nums">{money(item.amountCents)}</td>
-                      <td className="max-w-64 px-3 py-2.5 break-words">{item.notes}</td>
-                      <td className="px-3 py-2.5">
-                        {item.recordedByName}
-                        {item.updatedAt !== item.createdAt && (
-                          <p className="text-xs text-slate-500">Edited by {item.updatedByName}</p>
-                        )}
+                  {order.items.map((item) => (
+                    <tr key={item.batchId}>
+                      <td className="max-w-72 px-3 py-2.5 font-medium break-words">
+                        {item.productName}
                       </td>
                       <td className="px-3 py-2.5">
-                        <button
-                          className="secondary-button"
-                          disabled={busy}
-                          onClick={() => {
-                            setEditingPayment(item.id)
-                            setAmount(String(item.amountCents / 100))
-                            setPaidAt(item.paidAt)
-                            setReference(item.reference)
-                            // Note: Older payments may have a free-text method; pick one again.
-                            setMethod(
-                              (paymentMethods as readonly string[]).includes(item.method)
-                                ? item.method
-                                : ''
-                            )
-                            setPaymentNotes(item.notes)
-                          }}
-                        >
-                          Correct Payment
-                        </button>
+                        {item.batchNumber}
+                        <p className="text-xs text-slate-600">Exp {showDate(item.expiresAt)}</p>
+                      </td>
+                      <td className="px-3 py-2.5">
+                        {quantityLabel(item.quantity, item.unit, item.piecesPerUnit)}
+                      </td>
+                      <td className="px-3 py-2.5 tabular-nums">
+                        {money(item.unitPriceCents)}
+                        <p className="text-xs text-slate-500">
+                          per {unitWord(item.unit, item.piecesPerUnit)}
+                        </p>
+                      </td>
+                      <td className="px-3 py-2.5 font-semibold tabular-nums">
+                        {money(item.quantity * item.unitPriceCents)}
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-            {!order.payments?.length && (
-              <p className="text-sm text-slate-500">No payments recorded.</p>
+            {order.status === 'delivered' && (
+              <section
+                role="status"
+                className="flex flex-wrap items-start gap-3 rounded-lg border border-emerald-300 bg-emerald-50 p-4 text-emerald-900"
+              >
+                <FiCheckCircle aria-hidden="true" className="mt-0.5 size-5 shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <p className="font-bold">Delivery Recorded</p>
+                  <p className="text-sm">
+                    Delivered {showDateTime(order.deliveredAt!)} by{' '}
+                    {order.driverName ?? 'the courier'}, received by{' '}
+                    {order.receivedByName ?? 'the client'}. Recorded by {order.deliveredByName}.
+                    Stock was deducted once.
+                  </p>
+                </div>
+                <button
+                  className="secondary-button"
+                  disabled={busy}
+                  onClick={() => setShowReceipt(!showReceipt)}
+                >
+                  {showReceipt ? 'Hide Delivery Receipt' : 'View Delivery Receipt'}
+                </button>
+              </section>
             )}
-          </section>
-        )}
+            {order.status === 'delivered' && showReceipt && (
+              <div className="space-y-3 rounded-lg border border-slate-200 p-4">
+                <div className="max-h-[60vh] overflow-auto rounded-lg bg-slate-100 p-3">
+                  <DeliveryReceiptSlip order={order} />
+                </div>
+                <button
+                  className="primary-button"
+                  disabled={busy}
+                  onClick={() =>
+                    void act(
+                      async () => ((await exportDeliveryReceipt(order.id)) ? undefined : ''),
+                      'Delivery receipt saved.'
+                    )
+                  }
+                >
+                  Save Delivery Receipt
+                </button>
+              </div>
+            )}
+          </div>
+          <aside className="min-w-0 space-y-4" aria-label="People, delivery and payment">
+            <section className="space-y-2">
+              <h4 className="card-title">Handled By</h4>
+              <HandledBy order={order} />
+            </section>
+            {open && (
+              <section className="space-y-3 rounded-lg border border-slate-200 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h4 className="card-title">Delivery Schedule</h4>
+                  {order.status === 'scheduled' && (
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      disabled={busy}
+                      onClick={() => setRescheduling(!rescheduling)}
+                    >
+                      {rescheduling ? 'Keep Current Schedule' : 'Change Schedule'}
+                    </button>
+                  )}
+                </div>
+                {order.status === 'pending' && (
+                  <p className="text-sm font-medium text-amber-800">
+                    This order was created before scheduling was part of the order form. Set its
+                    delivery date to continue.
+                  </p>
+                )}
+                {rescheduling && (
+                  <form
+                    noValidate
+                    onSubmit={(event) => {
+                      event.preventDefault()
+                      schedule.clear()
+                      void act(async () => {
+                        try {
+                          await scheduleWholesale({
+                            orderId: order.id,
+                            scheduledDate: scheduleDate,
+                            deliveryAddress: scheduleAddress,
+                            deliveryNotes,
+                            driverName
+                          })
+                        } catch (cause) {
+                          schedule.capture(cause)
+                        }
+                        setRescheduling(false)
+                      }, 'Delivery schedule saved.')
+                    }}
+                  >
+                    <fieldset disabled={busy} className="grid gap-3">
+                      <Label text="Delivery Date" required>
+                        <input
+                          className="field"
+                          type="date"
+                          min={order.orderDate}
+                          value={scheduleDate}
+                          onChange={(event) => setScheduleDate(event.target.value)}
+                        />
+                        {schedule.error('scheduledDate')}
+                      </Label>
+                      <Label text="Delivery Address" required>
+                        <input
+                          className="field"
+                          maxLength={500}
+                          value={scheduleAddress}
+                          onChange={(event) => setScheduleAddress(event.target.value)}
+                        />
+                        {schedule.error('deliveryAddress')}
+                      </Label>
+                      <Label text="Driver / Courier">
+                        <FilteredInput
+                          rule="personName"
+                          maxLength={120}
+                          value={driverName}
+                          onValueChange={setDriverName}
+                        />
+                        {schedule.error('driverName')}
+                      </Label>
+                      <Label text="Delivery Notes">
+                        <input
+                          className="field"
+                          maxLength={500}
+                          value={deliveryNotes}
+                          onChange={(event) => setDeliveryNotes(event.target.value)}
+                        />
+                      </Label>
+                      <div>
+                        <button className="primary-button">Save Schedule</button>
+                      </div>
+                    </fieldset>
+                  </form>
+                )}
+              </section>
+            )}
+            {order.status === 'scheduled' && (
+              <section className="space-y-3 rounded-lg border border-slate-200 p-4">
+                <div className="flex items-center gap-1.5">
+                  <h4 className="card-title">Proof of Delivery</h4>
+                  <InfoTip label="Proof of Delivery">
+                    Fill this in when the goods have reached the client. Recording the delivery
+                    deducts the stock once.
+                  </InfoTip>
+                </div>
+                <fieldset disabled={busy} className="grid gap-3">
+                  <Label text="Delivered By (Driver / Courier)" required>
+                    <FilteredInput
+                      rule="personName"
+                      maxLength={120}
+                      value={driverName}
+                      onValueChange={setDriverName}
+                    />
+                    {delivery.error('driverName')}
+                  </Label>
+                  <Label text="Received By (Client Side)" required>
+                    <FilteredInput
+                      rule="personName"
+                      maxLength={120}
+                      value={receivedByName}
+                      onValueChange={setReceivedByName}
+                    />
+                    {delivery.error('receivedByName')}
+                  </Label>
+                </fieldset>
+              </section>
+            )}
+            {open && (
+              <div className="flex flex-wrap gap-3">
+                {order.status === 'scheduled' && (
+                  <button
+                    className="primary-button"
+                    disabled={busy}
+                    onClick={async () => {
+                      delivery.clear()
+                      if (driverName.trim().length < 2 || receivedByName.trim().length < 2) {
+                        setError(
+                          'Enter who delivered the order and who received it at the client before recording delivery.'
+                        )
+                        return
+                      }
+                      const accepted = await confirm({
+                        title: 'Record Full Delivery?',
+                        message:
+                          'Confirm the full order has been delivered. This deducts the ordered stock once and cannot be undone here.',
+                        confirmLabel: 'Record Delivery'
+                      })
+                      if (!accepted) return
+                      await act(async () => {
+                        try {
+                          await deliverWholesale({ orderId: order.id, driverName, receivedByName })
+                        } catch (cause) {
+                          delivery.capture(cause)
+                        }
+                        await deliveryRecorded()
+                      }, 'Delivery recorded. Stock deducted once.')
+                    }}
+                  >
+                    Record Full Delivery
+                  </button>
+                )}
+                <button
+                  className="danger-button"
+                  disabled={busy}
+                  onClick={async () => {
+                    const accepted = await confirm({
+                      title: 'Cancel This Order?',
+                      message:
+                        'Cancel this undelivered order? Cancellation is permanent. Orders with payments cannot be cancelled.',
+                      confirmLabel: 'Cancel Order',
+                      cancelLabel: 'Keep Order',
+                      tone: 'danger'
+                    })
+                    if (accepted)
+                      await act(
+                        () => cancelWholesale(order.id),
+                        'Order cancelled. No stock deducted.'
+                      )
+                  }}
+                >
+                  Cancel Order
+                </button>
+              </div>
+            )}
+            {admin && order.receivable && (
+              <section className="space-y-4 rounded-lg border border-slate-200 p-4">
+                <div>
+                  <h4 className="section-title text-lg">Accounts Receivable</h4>
+                  <p className="mt-1 text-sm font-semibold text-slate-700">
+                    Paid {money(order.receivable.paidCents)} · Remaining{' '}
+                    <span
+                      className={
+                        order.receivable.deadlineStatus === 'overdue' ? 'text-rose-700' : undefined
+                      }
+                    >
+                      {money(order.receivable.remainingCents)}
+                    </span>{' '}
+                    · {paymentLabels[order.receivable.paymentStatus]}
+                    {order.receivable.deadlineStatus === 'overdue' && (
+                      <span className="text-rose-700"> · Overdue</span>
+                    )}
+                  </p>
+                </div>
+                {(order.receivable.remainingCents > 0 || editingPayment !== undefined) && (
+                  <form
+                    noValidate
+                    className="space-y-3"
+                    onSubmit={(event) => {
+                      event.preventDefault()
+                      payment.clear()
+                      void act(async () => {
+                        if (!/^\d+(\.\d{1,2})?$/.test(amount) || Number(amount) <= 0) {
+                          payment.capture(
+                            new FieldValidationError([
+                              {
+                                path: 'amountCents',
+                                field: 'amountCents',
+                                message:
+                                  'Enter a payment greater than ₱0 with at most two decimal places.'
+                              }
+                            ])
+                          )
+                        }
+                        try {
+                          await payWholesale({
+                            paymentId: editingPayment,
+                            orderId: order.id,
+                            amountCents: priceToCents(Number(amount)),
+                            paidAt,
+                            reference,
+                            method: method as (typeof paymentMethods)[number],
+                            notes: paymentNotes
+                          })
+                        } catch (cause) {
+                          payment.capture(cause)
+                        }
+                        setEditingPayment(undefined)
+                        setAmount('')
+                        setReference('')
+                        setPaymentNotes('')
+                        setMethod('')
+                      }, 'Payment saved. Balance updated.')
+                    }}
+                  >
+                    <RequiredNote />
+                    <fieldset disabled={busy} className="grid gap-3">
+                      <Label text="Payment Amount (₱)" required>
+                        <input
+                          className="field"
+                          type="number"
+                          min="0.01"
+                          step="0.01"
+                          max={
+                            (order.receivable.remainingCents +
+                              (order.payments?.find((item) => item.id === editingPayment)
+                                ?.amountCents ?? 0)) /
+                            100
+                          }
+                          value={amount}
+                          onChange={(event) => setAmount(event.target.value)}
+                        />
+                        {payment.error('amountCents')}
+                      </Label>
+                      <Label text="Payment Date" required>
+                        <input
+                          className="field"
+                          type="date"
+                          min={order.orderDate}
+                          max={localDate()}
+                          value={paidAt}
+                          onChange={(event) => setPaidAt(event.target.value)}
+                        />
+                        {payment.error('paidAt')}
+                      </Label>
+                      <Label text="Payment Reference" required>
+                        <FilteredInput
+                          rule="reference"
+                          maxLength={120}
+                          placeholder="Unique, e.g. OR-1024 or a transfer number"
+                          value={reference}
+                          onValueChange={setReference}
+                        />
+                        {payment.error('reference')}
+                      </Label>
+                      <Label text="Payment Method" required>
+                        <select
+                          className="field"
+                          value={method}
+                          onChange={(event) => setMethod(event.target.value)}
+                        >
+                          <option value="">Select a method</option>
+                          {paymentMethods.map((value) => (
+                            <option key={value} value={value}>
+                              {paymentMethodLabel(value)}
+                            </option>
+                          ))}
+                        </select>
+                        {payment.error('method')}
+                      </Label>
+                      <Label text="Payment Notes">
+                        <input
+                          className="field"
+                          maxLength={500}
+                          value={paymentNotes}
+                          onChange={(event) => setPaymentNotes(event.target.value)}
+                        />
+                      </Label>
+                      <div className="flex flex-wrap gap-2">
+                        <button className="primary-button">
+                          {editingPayment !== undefined
+                            ? 'Save Payment Correction'
+                            : 'Record Payment'}
+                        </button>
+                        {editingPayment !== undefined && (
+                          <button
+                            type="button"
+                            className="secondary-button"
+                            onClick={() => {
+                              setEditingPayment(undefined)
+                              setAmount('')
+                              setReference('')
+                              setPaymentNotes('')
+                              setMethod('')
+                            }}
+                          >
+                            Cancel Correction
+                          </button>
+                        )}
+                      </div>
+                    </fieldset>
+                  </form>
+                )}
+              </section>
+            )}
+            {admin && order.receivable && (
+              <section className="space-y-3">
+                <h4 className="card-title">Payment History</h4>
+                <div className="max-h-64 overflow-auto rounded-lg border border-slate-200">
+                  <table className="data-table w-full min-w-[550px] text-left text-sm">
+                    <thead>
+                      <tr>
+                        {[
+                          'Date',
+                          'Reference',
+                          'Method',
+                          'Amount',
+                          'Notes',
+                          'Recorded By',
+                          'Action'
+                        ].map((label) => (
+                          <th className="px-3 py-2.5" key={label}>
+                            {label}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {order.payments?.map((item) => (
+                        <tr key={item.id}>
+                          <td className="px-3 py-2.5">{showDate(item.paidAt)}</td>
+                          <td className="max-w-52 px-3 py-2.5 break-all">{item.reference}</td>
+                          <td className="px-3 py-2.5">{paymentMethodLabel(item.method)}</td>
+                          <td className="px-3 py-2.5 tabular-nums">{money(item.amountCents)}</td>
+                          <td className="max-w-64 px-3 py-2.5 break-words">{item.notes}</td>
+                          <td className="px-3 py-2.5">
+                            {item.recordedByName}
+                            {item.updatedAt !== item.createdAt && (
+                              <p className="text-xs text-slate-500">
+                                Edited by {item.updatedByName}
+                              </p>
+                            )}
+                          </td>
+                          <td className="px-3 py-2.5">
+                            <button
+                              className="secondary-button"
+                              disabled={busy}
+                              onClick={() => {
+                                setEditingPayment(item.id)
+                                setAmount(String(item.amountCents / 100))
+                                setPaidAt(item.paidAt)
+                                setReference(item.reference)
+                                // Note: Older payments may have a free-text method; pick one again.
+                                setMethod(
+                                  (paymentMethods as readonly string[]).includes(item.method)
+                                    ? item.method
+                                    : ''
+                                )
+                                setPaymentNotes(item.notes)
+                              }}
+                            >
+                              Correct Payment
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {!order.payments?.length && (
+                  <p className="text-sm text-slate-500">No payments recorded.</p>
+                )}
+              </section>
+            )}
+          </aside>
+        </div>
       </div>
     </Modal>
   )
@@ -1519,8 +1699,7 @@ function Fact({ label, children }: { label: string; children: ReactNode }): Reac
   )
 }
 
-const when = (value: string | null): string =>
-  value ? ` · ${new Date(value).toLocaleString()}` : ''
+const when = (value: string | null): string => (value ? ` · ${showDateTime(value)}` : '')
 
 /** Who handled each step of a wholesale order, so every hand-off is accountable. */
 function HandledBy({ order }: { order: WholesaleDetails }): ReactElement {
@@ -1541,11 +1720,104 @@ function HandledBy({ order }: { order: WholesaleDetails }): ReactElement {
       {rows.map(([label, name, at]) => (
         <div className="contents" key={label}>
           <dt className="text-slate-600">{label}</dt>
-          <dd className={name ? 'font-medium' : 'text-slate-400'}>
+          <dd className={name ? 'font-medium' : 'text-slate-600'}>
             {name ? `${name}${when(at)}` : 'Not recorded'}
           </dd>
         </div>
       ))}
     </dl>
+  )
+}
+
+/**
+ * Pharmacy clients are other pharmacies that buy by the box. They are kept apart from retail
+ * customers, so they are added and edited here rather than under Customers.
+ */
+function PharmacyClients({ clients }: { clients: CustomerProfile[] }): ReactElement {
+  const [query, setQuery] = useState('')
+  const shown = useMemo(() => {
+    const search = query.trim().toLowerCase()
+    return clients.filter(
+      (client) =>
+        !search ||
+        `${client.fullName} ${client.contactPerson} ${client.phone} ${client.address}`
+          .toLowerCase()
+          .includes(search)
+    )
+  }, [clients, query])
+  return (
+    <section className="panel space-y-4 p-5 sm:p-6">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <div className="flex items-center gap-1.5">
+            <h3 className="section-title">Pharmacy Clients ({clients.length})</h3>
+            <InfoTip label="Pharmacy Clients">
+              Other pharmacies that order by the box. Open one to edit its contact person, phone or
+              delivery address.
+            </InfoTip>
+          </div>
+        </div>
+        <Link
+          to="/wholesale/clients/$clientId"
+          params={{ clientId: 'new' }}
+          className="secondary-button"
+        >
+          <FiPlus aria-hidden="true" /> Add Pharmacy Client
+        </Link>
+      </div>
+      {clients.length > 0 && (
+        <label className="field-label block max-w-xl">
+          Find a Client
+          <span className="relative mt-1.5 block font-normal">
+            <FiSearch
+              aria-hidden="true"
+              className="absolute top-1/2 left-3.5 -translate-y-1/2 text-slate-400"
+            />
+            <input
+              className="field pl-10"
+              maxLength={100}
+              value={query}
+              placeholder="Pharmacy name, contact person or phone"
+              onChange={(event) => setQuery(event.target.value)}
+            />
+          </span>
+        </label>
+      )}
+      <div className="divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200">
+        {shown.map((client) => (
+          <Link
+            key={client.id}
+            to="/wholesale/clients/$clientId"
+            params={{ clientId: String(client.id) }}
+            className="group flex items-center gap-4 bg-white px-4 py-3 transition hover:bg-slate-50"
+          >
+            <div className="min-w-0 flex-1">
+              <p className="truncate font-semibold text-slate-900">{client.fullName}</p>
+              <p className="truncate text-sm text-slate-500">
+                {[
+                  client.contactPerson,
+                  client.phone,
+                  client.address,
+                  client.tin && `TIN ${client.tin}`
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </p>
+            </div>
+            <FiChevronRight
+              aria-hidden="true"
+              className="group-hover:text-brand-700 shrink-0 text-slate-400"
+            />
+          </Link>
+        ))}
+        {shown.length === 0 && (
+          <p className="bg-white p-6 text-center text-sm text-slate-500">
+            {clients.length
+              ? 'No pharmacy clients match this search.'
+              : 'No pharmacy clients yet. Add one before placing a wholesale order.'}
+          </p>
+        )}
+      </div>
+    </section>
   )
 }
