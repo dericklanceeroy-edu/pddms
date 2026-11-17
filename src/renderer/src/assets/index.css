@@ -143,6 +143,15 @@
     @apply mt-1 max-w-3xl text-sm leading-6 text-slate-600;
   }
 
+  /* Info "i" button: holds a section's or field's explanation instead of a paragraph of text. */
+  .info-tip-button {
+    @apply hover:text-brand-700 hover:bg-brand-50 aria-expanded:text-brand-700 aria-expanded:bg-brand-50 inline-grid size-6 shrink-0 cursor-help place-items-center rounded-full text-[1rem] text-slate-500 transition-colors;
+  }
+
+  .info-tip-bubble {
+    @apply fixed z-[90] rounded-lg border border-slate-200 bg-white px-3.5 py-3 text-left text-sm leading-relaxed font-normal tracking-normal text-slate-700 normal-case shadow-lg;
+  }
+
   .card-title {
     @apply text-base font-semibold text-slate-900;
   }

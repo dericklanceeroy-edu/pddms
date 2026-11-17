@@ -105,6 +105,26 @@ export async function getOrder(id: number, financial: boolean): Promise<Wholesal
       : {})
   }
 }
+/**
+ * Pieces of each batch already promised to pending or scheduled wholesale orders. Stock leaves at
+ * delivery, so the order form subtracts these to show only boxes that are still free.
+ */
+export async function reservedPieces(): Promise<Record<number, number>> {
+  const rows = await db
+    .selectFrom('wholesaleOrderItems')
+    .innerJoin('wholesaleOrders', 'wholesaleOrders.id', 'wholesaleOrderItems.orderId')
+    .select([
+      'wholesaleOrderItems.batchId',
+      sql<number>`SUM(wholesale_order_items.quantity * wholesale_order_items.pieces_per_unit)`.as(
+        'pieces'
+      )
+    ])
+    .where('wholesaleOrders.status', 'in', ['pending', 'scheduled'])
+    .groupBy('wholesaleOrderItems.batchId')
+    .execute()
+  return Object.fromEntries(rows.map((row) => [row.batchId, Number(row.pieces)]))
+}
+
 export async function overdueSummary(): Promise<{ count: number; remainingCents: number }> {
   const row = await db
     .selectFrom('wholesaleOrders')
@@ -157,7 +177,9 @@ export async function createOrder(input: WholesaleDraft, accountId: number): Pro
       .where('id', '=', data.customerId)
       .executeTakeFirst()
     if (!customer || customer.isArchived)
-      throw new WholesaleError('Select an existing pharmacy client (archived clients cannot order).')
+      throw new WholesaleError(
+        'Select an existing pharmacy client (archived clients cannot order).'
+      )
     if (customer.clientType !== 'pharmacy')
       throw new WholesaleError(
         `${customer.fullName} is a retail customer. Wholesale orders are for pharmacy clients only.`

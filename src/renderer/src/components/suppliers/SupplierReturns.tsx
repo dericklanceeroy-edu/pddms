@@ -1,4 +1,5 @@
 import FormField, { FormError, RequiredNote } from '@renderer/components/ui/FormField'
+import InfoTip from '@renderer/components/ui/InfoTip'
 import Modal from '@renderer/components/ui/Modal'
 import { EmptyState } from '@renderer/components/ui/PageHeader'
 import { splitErrors, type FieldErrors } from '@renderer/components/ui/fieldErrors'
@@ -83,11 +84,14 @@ export default function SupplierReturns({
   return (
     <div className="space-y-6 p-4 sm:p-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="max-w-3xl text-sm text-slate-600">
-          Record stock sent back first; it leaves inventory right away. When the supplier issues a
-          credit note, record it here and link the returns it covers. A credit lowers the balance of
-          the purchase order you apply it to.
-        </p>
+        <div className="flex items-center gap-1.5">
+          <h3 className="section-title text-lg">Returns &amp; Credits</h3>
+          <InfoTip label="Returns and Credits">
+            Record stock sent back first; it leaves inventory right away. When the supplier issues a
+            credit note, record it here and link the returns it covers. A credit lowers the balance
+            of the purchase order you apply it to.
+          </InfoTip>
+        </div>
         <div className="flex shrink-0 gap-2">
           <button type="button" className="secondary-button" onClick={() => setDialog('return')}>
             <FiCornerUpLeft aria-hidden="true" /> Record Return
@@ -341,7 +345,7 @@ function ReturnDialog({
   return (
     <Modal
       title="Return Stock to Supplier"
-      description="The pieces leave inventory from the batch you choose. The batch's supplier is the one the stock goes back to."
+      info="The pieces leave inventory from the batch you choose. The batch's supplier is the one the stock goes back to."
       close={close}
       busy={saving}
     >
@@ -370,7 +374,7 @@ function ReturnDialog({
             label="Batch"
             required
             error={errors.batchId}
-            hint="Soonest expiry first. Only batches in stock are listed."
+            info="Soonest expiry first. Only batches in stock are listed."
           >
             <select
               className="field"
@@ -513,7 +517,7 @@ function CreditNoteDialog({
   return (
     <Modal
       title="Record Supplier Credit Note"
-      description="Enter the credit note exactly as the supplier issued it."
+      info="Enter the credit note exactly as the supplier issued it."
       close={close}
       size="md"
       busy={saving}
@@ -571,7 +575,7 @@ function CreditNoteDialog({
           <FormField
             label="Apply to Purchase Order"
             error={errors.purchaseOrderId}
-            hint="Orders from this supplier that still owe money. Leave empty to keep the credit for the next order."
+            info="Orders from this supplier that still owe money. Leave empty to keep the credit for the next order."
             className="sm:col-span-2"
           >
             <select

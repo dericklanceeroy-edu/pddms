@@ -1,4 +1,5 @@
 import FormField, { FormError, RequiredNote } from '@renderer/components/ui/FormField'
+import { TitleWithInfo } from '@renderer/components/ui/InfoTip'
 import Modal from '@renderer/components/ui/Modal'
 import { EmptyState } from '@renderer/components/ui/PageHeader'
 import { splitErrors, type FieldErrors } from '@renderer/components/ui/fieldErrors'
@@ -15,7 +16,7 @@ import { filterInput } from '@shared/inputRules'
 import { localDate } from '@shared/inventory'
 import type { Supplier } from '@shared/types'
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactElement } from 'react'
-import { FiArchive, FiClock, FiPlus, FiRotateCcw, FiTag } from 'react-icons/fi'
+import { FiArchive, FiClock, FiPlus, FiRotateCcw, FiTag, FiTruck } from 'react-icons/fi'
 
 const currency = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' })
 const date = new Intl.DateTimeFormat('en-PH', { dateStyle: 'medium' })
@@ -103,11 +104,15 @@ export default function PriceList({
   return (
     <div className="space-y-0">
       <section className="flex flex-col gap-3 border-b border-slate-200 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
-        <p className="max-w-3xl text-sm text-slate-600">
-          {canEdit
-            ? 'Enter each supplier’s agreed cost per box from their quotation. A supplier can offer several box sizes of one product; each is its own pack with its own price. A new price takes effect on its date and keeps the old one in history.'
-            : 'Costs per box agreed with each supplier. Purchase orders use these prices; only the administrator can change them. If an invoice shows a different price, record it when receiving.'}
-        </p>
+        <TitleWithInfo
+          className="section-title text-lg"
+          title="Supplier Price List"
+          info={
+            canEdit
+              ? 'Enter each supplier’s agreed cost per box from their quotation. A supplier can offer several box sizes of one product; each is its own pack with its own price. A new price takes effect on its date and keeps the old one in history.'
+              : 'Costs per box agreed with each supplier. Purchase orders use these prices; only the administrator can change them. If an invoice shows a different price, record it when receiving.'
+          }
+        />
         <div className="flex shrink-0 flex-wrap gap-2">
           <label className="flex items-center gap-2 text-sm text-slate-700">
             <input
@@ -126,13 +131,11 @@ export default function PriceList({
       </section>
       {canEdit && differences.length > 0 && (
         <section className="border-b border-amber-200 bg-amber-50/60 p-4 sm:p-5">
-          <h3 className="section-title text-base text-amber-900">
-            Differences Found at Receiving ({differences.length})
-          </h3>
-          <p className="mt-1 text-sm text-amber-900">
-            Deliveries whose invoice cost or box size differed from the price list. Check with the
-            supplier, then update the price or add the new box size.
-          </p>
+          <TitleWithInfo
+            className="section-title text-base text-amber-900"
+            title={`Differences Found at Receiving (${differences.length})`}
+            info="Deliveries whose invoice cost or box size differed from the price list. Check with the supplier, then update the price or add the new box size."
+          />
           <div className="mt-3 overflow-x-auto rounded-md border border-amber-200 bg-white">
             <table className="w-full min-w-[860px] text-sm">
               <thead className="bg-amber-50 text-left text-xs text-amber-900">
@@ -150,8 +153,8 @@ export default function PriceList({
                 {differences.slice(0, 20).map((row) => {
                   const pack = packs.find(
                     (value) =>
-                      value.supplierName === row.supplierName &&
-                      value.productName === row.productName &&
+                      value.supplierId === row.supplierId &&
+                      value.drugId === row.drugId &&
                       value.piecesPerBox === row.deliveredPiecesPerBox
                   )
                   return (
@@ -187,8 +190,8 @@ export default function PriceList({
                             className="secondary-button h-9 text-xs"
                             onClick={() =>
                               setAdding({
-                                supplierName: row.supplierName,
-                                productName: row.productName,
+                                supplierId: String(row.supplierId),
+                                drugId: String(row.drugId),
                                 piecesPerBox: String(row.deliveredPiecesPerBox),
                                 unitCost: String(row.invoiceUnitCost)
                               })
@@ -210,7 +213,7 @@ export default function PriceList({
         <table className="w-full min-w-[900px] text-sm">
           <thead className="surface-header text-left text-slate-500">
             <tr>
-              <th className="px-5 py-3">Product</th>
+              <th className="py-3 pr-5 pl-9">Product</th>
               <th className="px-5 py-3">Pack</th>
               <th className="px-5 py-3 text-right whitespace-nowrap">Cost per Box</th>
               <th className="px-5 py-3">Effective / Quotation</th>
@@ -220,12 +223,25 @@ export default function PriceList({
           </thead>
           {bySupplier.map(([supplier, rows]) => (
             <tbody key={supplier} className="divide-y divide-slate-100/90">
-              <tr className="bg-slate-50">
-                <th
-                  colSpan={6}
-                  className="px-5 py-2 text-left text-sm font-semibold text-slate-800"
-                >
-                  {supplier}
+              {/* Note: QA Tests 3: the supplier row read like another product. It is now a
+                  labelled band with an icon and a pack count, and the products below are
+                  indented under it. */}
+              <tr className="border-brand-600 border-l-4 bg-slate-100">
+                <th colSpan={6} scope="colgroup" className="px-4 py-2.5 text-left">
+                  <span className="flex items-center gap-3">
+                    <span className="bg-brand-600 grid size-8 shrink-0 place-items-center rounded-md text-white">
+                      <FiTruck aria-hidden="true" />
+                    </span>
+                    <span className="min-w-0">
+                      <span className="text-brand-700 block text-xs font-bold tracking-wider uppercase">
+                        Supplier
+                      </span>
+                      <span className="block text-base font-bold text-slate-900">{supplier}</span>
+                    </span>
+                    <span className="ml-auto text-xs font-medium whitespace-nowrap text-slate-600">
+                      {rows.length} pack{rows.length === 1 ? '' : 's'}
+                    </span>
+                  </span>
                 </th>
               </tr>
               {rows.map((pack) => (
@@ -301,7 +317,7 @@ function PackRow({
   return (
     <>
       <tr className={pack.isArchived ? 'text-slate-500' : 'hover:bg-brand-50/50'}>
-        <td className="px-5 py-3">
+        <td className="py-3 pr-5 pl-9">
           <p className="font-medium text-slate-900">{pack.productName}</p>
           {pack.isArchived && (
             <span className="mt-1 inline-block rounded border border-slate-300 px-1.5 py-0.5 text-xs font-semibold">
@@ -424,16 +440,8 @@ function PackDialog({
   saved: (message: string) => Promise<void>
 }): ReactElement {
   const [values, setValues] = useState<NewPackDraft>(() => ({
-    supplierId: String(
-      suppliers.find((supplier) => supplier.organization === initial.supplierName)?.id ?? ''
-    ),
-    drugId: String(
-      products.find(
-        (product) =>
-          initial.productName?.startsWith(product.brandName) &&
-          initial.productName.includes(product.formulation)
-      )?.id ?? ''
-    ),
+    supplierId: initial.supplierId ?? '',
+    drugId: initial.drugId ?? '',
     supplierName: '',
     productName: '',
     piecesPerBox: initial.piecesPerBox ?? '',
@@ -476,7 +484,7 @@ function PackDialog({
   return (
     <Modal
       title="Add Pack & Price"
-      description="One product as one supplier sells it: the box size and the agreed cost per box."
+      info="One product as one supplier sells it: the box size and the agreed cost per box."
       close={close}
       busy={saving}
     >
@@ -514,7 +522,7 @@ function PackDialog({
           <FormField
             label="Pieces per Box"
             required
-            hint="Use 1 if the supplier sells it by the piece or bottle."
+            info="Use 1 if the supplier sells it by the piece or bottle."
             error={errors.piecesPerBox}
           >
             <input
@@ -544,7 +552,7 @@ function PackDialog({
           <FormField
             label="Effective From"
             required
-            hint="Orders submitted on or after this date use this price."
+            info="Orders submitted on or after this date use this price."
             error={errors.effectiveFrom}
           >
             <input
@@ -556,7 +564,7 @@ function PackDialog({
           </FormField>
           <FormField
             label="Quotation No."
-            hint="The supplier's quotation or price list reference."
+            info="The supplier's quotation or price list reference."
             error={errors.quotationReference}
           >
             <input
@@ -627,7 +635,8 @@ function PriceDialog({
   return (
     <Modal
       title={`New Price: ${pack.productName}`}
-      description={`${pack.supplierName}, box of ${pack.piecesPerBox}. Current price ${pack.current ? currency.format(pack.current.unitCost) : 'not yet in effect'}. The old price stays in history.`}
+      description={`${pack.supplierName}, box of ${pack.piecesPerBox}. Current price ${pack.current ? currency.format(pack.current.unitCost) : 'not yet in effect'}.`}
+      info="The new price takes effect on its date. The old price stays in history."
       close={close}
       size="sm"
       busy={saving}

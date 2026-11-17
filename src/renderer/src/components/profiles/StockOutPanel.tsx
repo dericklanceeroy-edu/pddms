@@ -1,4 +1,5 @@
 import FormField from '@renderer/components/ui/FormField'
+import InfoTip from '@renderer/components/ui/InfoTip'
 import { splitErrors, type FieldErrors } from '@renderer/components/ui/fieldErrors'
 import type { ItemProfile } from '@renderer/data/profiles'
 import { getStockOuts, recordStockOut } from '@renderer/services/inventory'
@@ -80,12 +81,14 @@ export default function StockOutPanel({ item }: { item: ItemProfile }): ReactEle
 
   return (
     <section className="panel min-w-0 space-y-4 p-5">
-      <h3 className="section-title text-lg">Write Off Stock</h3>
-      <p className="text-sm text-slate-500">
-        Record expired, damaged, lost or recalled pieces removed from a batch. Write-offs are added
-        up by reason in Reports, Write-offs and Losses. Stock sent back to a supplier is recorded
-        under Suppliers &amp; Purchasing, Returns &amp; Credits instead.
-      </p>
+      <div className="flex items-center gap-1.5">
+        <h3 className="section-title text-lg">Write Off Stock</h3>
+        <InfoTip label="Write Off Stock">
+          Record expired, damaged, lost or recalled pieces removed from a batch. Write-offs are
+          added up by reason in Reports, Write-offs and Losses. Stock sent back to a supplier is
+          recorded under Suppliers &amp; Purchasing, Returns &amp; Credits instead.
+        </InfoTip>
+      </div>
       <form
         noValidate
         onSubmit={(event) => void submit(event)}

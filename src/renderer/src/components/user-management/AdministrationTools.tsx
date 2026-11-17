@@ -1,3 +1,4 @@
+import InfoTip from '@renderer/components/ui/InfoTip'
 import ArchivedRecords from '@renderer/components/user-management/ArchivedRecords'
 import { RESTORE_NOTICE_KEY } from '@renderer/data/restoreNotice'
 import { channels } from '@shared/constants'
@@ -206,11 +207,15 @@ export default function AdministrationTools(): ReactElement {
       )}
       <section className="panel space-y-4 p-5 sm:p-6">
         <div>
-          <h3 className="section-title">Role Permissions</h3>
-          <p className="section-subtitle">
-            What each role can do in each area. To change someone’s access, edit the user and pick
-            another role. The Master role is created during setup and cannot be assigned.
-          </p>
+          <div className="flex items-center gap-1.5">
+            <h3 className="section-title">Role Permissions</h3>
+            <InfoTip label="Role Permissions">
+              What each role can do in each area. To change someone’s access, edit the user and pick
+              another role. The Master role is created during setup and cannot be assigned. “(Own)”
+              means the role can use only its own records, for example a cashier’s own sales or
+              their own account.
+            </InfoTip>
+          </div>
         </div>
         <div
           className="overflow-x-auto rounded-lg border border-slate-200"
@@ -265,20 +270,18 @@ export default function AdministrationTools(): ReactElement {
             </tbody>
           </table>
         </div>
-        <p className="text-xs text-slate-500">
-          “(Own)” means the role can use only its own records, for example a cashier’s own sales or
-          their own account.
-        </p>
       </section>
       <section className="panel space-y-4 p-5 sm:p-6">
         <div>
-          <h3 className="section-title">Backups &amp; Restore</h3>
-          <p className="section-subtitle">
-            A backup holds a consistent copy of the database and the supplier invoice files it
-            refers to. Keep the whole backup folder and store it securely; files are not encrypted.
-            Restoring signs everyone out. Backups from earlier versions of Med Prix are upgraded
-            during restore.
-          </p>
+          <div className="flex items-center gap-1.5">
+            <h3 className="section-title">Backups &amp; Restore</h3>
+            <InfoTip label="Backups & Restore">
+              A backup holds a consistent copy of the database and the supplier invoice files it
+              refers to. Keep the whole backup folder and store it securely; files are not
+              encrypted. Restoring signs everyone out. Backups from earlier versions of Med Prix are
+              upgraded during restore.
+            </InfoTip>
+          </div>
         </div>
         <div className="flex flex-wrap gap-2">
           <button
@@ -338,9 +341,12 @@ export default function AdministrationTools(): ReactElement {
             Refresh Backup List
           </button>
         </div>
-        <p className="text-xs text-slate-500">
-          The list shows the default local backup folder and backups created in this session.
-          Backups saved elsewhere can be chosen through Restore From Backup.
+        <p className="flex items-center gap-1 text-xs text-slate-500">
+          Backups in the default folder and from this session.
+          <InfoTip label="Backup list">
+            The list shows the default local backup folder and backups created in this session.
+            Backups saved elsewhere can be chosen through Restore From Backup.
+          </InfoTip>
         </p>
         <div
           className="max-h-48 space-y-2 overflow-auto"
@@ -367,11 +373,14 @@ export default function AdministrationTools(): ReactElement {
       <ArchivedRecords />
       <section className="panel space-y-4 p-5 sm:p-6">
         <div>
-          <h3 className="section-title">System Activity Log</h3>
-          <p className="section-subtitle">
-            Security events and important saved operations. Passwords and raw request data are never
-            logged. A “started” entry without a final result may mean the operation was interrupted.
-          </p>
+          <div className="flex items-center gap-1.5">
+            <h3 className="section-title">System Activity Log</h3>
+            <InfoTip label="System Activity Log">
+              Security events and important saved operations. Passwords and raw request data are
+              never logged. A “started” entry without a final result may mean the operation was
+              interrupted.
+            </InfoTip>
+          </div>
         </div>
         <div className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50/70 p-4 sm:grid-cols-2 xl:grid-cols-[minmax(0,2fr)_repeat(4,minmax(0,1fr))_auto] xl:items-end">
           <label className="block text-sm font-medium text-slate-700">

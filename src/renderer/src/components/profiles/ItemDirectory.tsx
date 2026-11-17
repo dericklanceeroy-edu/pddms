@@ -1,4 +1,5 @@
 import DashboardShell from '@renderer/components/dashboard/DashboardShell'
+import InfoTip from '@renderer/components/ui/InfoTip'
 import { getItemStock, getSellableStock, getStockStatus } from '@renderer/data/profiles'
 import { useAccount } from '@renderer/hooks/useAccount'
 import { exportInventory } from '@renderer/services/inventory'
@@ -87,13 +88,15 @@ export default function ItemDirectory(): ReactElement {
           <div className="page-intro-content flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
             <div className="max-w-2xl min-w-0">
               <p className="eyebrow">Stock & purchasing</p>
-              <h1 className="page-title mt-0.5">
-                Inventory &amp; Expiry ({inventoryMetrics.products})
-              </h1>
-              <p className="page-subtitle">
-                Every medicine with its stock on hand and nearest expiry. Open a product to see its
-                batches, prices and generic equivalents.
-              </p>
+              <div className="flex items-center gap-1.5">
+                <h1 className="page-title mt-0.5">
+                  Inventory &amp; Expiry ({inventoryMetrics.products})
+                </h1>
+                <InfoTip label="Inventory & Expiry">
+                  Every medicine with its stock on hand and nearest expiry. Open a product to see
+                  its batches, prices and generic equivalents.
+                </InfoTip>
+              </div>
             </div>
             <div className="flex shrink-0 flex-wrap items-center gap-2">
               <button
@@ -179,10 +182,12 @@ export default function ItemDirectory(): ReactElement {
           <section className="panel min-w-0 overflow-hidden">
             <header className="flex flex-col gap-4 border-b border-slate-200 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
               <div>
-                <h3 className="section-title">List of Medicines</h3>
-                <p className="mt-1 text-sm text-slate-500">
-                  Search or filter, then open a product to see its batches and expiry dates.
-                </p>
+                <div className="flex items-center gap-1.5">
+                  <h3 className="section-title">List of Medicines</h3>
+                  <InfoTip label="List of Medicines">
+                    Search or filter, then open a product to see its batches and expiry dates.
+                  </InfoTip>
+                </div>
               </div>
               <span className="border-brand-100 bg-brand-50/80 text-brand-700 w-fit rounded-full border px-3 py-1 text-xs font-semibold">
                 {filteredItems.length} shown

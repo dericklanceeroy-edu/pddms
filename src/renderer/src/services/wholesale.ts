@@ -40,5 +40,8 @@ export const payWholesale = (data: WholesalePaymentInput): Promise<void> =>
   request(channels.wholesale.pay, validate(wholesalePaymentSchema, data))
 export const wholesaleAlerts = (): Promise<{ count: number; remainingCents: number }> =>
   request(channels.wholesale.alerts)
+/** Pieces of each batch already on undelivered wholesale orders, keyed by batch id. */
+export const reservedWholesale = (): Promise<Record<number, number>> =>
+  request(channels.wholesale.reserved)
 export const exportDeliveryReceipt = (id: number): Promise<boolean> =>
   request(channels.wholesale.exportReceipt, id)

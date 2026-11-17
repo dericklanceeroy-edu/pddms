@@ -550,6 +550,14 @@ if (!process.env.SECOND_QA_TEST_PHASE) {
     reason: 'Wrong item rung up',
     itemsReturned: true
   })
+  // QA Tests 3 rehearsal: the transactions list marks counted sales, so the Void button is hidden
+  // for them; a sale rung up after the count can still be voided.
+  as(cashier)
+  const afterCount = await sell([piece(tabletBatch, 1, 1000)], 1000)
+  const listed = (await ok(channels.sales.history)).records
+  assert.equal(listed.find((row) => row.id === lastSale.id).drawerCounted, true)
+  assert.equal(listed.find((row) => row.id === afterCount.id).drawerCounted, false)
+  as(admin)
 
   // L11: an account with sales is kept and Block is offered; an unused one can be deleted.
   const blocked = await bad(channels.account.removeOneById, /1\d* sale\(s\)/, cashier.id)

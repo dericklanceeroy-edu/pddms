@@ -1,6 +1,7 @@
 import DashboardShell from '@renderer/components/dashboard/DashboardShell'
 import { useConfirm } from '@renderer/components/ui/ConfirmDialog'
 import FilteredInput from '@renderer/components/ui/FilteredInput'
+import InfoTip from '@renderer/components/ui/InfoTip'
 import Modal from '@renderer/components/ui/Modal'
 import { removeOrArchive } from '@renderer/components/ui/removeOrArchive'
 import {
@@ -114,11 +115,13 @@ export default function ItemProfileView({ item }: { item: ItemProfile | null }):
           <form noValidate onSubmit={save} className="panel mx-auto max-w-3xl space-y-6 p-6 sm:p-7">
             <div>
               <p className="eyebrow">Inventory</p>
-              <h1 className="page-title mt-0.5">Add New Product</h1>
-              <p className="page-subtitle">
-                Create the product record first. Stock, batch numbers and expiry dates are added
-                when you receive products against a purchase order.
-              </p>
+              <div className="flex items-center gap-1.5">
+                <h1 className="page-title mt-0.5">Add New Product</h1>
+                <InfoTip label="Add New Product">
+                  Create the product record first. Stock, batch numbers and expiry dates are added
+                  when you receive products against a purchase order.
+                </InfoTip>
+              </div>
               <p className="mt-3 text-xs text-slate-500">
                 Fields marked <span className="text-rose-600">*</span> are required.
               </p>
@@ -574,7 +577,7 @@ function ProductFields({
           onValueChange={(value) => update('formulation', value)}
         />
       </Field>
-      <Field label="Reorder Level" hint="A low-stock alert appears when stock falls to this level.">
+      <Field label="Reorder Level" hint="Low-stock alert at this level.">
         <input
           required
           type="number"
@@ -592,9 +595,12 @@ function ProductFields({
           }
         />
       </Field>
-      <p className="self-end text-xs leading-5 text-slate-500">
-        Stock is always counted in pieces. Box sizes come from each supplier&apos;s price list and
-        are recorded per batch when stock is received, so one product can have boxes of 50 and 100.
+      <p className="flex items-center gap-1 self-end text-xs leading-5 text-slate-500">
+        Stock is counted in pieces.
+        <InfoTip label="Stock units">
+          Box sizes come from each supplier&apos;s price list and are recorded per batch when stock
+          is received, so one product can have boxes of 50 and 100.
+        </InfoTip>
       </p>
       <section className="rounded-md border border-slate-200 bg-slate-50 p-4 sm:col-span-2">
         <p className="text-sm font-medium text-slate-700">

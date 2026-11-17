@@ -1,4 +1,5 @@
 import FormField, { FormError } from '@renderer/components/ui/FormField'
+import InfoTip from '@renderer/components/ui/InfoTip'
 import type { ItemProfile } from '@renderer/data/profiles'
 import { exportRegister, getRegister } from '@renderer/services/controls'
 import { getProducts } from '@renderer/services/profiles'
@@ -70,13 +71,15 @@ export default function DrugRegisterPanel(): ReactElement {
           <FiBookOpen aria-hidden="true" />
         </span>
         <div>
-          <h3 id="dd-register-title" className="section-title">
-            Dangerous Drugs Register
-          </h3>
-          <p className="text-sm text-slate-600">
-            Every receipt, sale, void, write-off, return and count of one controlled product, with a
-            running balance. Save it as PDF to print and sign like the paper logbook.
-          </p>
+          <div className="flex items-center gap-1.5">
+            <h3 id="dd-register-title" className="section-title">
+              Dangerous Drugs Register
+            </h3>
+            <InfoTip label="Dangerous Drugs Register">
+              Every receipt, sale, void, write-off, return and count of one controlled product, with
+              a running balance. Save it as PDF to print and sign like the paper logbook.
+            </InfoTip>
+          </div>
         </div>
       </div>
       {products.length === 0 ? (

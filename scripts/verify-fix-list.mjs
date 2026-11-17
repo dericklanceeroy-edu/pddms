@@ -328,6 +328,17 @@ if (!process.env.FIX_LIST_TEST_PHASE) {
     [100, 90]
   )
   assert.equal(differences[0].invoiceUnitCost, 720)
+  // QA Tests 3 rehearsal: the row names its supplier and product by id and the product name
+  // matches the price list's, so the Price List can offer Update Price for the right pack.
+  const priceListPacks = (await ok(channels.priceList.getAll)).packs
+  assert.ok(
+    priceListPacks.some(
+      (pack) =>
+        pack.supplierId === differences[0].supplierId &&
+        pack.drugId === differences[0].drugId &&
+        pack.productName === differences[0].productName
+    )
+  )
 
   // 3. Products have no box size of their own.
   await bad(channels.product.updateOneById, null, tablet.id, { piecesPerBox: 20 })

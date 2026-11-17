@@ -1,4 +1,5 @@
 import { useConfirm } from '@renderer/components/ui/ConfirmDialog'
+import InfoTip from '@renderer/components/ui/InfoTip'
 import type { CustomerProfile, ItemProfile } from '@renderer/data/profiles'
 import { restoreRecord } from '@renderer/services/controls'
 import { getArchivedCustomers, getArchivedProducts } from '@renderer/services/profiles'
@@ -76,14 +77,16 @@ export default function ArchivedRecords(): ReactElement {
   return (
     <section className="panel space-y-4 p-5 sm:p-6" aria-labelledby="archived-title">
       <div>
-        <h3 id="archived-title" className="section-title">
-          Archived Records
-        </h3>
-        <p className="section-subtitle">
-          Products and customers with history are archived instead of deleted. They stay on old
-          receipts and reports and are hidden from new sales and orders. Restore one to use it
-          again.
-        </p>
+        <div className="flex items-center gap-1.5">
+          <h3 id="archived-title" className="section-title">
+            Archived Records
+          </h3>
+          <InfoTip label="Archived Records">
+            Products and customers with history are archived instead of deleted. They stay on old
+            receipts and reports and are hidden from new sales and orders. Restore one to use it
+            again.
+          </InfoTip>
+        </div>
       </div>
       {error && (
         <p role="alert" className="text-sm font-medium text-rose-700">

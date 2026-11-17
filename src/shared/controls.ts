@@ -1,8 +1,8 @@
 import z from 'zod'
+import { phoneKey } from './duplicates'
 import { localDate, yearsFromToday } from './inventory'
 import { currencyAmount, isoDateSchema, referenceText } from './schemas'
 import { supplierReturnReasons, type SupplierReturnReason } from './types'
-import { phoneKey } from './duplicates'
 import { piecesPerBoxSchema } from './units'
 
 /**
@@ -73,7 +73,9 @@ export interface PriceDifferenceRecord {
   id: number
   deliveredAt: string
   orderNumber: string
+  supplierId: number
   supplierName: string
+  drugId: number
   productName: string
   orderedUnitCost: number
   invoiceUnitCost: number
@@ -108,13 +110,24 @@ export type VoidSale = z.input<typeof voidSaleSchema>
 // Cash count -----------------------------------------------------------------------------------
 
 /** Philippine bills and coins in the drawer, largest first, in pesos. */
-export const denominations = ['1000', '500', '200', '100', '50', '20', '10', '5', '1', '0.25'] as const
+export const denominations = [
+  '1000',
+  '500',
+  '200',
+  '100',
+  '50',
+  '20',
+  '10',
+  '5',
+  '1',
+  '0.25'
+] as const
 export type Denomination = (typeof denominations)[number]
 export const denominationCents = (value: Denomination): number => Math.round(Number(value) * 100)
 export const cashCountSchema = z.strictObject({
   openingFloatCents: z.number().int().min(0).max(100_000_000),
   denominations: z
-    .partialRecord(z.enum(denominations), z.number().int().min(0, "Enter 0 or more.").max(100_000))
+    .partialRecord(z.enum(denominations), z.number().int().min(0, 'Enter 0 or more.').max(100_000))
     .default({}),
   notes: z.string().trim().max(300).default('')
 })

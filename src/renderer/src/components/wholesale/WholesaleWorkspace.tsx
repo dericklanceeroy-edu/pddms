@@ -2,6 +2,7 @@ import DashboardShell from '@renderer/components/dashboard/DashboardShell'
 import { useConfirm } from '@renderer/components/ui/ConfirmDialog'
 import FilteredInput from '@renderer/components/ui/FilteredInput'
 import { RequiredNote } from '@renderer/components/ui/FormField'
+import InfoTip from '@renderer/components/ui/InfoTip'
 import Modal from '@renderer/components/ui/Modal'
 import type { FieldErrors } from '@renderer/components/ui/fieldErrors'
 import DeliveryReceiptSlip from '@renderer/components/wholesale/DeliveryReceipt'
@@ -16,6 +17,7 @@ import {
   getWholesale,
   listWholesale,
   payWholesale,
+  reservedWholesale,
   scheduleWholesale,
   wholesaleAlerts
 } from '@renderer/services/wholesale'
@@ -222,11 +224,13 @@ export default function WholesaleWorkspace(): ReactElement {
         <header className="page-intro flex flex-wrap items-end justify-between gap-3">
           <div>
             <p className="eyebrow">Business</p>
-            <h1 className="page-title mt-0.5">Wholesale &amp; Deliveries</h1>
-            <p className="page-subtitle max-w-3xl">
-              Orders from pharmacy clients, sold by the box, with their delivery schedule and the
-              balances they owe.
-            </p>
+            <div className="flex items-center gap-1.5">
+              <h1 className="page-title mt-0.5">Wholesale &amp; Deliveries</h1>
+              <InfoTip label="Wholesale & Deliveries">
+                Orders from pharmacy clients, sold by the box, with their delivery schedule and the
+                balances they owe.
+              </InfoTip>
+            </div>
           </div>
           <div className="flex flex-wrap gap-2">
             <button
@@ -291,10 +295,12 @@ export default function WholesaleWorkspace(): ReactElement {
         )}
         <section className="panel space-y-4 p-5 sm:p-6">
           <div>
-            <h3 className="section-title">Orders &amp; Delivery Schedule</h3>
-            <p className="section-subtitle">
-              The list updates as you type. Select View to open an order’s details.
-            </p>
+            <div className="flex items-center gap-1.5">
+              <h3 className="section-title">Orders &amp; Delivery Schedule</h3>
+              <InfoTip label="Orders & Delivery Schedule">
+                The list updates as you type. Select View to open an order’s details.
+              </InfoTip>
+            </div>
           </div>
           <div className="flex flex-wrap items-end gap-3">
             <label className="field-label min-w-0 flex-1">
@@ -589,6 +595,18 @@ function OrderForm({
   const [saving, setSaving] = useState(false)
   const pending = useRef<{ fingerprint: string; id: string } | null>(null)
   const fields = useFieldErrors()
+  // Note: Stock leaves at delivery, so pieces already on other undelivered orders are promised.
+  // The picker shows only the boxes still free, matching the check made when the order is saved.
+  const [reserved, setReserved] = useState<Record<number, number>>({})
+  useEffect(() => {
+    let active = true
+    reservedWholesale()
+      .then((value) => active && setReserved(value))
+      .catch(() => undefined)
+    return () => {
+      active = false
+    }
+  }, [])
   const batches = useMemo(
     () =>
       products.flatMap((product) =>
@@ -597,10 +615,12 @@ function OrderForm({
           product,
           // Note: Each batch keeps the box size it was delivered in (e.g. 50 or 100 pieces);
           // a batch received loose is sold as a box of 1.
-          perBox: Math.max(1, batch.piecesPerBox)
+          perBox: Math.max(1, batch.piecesPerBox),
+          reserved: reserved[batch.id] ?? 0,
+          free: Math.max(0, batch.stock - (reserved[batch.id] ?? 0))
         }))
       ),
-    [products]
+    [products, reserved]
   )
   const matches = useMemo(() => {
     const terms = query.toLowerCase().trim().split(/\s+/).filter(Boolean)
@@ -639,7 +659,7 @@ function OrderForm({
         value.product.id === batch.product.id &&
         value.perBox === batch.perBox &&
         isBatchSellable(value.stock, value.expiresAt) &&
-        availableUnits(value.stock, 'box', value.perBox) >= 1
+        availableUnits(value.free, 'box', value.perBox) >= 1
     )
   const [confirmDialog, confirm] = useConfirm()
   const pick = async (batchId: number): Promise<void> => {
@@ -679,10 +699,10 @@ function OrderForm({
     }
     const existing = lines.find((line) => line.batchId === batchId)
     const next = quantity + (existing?.quantity ?? 0)
-    const available = availableUnits(batch.stock, 'box', batch.perBox)
+    const available = availableUnits(batch.free, 'box', batch.perBox)
     if (next > available) {
       setLineError(
-        `Only ${available} full box${available === 1 ? '' : 'es'} of ${batch.product.brandName} (batch ${batch.batchNumber}) available.`
+        `Only ${available} full box${available === 1 ? '' : 'es'} of ${batch.product.brandName} (batch ${batch.batchNumber}) available${batch.reserved ? '; the rest is on other undelivered orders' : ''}.`
       )
       return
     }
@@ -740,7 +760,7 @@ function OrderForm({
   return (
     <Modal
       title="New Wholesale Order"
-      description="Pick the pharmacy client and schedule the delivery, then add products by the box."
+      info="Pick the pharmacy client and schedule the delivery, then add products by the box."
       close={close}
       size="lg"
       busy={saving}
@@ -875,16 +895,18 @@ function OrderForm({
           </div>
         </fieldset>
         <fieldset disabled={saving} className="space-y-3">
-          <legend className="section-title text-lg">
-            2. Products (By the Box)
-            <span className="required-mark" aria-hidden="true">
-              *
+          <legend className="section-title flex items-center gap-1.5 text-lg">
+            <span>
+              2. Products (By the Box)
+              <span className="required-mark" aria-hidden="true">
+                *
+              </span>
             </span>
+            <InfoTip label="Products">
+              Search the catalog, enter the number of boxes, then select Add. Prices are per box of
+              that batch. Batches are listed soonest expiry first; sell the one marked “Sell first”.
+            </InfoTip>
           </legend>
-          <p className="text-sm text-slate-600">
-            Search the catalog, enter the number of boxes, then select Add. Prices are per box of
-            that batch. Batches are listed soonest expiry first; sell the one marked “Sell first”.
-          </p>
           <label className="relative block">
             <span className="sr-only">Search products</span>
             <FiSearch
@@ -908,7 +930,8 @@ function OrderForm({
                   </span>
                 </p>
                 {productBatches.map((batch) => {
-                  const available = availableUnits(batch.stock, 'box', batch.perBox)
+                  const available = availableUnits(batch.free, 'box', batch.perBox)
+                  const onOrders = Math.floor(batch.reserved / batch.perBox)
                   const first = sellFirst(batch)?.id === batch.id
                   return (
                     <div
@@ -942,8 +965,10 @@ function OrderForm({
                               : 'text-slate-500'
                           }
                         >
-                          {available} full box{available === 1 ? '' : 'es'} available · Expires{' '}
-                          {showDate(batch.expiresAt)}
+                          {available} full box{available === 1 ? '' : 'es'} available
+                          {batch.reserved > 0 &&
+                            ` (${onOrders > 0 ? `${onOrders} box${onOrders === 1 ? '' : 'es'}` : `${batch.reserved} pcs`} on other orders)`}{' '}
+                          · Expires {showDate(batch.expiresAt)}
                         </p>
                       </div>
                       <input
@@ -1353,11 +1378,13 @@ function OrderDetails({
             )}
             {order.status === 'scheduled' && (
               <section className="space-y-3 rounded-lg border border-slate-200 p-4">
-                <h4 className="card-title">Proof of Delivery</h4>
-                <p className="text-sm text-slate-600">
-                  Fill this in when the goods have reached the client. Recording the delivery
-                  deducts the stock once.
-                </p>
+                <div className="flex items-center gap-1.5">
+                  <h4 className="card-title">Proof of Delivery</h4>
+                  <InfoTip label="Proof of Delivery">
+                    Fill this in when the goods have reached the client. Recording the delivery
+                    deducts the stock once.
+                  </InfoTip>
+                </div>
                 <fieldset disabled={busy} className="grid gap-3">
                   <Label text="Delivered By (Driver / Courier)" required>
                     <FilteredInput
@@ -1722,11 +1749,13 @@ function PharmacyClients({ clients }: { clients: CustomerProfile[] }): ReactElem
     <section className="panel space-y-4 p-5 sm:p-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h3 className="section-title">Pharmacy Clients ({clients.length})</h3>
-          <p className="section-subtitle">
-            Other pharmacies that order by the box. Open one to edit its contact person, phone or
-            delivery address.
-          </p>
+          <div className="flex items-center gap-1.5">
+            <h3 className="section-title">Pharmacy Clients ({clients.length})</h3>
+            <InfoTip label="Pharmacy Clients">
+              Other pharmacies that order by the box. Open one to edit its contact person, phone or
+              delivery address.
+            </InfoTip>
+          </div>
         </div>
         <Link
           to="/wholesale/clients/$clientId"

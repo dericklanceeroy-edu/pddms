@@ -1,5 +1,6 @@
 import { useConfirm } from '@renderer/components/ui/ConfirmDialog'
 import FormField, { FormError } from '@renderer/components/ui/FormField'
+import InfoTip from '@renderer/components/ui/InfoTip'
 import Modal from '@renderer/components/ui/Modal'
 import type { ItemProfile } from '@renderer/data/profiles'
 import {
@@ -86,18 +87,20 @@ export default function StockCount({
   return (
     <Modal
       title="Physical Stock Count"
-      description="Count what is on the shelves and correct the system stock, up or down, with a reason for each difference."
+      info="Count what is on the shelves and correct the system stock, up or down, with a reason for each difference."
       close={close}
       size="lg"
       busy={busy}
     >
       <div className="space-y-5">
         <section className="rounded-lg border border-slate-200 bg-slate-50/60 p-4">
-          <h3 className="text-sm font-semibold text-slate-800">Start a Count</h3>
-          <p className="mt-1 text-xs text-slate-600">
-            The count lists every batch in stock with the quantity the system expects. Print the
-            sheet, count, then enter the results.
-          </p>
+          <div className="flex items-center gap-1.5">
+            <h3 className="text-sm font-semibold text-slate-800">Start a Count</h3>
+            <InfoTip label="Start a Count">
+              The count lists every batch in stock with the quantity the system expects. Print the
+              sheet, count, then enter the results.
+            </InfoTip>
+          </div>
           <div className="mt-3 grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
             <FormField label="What to Count">
               <select
@@ -336,11 +339,14 @@ function CountSheet({
     >
       <div className="space-y-4">
         {editable ? (
-          <p className="text-sm text-slate-600">
-            Enter each batch&apos;s count right after counting its shelf. Each line is saved when
-            you leave the field, together with the system stock at that moment, so sales made during
-            the count are not subtracted twice. Any difference needs a reason (for example: found on
-            another shelf, broken, not recorded at sale). Complete when every batch is counted.
+          <p className="flex items-center gap-1 text-sm text-slate-600">
+            Enter each batch&apos;s count right after counting its shelf.
+            <InfoTip label="Counting">
+              Each line is saved when you leave the field, together with the system stock at that
+              moment, so sales made during the count are not subtracted twice. Any difference needs
+              a reason (for example: found on another shelf, broken, not recorded at sale). Complete
+              when every batch is counted.
+            </InfoTip>
           </p>
         ) : (
           <p className="text-sm text-slate-600">

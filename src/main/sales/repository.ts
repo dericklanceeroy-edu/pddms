@@ -1,5 +1,6 @@
 import { noteAudit } from '@main/audit/repository'
 import { db } from '@main/db'
+import { deductBatchStock } from '@main/inventory/repository'
 import {
   cashCountSchema,
   countedCents,
@@ -10,11 +11,8 @@ import {
   type CashCountRecord,
   type VoidSale
 } from '@shared/controls'
-import { dateBounds } from '@shared/reporting'
-import { LOGIN_LOCK_MS, LOGIN_MAX_ATTEMPTS, LOGIN_WINDOW_MS } from '@shared/security'
-import { verify } from 'argon2'
-import { deductBatchStock } from '@main/inventory/repository'
 import { isBatchSellable, localDate } from '@shared/inventory'
+import { dateBounds } from '@shared/reporting'
 import {
   calculateSale,
   checkoutSchema,
@@ -25,12 +23,15 @@ import {
   SalesError,
   type Checkout,
   type SaleDraft,
+  type SaleHistoryRecord,
   type SaleLine,
   type SaleRecord,
   type SaleTotals
 } from '@shared/sales'
+import { LOGIN_LOCK_MS, LOGIN_MAX_ATTEMPTS, LOGIN_WINDOW_MS } from '@shared/security'
 import type { Database } from '@shared/types'
 import { saleUnitPieces, UnitError, unitSellPrice } from '@shared/units'
+import { verify } from 'argon2'
 import { sql, type Kysely } from 'kysely'
 import { randomUUID } from 'node:crypto'
 
@@ -158,14 +159,25 @@ export async function getSale(id: number, cashierId?: number): Promise<SaleRecor
   return { ...sale, items }
 }
 
-export async function history(
-  beforeId?: number,
-  cashierId?: number
-): Promise<Omit<SaleRecord, 'items'>[]> {
+export async function history(beforeId?: number, cashierId?: number): Promise<SaleHistoryRecord[]> {
   let query = db.selectFrom('sales').selectAll().orderBy('id', 'desc').limit(50)
   if (beforeId !== undefined) query = query.where('id', '<', beforeId)
   if (cashierId !== undefined) query = query.where('cashierId', '=', cashierId)
-  return query.execute()
+  const sales = await query.execute()
+  // Note: Same rule as voidSale: a sale of today can no longer be voided once its cashier has
+  // saved a cash count after it, so the list hides the Void button for those sales.
+  const today = localDate()
+  const counts = await db
+    .selectFrom('cashCounts')
+    .select(['cashierId', 'createdAt'])
+    .where('businessDate', '=', today)
+    .execute()
+  return sales.map((sale) => ({
+    ...sale,
+    drawerCounted:
+      localDate(new Date(sale.createdAt)) === today &&
+      counts.some((count) => count.cashierId === sale.cashierId && count.createdAt > sale.createdAt)
+  }))
 }
 
 export async function checkout(input: Checkout, accountId: number): Promise<SaleRecord> {
@@ -354,7 +366,9 @@ async function approveAsAdministrator(
   const now = Date.now()
   const failures = approvalFailures.get(requestedBy)
   if (failures && failures.lockedUntil > now)
-    throw new SalesError('Too many wrong approvals. Wait a minute, then ask the administrator again.')
+    throw new SalesError(
+      'Too many wrong approvals. Wait a minute, then ask the administrator again.'
+    )
   const account = await db
     .selectFrom('accounts')
     .selectAll()
@@ -368,7 +382,8 @@ async function approveAsAdministrator(
     (await verify(account.password, password))
   if (!valid) {
     const count = failures && now - failures.last <= LOGIN_WINDOW_MS ? failures.count + 1 : 1
-    if (approvalFailures.size >= 1000) approvalFailures.delete(approvalFailures.keys().next().value!)
+    if (approvalFailures.size >= 1000)
+      approvalFailures.delete(approvalFailures.keys().next().value!)
     approvalFailures.set(requestedBy, {
       count,
       last: now,
@@ -401,7 +416,9 @@ export async function voidSale(
   let approver = actor.fullName
   if (actor.role !== 'master') {
     if (!data.approval)
-      throw new SalesError('An administrator must approve this void with their username and password.')
+      throw new SalesError(
+        'An administrator must approve this void with their username and password.'
+      )
     approver = await approveAsAdministrator(
       data.approval.username,
       data.approval.password,
