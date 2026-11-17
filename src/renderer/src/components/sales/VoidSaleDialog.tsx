@@ -1,4 +1,5 @@
 import FormField, { FormError, RequiredNote } from '@renderer/components/ui/FormField'
+import InfoTip from '@renderer/components/ui/InfoTip'
 import Modal from '@renderer/components/ui/Modal'
 import { voidSale } from '@renderer/services/controls'
 import { money, type SaleRecord } from '@shared/sales'
@@ -118,11 +119,13 @@ export default function VoidSaleDialog({
         </fieldset>
         {needsApproval && (
           <fieldset className="space-y-3 rounded-md border border-slate-200 p-3">
-            <legend className="px-1 text-sm font-semibold">Administrator Approval</legend>
-            <p className="text-xs text-slate-500">
-              The administrator types their own sign-in here. After five wrong tries, approvals from
-              this account pause for a minute.
-            </p>
+            <legend className="flex items-center gap-1 px-1 text-sm font-semibold">
+              Administrator Approval
+              <InfoTip label="Administrator Approval">
+                The administrator types their own sign-in here. After five wrong tries, approvals
+                from this account pause for a minute.
+              </InfoTip>
+            </legend>
             <FormField label="Administrator Username" required>
               <input
                 className="field"

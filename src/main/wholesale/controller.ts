@@ -98,6 +98,7 @@ handle(channels.wholesale.pay, 'pay', (payload, account) =>
   repository.recordPayment(wholesalePaymentSchema.parse(payload), account.id)
 )
 handle(channels.wholesale.alerts, 'alerts', () => repository.overdueSummary())
+handle(channels.wholesale.reserved, 'create', () => repository.reservedPieces())
 handle(channels.wholesale.exportReceipt, 'read', async (payload, account, event) => {
   const id = idSchema.parse(payload)
   const order = await repository.getOrder(id, false)

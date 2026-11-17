@@ -1,6 +1,7 @@
 import { splitErrors, type FieldErrors } from '@renderer/components/ui/fieldErrors'
 import FilteredInput from '@renderer/components/ui/FilteredInput'
 import FormField, { FormError, RequiredNote } from '@renderer/components/ui/FormField'
+import InfoTip from '@renderer/components/ui/InfoTip'
 import Modal from '@renderer/components/ui/Modal'
 import type {
   InvoiceRecord,
@@ -208,11 +209,13 @@ export default function ProcurementRecords({
       </div>
       <section className="border-b border-slate-200 p-4">
         <div className="mb-3">
-          <h3 className="section-title text-lg">Balances Owed to Suppliers</h3>
-          <p className="section-subtitle">
-            Based on the products actually received for each purchase order. You can record a
-            payment before the supplier invoice is added.
-          </p>
+          <div className="flex items-center gap-1.5">
+            <h3 className="section-title text-lg">Balances Owed to Suppliers</h3>
+            <InfoTip label="Balances Owed to Suppliers">
+              Based on the products actually received for each purchase order. You can record a
+              payment before the supplier invoice is added.
+            </InfoTip>
+          </div>
         </div>
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {procurement.paymentSummaries.map((summary) => (
@@ -288,10 +291,12 @@ export default function ProcurementRecords({
         </div>
       </section>
       <div className="border-b border-slate-200 px-4 py-3">
-        <h3 className="section-title text-lg">Supplier Invoices</h3>
-        <p className="section-subtitle">
-          Invoice documents attached to purchase orders, with their due dates and amounts paid.
-        </p>
+        <div className="flex items-center gap-1.5">
+          <h3 className="section-title text-lg">Supplier Invoices</h3>
+          <InfoTip label="Supplier Invoices">
+            Invoice documents attached to purchase orders, with their due dates and amounts paid.
+          </InfoTip>
+        </div>
       </div>
       <div className="min-w-0 overflow-x-auto">
         <table className="w-full min-w-[850px] table-fixed text-sm">
@@ -490,10 +495,12 @@ function ReceivingReports({
   return (
     <div className="space-y-4 p-4 sm:p-5">
       <div>
-        <h3 className="section-title text-lg">Receiving Reports</h3>
-        <p className="section-subtitle">
-          Each report is one recorded delivery and the inventory batches it added stock to.
-        </p>
+        <div className="flex items-center gap-1.5">
+          <h3 className="section-title text-lg">Receiving Reports</h3>
+          <InfoTip label="Receiving Reports">
+            Each report is one recorded delivery and the inventory batches it added stock to.
+          </InfoTip>
+        </div>
       </div>
       {deliveries.map((delivery) => {
         const order = procurement.orders.find((record) => record.id === delivery.purchaseOrderId)
@@ -814,7 +821,7 @@ function InvoiceDialog({
   return (
     <Modal
       title="Add Supplier Invoice"
-      description="Record the supplier's invoice and attach the document they provided."
+      info="Record the supplier's invoice and attach the document they provided."
       close={close}
       busy={saving || choosing}
     >
@@ -890,7 +897,7 @@ function InvoiceDialog({
           <FormField
             label="Payment Due Date"
             required
-            hint="On or after the invoice date."
+            info="On or after the invoice date."
             error={errors.dueDate}
           >
             <input
@@ -908,7 +915,7 @@ function InvoiceDialog({
         <FormField
           label="Invoice Document"
           required
-          hint="PDF, PNG, JPEG or WebP. A copy is stored with the record."
+          info="PDF, PNG, JPEG or WebP. A copy is stored with the record."
           error={errors.fileToken}
         >
           <div className="flex min-w-0 flex-wrap items-center gap-3">
@@ -1024,7 +1031,7 @@ function PaymentDialog({
   return (
     <Modal
       title="Record Supplier Payment"
-      description="Payments are recorded against the value of stock already delivered. Linking an invoice is optional."
+      info="Payments are recorded against the value of stock already delivered. Linking an invoice is optional."
       close={close}
       busy={saving}
     >
@@ -1089,7 +1096,7 @@ function PaymentDialog({
           </FormField>
           <FormField
             label="Supplier Invoice"
-            hint="Link the invoice this payment settles, if any."
+            info="Link the invoice this payment settles, if any."
             error={errors.invoiceId}
           >
             <select

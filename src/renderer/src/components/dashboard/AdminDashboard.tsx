@@ -1,3 +1,4 @@
+import InfoTip from '@renderer/components/ui/InfoTip'
 import type { DashboardView } from '@renderer/data/adminDashboard'
 import { useAdminDashboard } from '@renderer/hooks/useAdminDashboard'
 import type { ReactElement } from 'react'
@@ -116,8 +117,10 @@ export default function AdminDashboard(): ReactElement {
           <section id="overview" className="scroll-mt-28">
             <div className="page-intro">
               <div className="page-intro-content">
-                <h1 className="page-title">{views[view].title}</h1>
-                <p className="page-subtitle">{views[view].subtitle}</p>
+                <div className="flex items-center gap-1.5">
+                  <h1 className="page-title">{views[view].title}</h1>
+                  <InfoTip label={views[view].title}>{views[view].subtitle}</InfoTip>
+                </div>
               </div>
             </div>
             <QuickActions view={view} />

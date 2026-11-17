@@ -1,4 +1,5 @@
 import DashboardShell from '@renderer/components/dashboard/DashboardShell'
+import InfoTip from '@renderer/components/ui/InfoTip'
 import { useAccount } from '@renderer/hooks/useAccount'
 import { canAccessPath } from '@renderer/navigation/access'
 import { useProfileStore } from '@renderer/stores/useProfileStore'
@@ -62,23 +63,25 @@ export default function CustomerDirectory(): ReactElement {
           <div className="page-intro-content flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
             <div className="max-w-2xl">
               <p className="eyebrow">Daily work</p>
-              <h1 className="page-title mt-0.5">Customers ({directoryMetrics.total})</h1>
-              <p className="page-subtitle">
-                People who buy at the counter, with their Senior Citizen or PWD eligibility.
-                {/* Note: Cashiers cannot open Wholesale & Deliveries, so they get no link. */}
-                {canOpenWholesale ? (
-                  <>
-                    {' '}
-                    Pharmacy clients that buy wholesale are managed in{' '}
-                    <Link to="/wholesale" className="text-brand-700 font-semibold underline">
-                      Wholesale &amp; Deliveries
-                    </Link>
-                    .
-                  </>
-                ) : (
-                  ' Pharmacy clients that buy wholesale are handled by the staff and administrators.'
-                )}
-              </p>
+              <div className="mt-0.5 flex items-center gap-1.5">
+                <h1 className="page-title">Customers ({directoryMetrics.total})</h1>
+                <InfoTip label="Customers">
+                  People who buy at the counter, with their Senior Citizen or PWD eligibility.
+                  {/* Note: Cashiers cannot open Wholesale & Deliveries, so they get no link. */}
+                  {canOpenWholesale ? (
+                    <>
+                      {' '}
+                      Pharmacy clients that buy wholesale are managed in{' '}
+                      <Link to="/wholesale" className="text-brand-700 font-semibold underline">
+                        Wholesale &amp; Deliveries
+                      </Link>
+                      .
+                    </>
+                  ) : (
+                    ' Pharmacy clients that buy wholesale are handled by the staff and administrators.'
+                  )}
+                </InfoTip>
+              </div>
             </div>
             <div className="flex flex-wrap items-center gap-3">
               <Link

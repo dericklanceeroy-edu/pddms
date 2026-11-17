@@ -3,6 +3,7 @@ import { useConfirm } from '@renderer/components/ui/ConfirmDialog'
 import { splitErrors, type FieldErrors } from '@renderer/components/ui/fieldErrors'
 import FilteredInput from '@renderer/components/ui/FilteredInput'
 import FormField, { RequiredNote } from '@renderer/components/ui/FormField'
+import InfoTip from '@renderer/components/ui/InfoTip'
 import Modal from '@renderer/components/ui/Modal'
 import { removeOrArchive } from '@renderer/components/ui/removeOrArchive'
 import {
@@ -240,20 +241,22 @@ export default function CustomerProfileView({
             <form noValidate onSubmit={save} className="panel space-y-6 p-6 sm:p-7">
               <div>
                 <p className="eyebrow">{pharmacy ? 'Pharmacy Client' : 'Customer Details'}</p>
-                <h2 className="section-title mt-2 text-2xl">
-                  {isNew
-                    ? pharmacy
-                      ? 'Add Pharmacy Client'
-                      : 'Add Customer Profile'
-                    : pharmacy
-                      ? 'Edit Pharmacy Client'
-                      : 'Edit Customer Profile'}
-                </h2>
-                <p className="section-subtitle">
-                  {pharmacy
-                    ? 'Another pharmacy that buys from Med Prix by the box. Pharmacy clients are kept separate from retail customers and appear only in Wholesale & Deliveries.'
-                    : 'Keep contact and eligibility information accurate for a smoother dispensing workflow.'}
-                </p>
+                <div className="mt-2 flex items-center gap-1.5">
+                  <h2 className="section-title text-2xl">
+                    {isNew
+                      ? pharmacy
+                        ? 'Add Pharmacy Client'
+                        : 'Add Customer Profile'
+                      : pharmacy
+                        ? 'Edit Pharmacy Client'
+                        : 'Edit Customer Profile'}
+                  </h2>
+                  <InfoTip label={pharmacy ? 'Pharmacy Client' : 'Customer Profile'}>
+                    {pharmacy
+                      ? 'Another pharmacy that buys from Med Prix by the box. Pharmacy clients are kept separate from retail customers and appear only in Wholesale & Deliveries.'
+                      : 'Keep contact and eligibility information accurate for a smoother dispensing workflow.'}
+                  </InfoTip>
+                </div>
               </div>
               <RequiredNote />
 
@@ -337,7 +340,7 @@ export default function CustomerProfileView({
                   <FormField
                     label="TIN"
                     error={shown('tin')}
-                    hint="Tax identification number, e.g. 123-456-789-000."
+                    info="Tax identification number, e.g. 123-456-789-000."
                   >
                     <input
                       className="field"
@@ -378,7 +381,7 @@ export default function CustomerProfileView({
                       label="Discount ID"
                       required
                       error={shown('discountId')}
-                      hint="Letters and numbers only, at least 4 characters."
+                      info="Letters and numbers only, at least 4 characters."
                     >
                       <FilteredInput
                         rule="discountId"
@@ -533,11 +536,13 @@ export default function CustomerProfileView({
 
             <section className="glass-surface relative overflow-hidden rounded-lg p-5 sm:p-6 xl:col-span-4">
               <div className="relative">
-                <p className="card-title">Profile Actions</p>
-                <p className="mt-2 text-sm leading-6 text-slate-500">
-                  Edit this record, merge it into a duplicate, or remove it. Records with history
-                  are archived instead of deleted.
-                </p>
+                <div className="flex items-center gap-1.5">
+                  <p className="card-title">Profile Actions</p>
+                  <InfoTip label="Profile Actions">
+                    Edit this record, merge it into a duplicate, or remove it. Records with history
+                    are archived instead of deleted.
+                  </InfoTip>
+                </div>
                 {error && !editing && (
                   <p role="alert" className="mt-3 text-sm font-medium text-rose-700">
                     {error}
@@ -735,7 +740,7 @@ function MergeDialog({
   return (
     <Modal
       title={`Merge ${source.fullName}`}
-      description="Use this when the same person or pharmacy was saved twice."
+      info="Use this when the same person or pharmacy was saved twice."
       close={close}
       busy={saving}
     >

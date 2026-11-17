@@ -50,7 +50,8 @@ export const walkInDiscountSchema = z
       context.addIssue({
         code: 'custom',
         path: ['discountExpiresAt'],
-        message: 'Check the expiry date: it is more than 10 years away. Enter the date printed on the ID.'
+        message:
+          'Check the expiry date: it is more than 10 years away. Enter the date printed on the ID.'
       })
     if (
       value.discountExpiresAt &&
@@ -103,7 +104,10 @@ export const prescriptionSchema = z.strictObject({
     .string()
     .trim()
     .max(60, 'Prescription number is too long.')
-    .regex(/^([A-Za-z0-9][A-Za-z0-9 ./#_()-]*)?$/, 'Prescription number may use letters, numbers and - / . # _ ( ).')
+    .regex(
+      /^([A-Za-z0-9][A-Za-z0-9 ./#_()-]*)?$/,
+      'Prescription number may use letters, numbers and - / . # _ ( ).'
+    )
     .default(''),
   // Note: Dangerous drugs register (DDB Board Regulation No. 1 s.2014, drugstore register 1-14):
   // patient name, age and address, prescriber address and S2 license number. Required at checkout
@@ -112,16 +116,28 @@ export const prescriptionSchema = z.strictObject({
     .string()
     .trim()
     .max(120, 'Name is too long.')
-    .regex(/^(\p{L}[\p{L} .,'-]*)?$/u, 'Use letters, spaces, periods, commas, apostrophes or hyphens.')
+    .regex(
+      /^(\p{L}[\p{L} .,'-]*)?$/u,
+      'Use letters, spaces, periods, commas, apostrophes or hyphens.'
+    )
     .default(''),
-  patientAge: z.number().int().min(0, 'Enter the age in years.').max(130, 'Check the age.').nullable().default(null),
+  patientAge: z
+    .number()
+    .int()
+    .min(0, 'Enter the age in years.')
+    .max(130, 'Check the age.')
+    .nullable()
+    .default(null),
   patientAddress: z.string().trim().max(300, 'Address is too long.').default(''),
   prescriberAddress: z.string().trim().max(300, 'Address is too long.').default(''),
   prescriberS2License: z
     .string()
     .trim()
     .max(40, 'License number is too long.')
-    .regex(/^([A-Za-z0-9][A-Za-z0-9 ./#_()-]*)?$/, 'S2 license may use letters, numbers and - / . # _ ( ).')
+    .regex(
+      /^([A-Za-z0-9][A-Za-z0-9 ./#_()-]*)?$/,
+      'S2 license may use letters, numbers and - / . # _ ( ).'
+    )
     .default('')
 })
 export type Prescription = z.input<typeof prescriptionSchema>
@@ -150,7 +166,10 @@ export const checkoutSchema = saleDraftSchema
       .string()
       .trim()
       .max(60, 'Reference number is too long.')
-      .regex(/^([A-Za-z0-9][A-Za-z0-9 ./#_()-]*)?$/, 'Reference may use letters, numbers and - / . # _ ( ).')
+      .regex(
+        /^([A-Za-z0-9][A-Za-z0-9 ./#_()-]*)?$/,
+        'Reference may use letters, numbers and - / . # _ ( ).'
+      )
       .nullable()
       .default(null),
     prescription: prescriptionSchema.nullable().default(null)
@@ -266,6 +285,14 @@ export interface SaleRecord extends SaleTotals {
   voidItemsReturned: number | null
   createdAt: string
   items: SaleLine[]
+}
+/** A sale in the transactions list. */
+export type SaleHistoryRecord = Omit<SaleRecord, 'items'> & {
+  /**
+   * True when the sale's cashier has saved a cash count after the sale, so it can no longer be
+   * voided (the server refuses it either way).
+   */
+  drawerCounted: boolean
 }
 export const money = (cents: number): string =>
   new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(cents / 100)

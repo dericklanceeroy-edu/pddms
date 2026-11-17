@@ -20,6 +20,7 @@ export const channels = {
     cancel: 'wholesale.cancel',
     pay: 'wholesale.pay',
     alerts: 'wholesale.alerts',
+    reserved: 'wholesale.reserved',
     exportReceipt: 'wholesale.exportReceipt'
   },
   sales: {

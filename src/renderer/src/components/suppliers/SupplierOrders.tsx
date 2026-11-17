@@ -6,6 +6,7 @@ import { useConfirm } from '@renderer/components/ui/ConfirmDialog'
 import { splitErrors, type FieldErrors } from '@renderer/components/ui/fieldErrors'
 import FilteredInput from '@renderer/components/ui/FilteredInput'
 import FormField, { FormError, RequiredNote } from '@renderer/components/ui/FormField'
+import InfoTip, { HeaderInfo, TitleWithInfo } from '@renderer/components/ui/InfoTip'
 import Modal from '@renderer/components/ui/Modal'
 import PageHeader, { EmptyState } from '@renderer/components/ui/PageHeader'
 import type { ItemBatch, ItemProfile } from '@renderer/data/profiles'
@@ -36,6 +37,7 @@ import {
   Fragment,
   useCallback,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -785,7 +787,14 @@ function OrderTable({
                   </p>
                 </td>
                 <td className="px-4 py-4">
-                  <StatusBadge status={order.status} />
+                  <span className="inline-flex items-center gap-1">
+                    <StatusBadge status={order.status} />
+                    <InfoTip label={orderStatusLabels[order.status]}>
+                      {orderStatusHelp[order.status]}
+                      {['submitted', 'partially_received'].includes(order.status) &&
+                        ' Editing is locked after submission.'}
+                    </InfoTip>
+                  </span>
                 </td>
                 <td className="min-w-0 px-4 py-4 text-slate-600">
                   <ul className="space-y-1.5">
@@ -872,13 +881,6 @@ function OrderTable({
                         <FiTrash2 /> Delete
                       </button>
                     )}
-                    {order.status !== 'draft' && (
-                      <p className="text-xs leading-5 text-slate-500">
-                        {orderStatusHelp[order.status]}
-                        {['submitted', 'partially_received'].includes(order.status) &&
-                          ' Editing is locked after submission.'}
-                      </p>
-                    )}
                   </div>
                 </td>
               </tr>
@@ -908,11 +910,11 @@ function AwaitingDelivery({
 }): ReactElement {
   return (
     <section className="border-b border-slate-200 p-4 sm:p-5">
-      <h3 className="section-title text-lg">Orders Waiting for Delivery</h3>
-      <p className="section-subtitle">
-        Pick the submitted purchase order that matches the supplier’s delivery receipt, then enter
-        what actually arrived. Draft orders must be submitted first under Purchase orders.
-      </p>
+      <TitleWithInfo
+        className="section-title text-lg"
+        title="Orders Waiting for Delivery"
+        info="Pick the submitted purchase order that matches the supplier’s delivery receipt, then enter what actually arrived. Draft orders must be submitted first under Purchase Orders."
+      />
       <div className="mt-3 grid gap-3 lg:grid-cols-2">
         {orders.map((order) => (
           <article
@@ -942,8 +944,7 @@ function AwaitingDelivery({
       </div>
       {!isLoading && orders.length === 0 && (
         <p className="mt-3 rounded-md border border-dashed border-slate-300 p-4 text-sm text-slate-500">
-          No submitted purchase orders are waiting for delivery. Submit a draft order under Purchase
-          orders once it has been sent to the supplier.
+          No submitted purchase orders are waiting for delivery.
         </p>
       )}
     </section>
@@ -1022,7 +1023,7 @@ function SupplierDialog({
   return (
     <Modal
       title={initial ? `Supplier: ${initial.organization}` : 'Add Supplier'}
-      description={initial ? 'Review or update the supplier details.' : undefined}
+      info={initial ? 'Review or update the supplier details.' : undefined}
       close={close}
       busy={saving}
     >
@@ -1075,7 +1076,7 @@ function SupplierDialog({
           <FormField
             label="PDEA License / Permit No."
             error={errors.pdeaLicense}
-            hint="Needed for suppliers of dangerous drugs; shown in the drugs register."
+            info="Needed for suppliers of dangerous drugs; shown in the drugs register."
             className="sm:col-span-2"
           >
             {input('pdeaLicense', {
@@ -1256,7 +1257,7 @@ function OrderDialog({
   return (
     <Modal
       title={initial ? `Edit ${initial.orderNumber}` : 'Create Purchase Order'}
-      description={
+      info={
         initial
           ? 'Draft orders can be changed until they are submitted to the supplier.'
           : 'The order is saved as a draft. Submit it once it has been sent to the supplier, then receive the products when they arrive.'
@@ -1295,13 +1296,13 @@ function OrderDialog({
           <FormField
             label="Order Date"
             showOptional={false}
-            hint="Set automatically when the order is created."
+            info="Set automatically when the order is created."
           >
             <input type="date" className="field" value={minimumDate} readOnly />
           </FormField>
           <FormField
             label="Expected Delivery Date"
-            hint="Cannot be before the order date."
+            info="Cannot be before the order date."
             error={errors.expectedAt}
             className="sm:col-span-2 sm:max-w-[calc(50%-0.5rem)]"
           >
@@ -1319,14 +1320,14 @@ function OrderDialog({
         </div>
         <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3 sm:p-4">
           <div className="mb-3 flex items-start justify-between gap-3">
-            <div>
+            <div className="flex items-center gap-1">
               <p className="text-sm font-medium text-slate-700">
                 Products Ordered<span className="required-mark">*</span>
               </p>
-              <p className="text-xs text-slate-500">
+              <InfoTip label="Products Ordered">
                 Choose the product and the supplier’s box size, then enter the number of boxes. The
                 cost per box comes from the supplier’s price list and cannot be changed here.
-              </p>
+              </InfoTip>
             </div>
             <button
               type="button"
@@ -1344,7 +1345,7 @@ function OrderDialog({
           </div>
           {supplierId === 0 && (
             <p className="rounded-md bg-white p-3 text-sm text-slate-600">
-              Select the supplier first. Only products on that supplier’s price list can be ordered.
+              Select the supplier first.
             </p>
           )}
           {packs === null && supplierId > 0 && (
@@ -1770,7 +1771,9 @@ function ReceiveDialog({
   return (
     <Modal
       title={`Receive Products for ${order.orderNumber}`}
-      description={`${order.supplierName}. Enter only what physically arrived. Inventory, batches and the order status are updated together when you save.`}
+      description={order.supplierName}
+      info="Enter only what physically arrived. Stock, batches and the order status are updated together when you save. Products that did not arrive stay open for a later delivery."
+
       close={close}
       size="xl"
       busy={saving}
@@ -1793,7 +1796,7 @@ function ReceiveDialog({
           </FormField>
           <FormField
             label="Delivery Receipt No. / Notes"
-            hint="The supplier's DR number helps match the invoice later."
+            info="The supplier's delivery receipt (DR) number helps match the invoice later."
             error={errors.notes}
           >
             <input
@@ -1807,7 +1810,7 @@ function ReceiveDialog({
           <FormField
             label="Delivered By (Supplier)"
             required
-            hint="The supplier's driver or delivery person who handed over the goods. Letters only, e.g. Juan Dela Cruz."
+            info="The supplier's driver or delivery person who handed over the goods, e.g. Juan Dela Cruz."
             error={errors.deliveredByName}
           >
             <FilteredInput
@@ -1824,7 +1827,7 @@ function ReceiveDialog({
           <FormField
             label="Checked By"
             required
-            hint={`Who counted and inspected the goods. You (${account?.fullName ?? 'signed-in user'}) are recorded as the person entering this delivery.`}
+            info={`Who counted and inspected the goods. You (${account?.fullName ?? 'signed-in user'}) are recorded as the person entering this delivery.`}
             error={errors.checkedByName}
           >
             <FilteredInput
@@ -1847,11 +1850,19 @@ function ReceiveDialog({
                 <th className="px-2 py-2 text-right">Ordered</th>
                 <th className="px-2 py-2 text-right">Already Received</th>
                 <th className="px-2 py-2 text-right">Still to Receive</th>
-                <th className="bg-brand-50 text-brand-800 w-28 px-2 py-2">
-                  Received now<span className="text-rose-600">*</span>
+                <th className="bg-brand-50 text-brand-800 w-32 px-2 py-2">
+                  <HeaderInfo
+                    label="Received now"
+                    required
+                    info="Enter 0 for products that did not arrive; they stay open for a later delivery. Boxes received are added to stock as pieces."
+                  />
                 </th>
                 <th className="w-40 px-2 py-2">
-                  Batch number<span className="text-rose-600">*</span>
+                  <HeaderInfo
+                    label="Batch number"
+                    required
+                    info="Picking an existing batch of this product fills in its expiry date and price. Stock joins that batch only when product, supplier, cost, price and expiry all match."
+                  />
                 </th>
                 <th className="w-40 px-2 py-2">
                   Expiry date<span className="text-rose-600">*</span>
@@ -1859,8 +1870,18 @@ function ReceiveDialog({
                 <th className="w-32 px-2 py-2">
                   Price per piece (₱)<span className="text-rose-600">*</span>
                 </th>
-                <th className="w-32 px-2 py-2">Price per Box (₱)</th>
-                <th className="w-32 px-2 py-2">Wholesale per Box (₱)</th>
+                <th className="w-32 px-2 py-2">
+                  <HeaderInfo
+                    label="Price per Box (₱)"
+                    info="Leave empty to sell a box at the piece price × pieces per box."
+                  />
+                </th>
+                <th className="w-32 px-2 py-2">
+                  <HeaderInfo
+                    label="Wholesale per Box (₱)"
+                    info="What pharmacy clients pay per box. Leave empty to charge them the retail box price."
+                  />
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -2031,19 +2052,6 @@ function ReceiveDialog({
             </tbody>
           </table>
         </div>
-        <p className="text-xs text-slate-500">
-          Set “Received now” to 0 for products that did not arrive; they stay open for a later
-          delivery. Boxes refused at the door (crushed, wet, wrong item) go under “Rejected”: they
-          are not added to stock or owed to the supplier, and the line stays open for a replacement.
-          If the boxes hold a different number of pieces, or the invoice cost per box differs from
-          the price list, enter what arrived and the reason; the administrator reviews it under
-          Price List. Batch number, expiry date and price per piece are required for every product
-          you receive. Boxes received are added to stock as pieces. Leave the box price empty to
-          sell a box at the piece price × pieces per box. The wholesale price is what pharmacy
-          clients pay per box; leave it empty to charge them the retail box price. Picking an
-          existing batch of this product fills in its expiry date and price; stock is added to that
-          batch only when product, supplier, cost, price and expiry match.
-        </p>
         <FormError message={error} />
         <DialogActions close={close} saving={saving} label="Receive Products" />
       </form>
@@ -2073,11 +2081,21 @@ function DeliveryCheck({
       <p className="mt-1 text-xs font-medium text-rose-700">{errors[`${item.id}.${field}`]}</p>
     ) : null
   const rejected = Number(line.rejectedQuantity) > 0
+  const id = useId()
   return (
     <div className="grid gap-3 rounded-md border border-slate-200 bg-slate-50/70 p-3 text-xs sm:grid-cols-2 lg:grid-cols-[7rem_minmax(0,1fr)_8rem_9rem_minmax(0,1.3fr)]">
-      <label className="font-semibold text-slate-700">
-        Rejected ({item.unit === 'box' ? 'boxes' : 'pcs'})
+      <div className="font-semibold text-slate-700">
+        <span className="flex items-center gap-1">
+          <label htmlFor={`${id}-rejected`}>
+            Rejected ({item.unit === 'box' ? 'boxes' : 'pcs'})
+          </label>
+          <InfoTip label="Rejected">
+            Boxes refused at the door (crushed, wet, wrong item). They are not added to stock or
+            owed to the supplier, and the line stays open for a replacement.
+          </InfoTip>
+        </span>
         <input
+          id={`${id}-rejected`}
           type="number"
           min="0"
           step="1"
@@ -2089,7 +2107,7 @@ function DeliveryCheck({
           onChange={(event) => update('rejectedQuantity', event.target.value)}
         />
         {error('rejectedQuantity')}
-      </label>
+      </div>
       <label className="font-semibold text-slate-700">
         Why rejected{rejected && <span className="text-rose-600">*</span>}
         <input
@@ -2138,9 +2156,18 @@ function DeliveryCheck({
         </span>
         {error('unitCost')}
       </label>
-      <label className="font-semibold text-slate-700">
-        Reason for difference{differs && <span className="text-rose-600">*</span>}
+      <div className="font-semibold text-slate-700">
+        <span className="flex items-center gap-1">
+          <label htmlFor={`${id}-difference`}>
+            Reason for difference{differs && <span className="text-rose-600">*</span>}
+          </label>
+          <InfoTip label="Reason for difference">
+            Needed when the boxes hold a different number of pieces, or the invoice cost differs
+            from the order. The administrator reviews it under Price List.
+          </InfoTip>
+        </span>
         <input
+          id={`${id}-difference`}
           className="field mt-1"
           maxLength={300}
           disabled={!differs}
@@ -2152,12 +2179,10 @@ function DeliveryCheck({
           onChange={(event) => update('differenceReason', event.target.value)}
         />
         {differs && !errors[`${item.id}.differenceReason`] && (
-          <span className="mt-0.5 block font-normal text-amber-700">
-            Differs from the order. The administrator will see it under Price List.
-          </span>
+          <span className="mt-0.5 block font-normal text-amber-700">Differs from the order.</span>
         )}
         {error('differenceReason')}
-      </label>
+      </div>
     </div>
   )
 }

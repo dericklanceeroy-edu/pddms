@@ -74,8 +74,7 @@ export async function findPriceList(): Promise<SupplierPackRecord[]> {
       piecesPerBox: pack.piecesPerBox,
       isArchived: pack.isArchived === 1 || pack.productArchived === 1,
       current: history.find((price) => price.effectiveFrom <= today) ?? null,
-      upcoming:
-        history.filter((price) => price.effectiveFrom > today).at(-1) ?? null,
+      upcoming: history.filter((price) => price.effectiveFrom > today).at(-1) ?? null,
       history
     }
   })
@@ -203,7 +202,12 @@ export async function setPackArchived(packId: number, archived: boolean): Promis
     .selectFrom('supplierPacks')
     .innerJoin('suppliers', 'suppliers.id', 'supplierPacks.supplierId')
     .innerJoin('drugs', 'drugs.id', 'supplierPacks.drugId')
-    .select(['supplierPacks.isArchived', 'suppliers.organization', 'drugs.brandName', 'supplierPacks.piecesPerBox'])
+    .select([
+      'supplierPacks.isArchived',
+      'suppliers.organization',
+      'drugs.brandName',
+      'supplierPacks.piecesPerBox'
+    ])
     .where('supplierPacks.id', '=', packId)
     .executeTakeFirst()
   if (!pack) throw new Error('Pack not found.')
@@ -223,7 +227,11 @@ export async function findPriceDifferences(): Promise<PriceDifferenceRecord[]> {
   const rows = await db
     .selectFrom('supplierDeliveryItems')
     .innerJoin('supplierDeliveries', 'supplierDeliveries.id', 'supplierDeliveryItems.deliveryId')
-    .innerJoin('purchaseOrderItems', 'purchaseOrderItems.id', 'supplierDeliveryItems.purchaseOrderItemId')
+    .innerJoin(
+      'purchaseOrderItems',
+      'purchaseOrderItems.id',
+      'supplierDeliveryItems.purchaseOrderItemId'
+    )
     .innerJoin('purchaseOrders', 'purchaseOrders.id', 'supplierDeliveries.purchaseOrderId')
     .innerJoin('suppliers', 'suppliers.id', 'supplierDeliveries.supplierId')
     .innerJoin('drugs', 'drugs.id', 'supplierDeliveryItems.drugId')
@@ -232,9 +240,12 @@ export async function findPriceDifferences(): Promise<PriceDifferenceRecord[]> {
       'supplierDeliveryItems.id',
       'supplierDeliveries.deliveredAt',
       'purchaseOrders.orderNumber',
+      'suppliers.id as supplierId',
       'suppliers.organization as supplierName',
+      'drugs.id as drugId',
       'drugs.brandName',
       'drugs.genericName',
+      'drugs.formulation',
       'purchaseOrderItems.unitCost as orderedUnitCost',
       'supplierDeliveryItems.unitCost as invoiceUnitCost',
       'purchaseOrderItems.piecesPerUnit as orderedPiecesPerBox',
@@ -252,8 +263,10 @@ export async function findPriceDifferences(): Promise<PriceDifferenceRecord[]> {
     .orderBy('supplierDeliveryItems.id', 'desc')
     .limit(200)
     .execute()
-  return rows.map(({ brandName, genericName, ...row }) => ({
+  // Note: The name matches the price list's product name (with formulation), and the ids let the
+  // Price List find the pack to update, so a price-only difference offers "Update Price".
+  return rows.map(({ brandName, genericName, formulation, ...row }) => ({
     ...row,
-    productName: `${brandName} (${genericName})`
+    productName: `${brandName} (${genericName}) ${formulation}`
   }))
 }

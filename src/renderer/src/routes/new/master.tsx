@@ -63,7 +63,7 @@ function RouteComponent(): ReactElement {
             disabled={isSubmitting}
           />
         </FormField>
-        <FormField label="Email" required hint="Used to reach the account holder about the system.">
+        <FormField label="Email" required info="Used to reach the account holder about the system.">
           <Form.Text
             name="email"
             rule="email"
@@ -90,7 +90,7 @@ function RouteComponent(): ReactElement {
         <FormField
           label="Username"
           required
-          hint="At least 4 characters. You will use this to sign in."
+          info="At least 4 characters. You will use this to sign in."
         >
           <Form.Text
             name="username"
@@ -106,7 +106,7 @@ function RouteComponent(): ReactElement {
         <FormField
           label="Password"
           required
-          hint="At least 8 characters with a letter and a number. Keep it private; this account controls the whole system."
+          info="At least 8 characters with a letter and a number. Keep it private; this account controls the whole system."
         >
           <Form.Password
             name="password"
@@ -119,7 +119,7 @@ function RouteComponent(): ReactElement {
             disabled={isSubmitting}
           />
         </FormField>
-        <FormField label="Confirm Password" required hint="Type the same password again.">
+        <FormField label="Confirm Password" required info="Type the same password again.">
           <Form.Password
             name="confirmPassword"
             placeholder="Repeat the password"

@@ -1,6 +1,7 @@
 import { useEffect, useRef, type ReactElement, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { FiX } from 'react-icons/fi'
+import InfoTip from './InfoTip'
 
 /**
  * Shared in-app dialog.
@@ -12,13 +13,17 @@ import { FiX } from 'react-icons/fi'
 export default function Modal({
   title,
   description,
+  info,
   close,
   children,
   size = 'md',
   busy = false
 }: {
   title: string
+  /** One short line of context, e.g. the supplier or customer. */
   description?: string
+  /** Longer explanation of the dialog, shown from an "i" button beside the title. */
+  info?: ReactNode
   close: VoidFunction
   children: ReactNode
   size?: 'sm' | 'md' | 'lg' | 'xl'
@@ -80,9 +85,12 @@ export default function Modal({
         <div className="min-h-0 overflow-x-hidden overflow-y-auto p-5 sm:p-6">
           <div className="mb-5 flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <h2 className="text-xl font-semibold tracking-tight break-words text-slate-950">
-                {title}
-              </h2>
+              <div className="flex items-center gap-1.5">
+                <h2 className="text-xl font-semibold tracking-tight break-words text-slate-950">
+                  {title}
+                </h2>
+                {info && <InfoTip label={title}>{info}</InfoTip>}
+              </div>
               {description && <p className="mt-1 text-sm text-slate-500">{description}</p>}
             </div>
             <button

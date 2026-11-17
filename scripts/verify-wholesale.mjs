@@ -510,6 +510,16 @@ if (!process.env.WHOLESALE_TEST_PHASE) {
         items: [{ ...lines[1], quantity: 1 }]
       })
       assert.match(overPromised.error, /already on other undelivered orders, so only 0 box/)
+      // QA Tests 3 rehearsal: the order form gets the promised pieces, so it shows no free boxes
+      // for this batch instead of offering boxes the save would refuse.
+      const promisedBatch = (await stock())[1]
+      const reserved = await ok(channels.wholesale.reserved)
+      assert.ok(reserved[promisedBatch.id] > 0)
+      const perBox = Math.max(1, promisedBatch.piecesPerBox)
+      assert.equal(
+        Math.floor((promisedBatch.currentStock - reserved[promisedBatch.id]) / perBox),
+        0
+      )
       await ok(channels.wholesale.schedule, { ...schedule, orderId: promisedOrder })
       const results = await Promise.all(
         [promisedOrder, promisedOrder].map((orderId) =>

@@ -3,6 +3,7 @@ import { useConfirm } from '@renderer/components/ui/ConfirmDialog'
 import { splitErrors, type FieldErrors } from '@renderer/components/ui/fieldErrors'
 import FilteredInput from '@renderer/components/ui/FilteredInput'
 import { RequiredNote } from '@renderer/components/ui/FormField'
+import InfoTip from '@renderer/components/ui/InfoTip'
 import Modal from '@renderer/components/ui/Modal'
 import {
   roleLabels,
@@ -51,11 +52,13 @@ export default function UserManagement(): ReactElement {
           <div className="page-intro-content flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
             <div>
               <p className="eyebrow">Account & admin</p>
-              <h1 className="page-title mt-0.5">User Management</h1>
-              <p className="page-subtitle">
-                Create staff and cashier accounts, and block access for anyone who should no longer
-                sign in.
-              </p>
+              <div className="flex items-center gap-1.5">
+                <h1 className="page-title mt-0.5">User Management</h1>
+                <InfoTip label="User Management">
+                  Create staff and cashier accounts, and block access for anyone who should no
+                  longer sign in.
+                </InfoTip>
+              </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <button

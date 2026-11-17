@@ -1,5 +1,6 @@
 import DashboardShell from '@renderer/components/dashboard/DashboardShell'
 import DrugRegisterPanel from '@renderer/components/reporting/DrugRegisterPanel'
+import InfoTip from '@renderer/components/ui/InfoTip'
 import { exportReport, exportReportPdf, getReport } from '@renderer/services/reporting'
 import { localDate } from '@shared/inventory'
 import {
@@ -128,11 +129,13 @@ export default function ReportingWorkspace(): ReactElement {
       <div className="space-y-5">
         <header className="page-intro">
           <p className="eyebrow">Business</p>
-          <h1 className="page-title mt-0.5">Reports</h1>
-          <p className="page-subtitle">
-            Live database reports. Choose the same start and end date for a daily report. Amounts
-            are in Philippine pesos.
-          </p>
+          <div className="flex items-center gap-1.5">
+            <h1 className="page-title mt-0.5">Reports</h1>
+            <InfoTip label="Reports">
+              Live database reports. Choose the same start and end date for a daily report. Amounts
+              are in Philippine pesos.
+            </InfoTip>
+          </div>
         </header>
         <form
           className="panel space-y-4 p-5 sm:p-6"
@@ -144,10 +147,12 @@ export default function ReportingWorkspace(): ReactElement {
           {/* Note: The section's actions sit above its fields, in the section header. */}
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h3 className="section-title">Report Filters</h3>
-              <p className="section-subtitle">
-                Pick a report and period, then apply. Changing the report type loads it at once.
-              </p>
+              <div className="flex items-center gap-1.5">
+                <h3 className="section-title">Report Filters</h3>
+                <InfoTip label="Report Filters">
+                  Pick a report and period, then apply. Changing the report type loads it at once.
+                </InfoTip>
+              </div>
             </div>
             <div className="flex flex-wrap gap-2">
               <button
@@ -374,11 +379,13 @@ export default function ReportingWorkspace(): ReactElement {
               <FiPackage aria-hidden="true" />
             </span>
             <div>
-              <h3 className="card-title">Receiving Reports</h3>
-              <p className="text-sm text-slate-600">
-                Deliveries received against purchase orders, with batch numbers and expiry dates.
-                They open in Suppliers &amp; Purchasing, where stock is received.
-              </p>
+              <div className="flex items-center gap-1.5">
+                <h3 className="card-title">Receiving Reports</h3>
+                <InfoTip label="Receiving Reports">
+                  Deliveries received against purchase orders, with batch numbers and expiry dates.
+                  They open in Suppliers &amp; Purchasing, where stock is received.
+                </InfoTip>
+              </div>
             </div>
           </div>
           <Link to="/suppliers" search={{ tab: 'receiving' }} className="secondary-button shrink-0">

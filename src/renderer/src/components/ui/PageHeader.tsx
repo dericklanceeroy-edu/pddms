@@ -1,7 +1,11 @@
 import type { ReactElement, ReactNode } from 'react'
+import InfoTip from './InfoTip'
 
 /**
- * Standard page heading: section trail, title, one-line description and the page's main actions.
+ * Standard page heading: section trail, title and the page's main actions.
+ *
+ * Note: The description sits behind an "i" button beside the title (QA Tests 3: pages carried too
+ * much explanatory text), so the page opens on its content.
  */
 export default function PageHeader({
   section,
@@ -19,8 +23,10 @@ export default function PageHeader({
     <header className="page-header">
       <div className="min-w-0">
         {section && <p className="eyebrow">{section}</p>}
-        <h1 className="page-title mt-0.5">{title}</h1>
-        {description && <p className="page-subtitle max-w-3xl">{description}</p>}
+        <div className="mt-0.5 flex items-center gap-1.5">
+          <h1 className="page-title">{title}</h1>
+          {description && <InfoTip label={title}>{description}</InfoTip>}
+        </div>
       </div>
       {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}
     </header>

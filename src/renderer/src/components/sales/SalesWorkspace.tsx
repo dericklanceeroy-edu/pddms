@@ -1,6 +1,7 @@
 import DashboardShell from '@renderer/components/dashboard/DashboardShell'
 import { useConfirm } from '@renderer/components/ui/ConfirmDialog'
 import FilteredInput from '@renderer/components/ui/FilteredInput'
+import InfoTip from '@renderer/components/ui/InfoTip'
 import { getSellableStock, type CustomerProfile, type ItemProfile } from '@renderer/data/profiles'
 import { useAccount } from '@renderer/hooks/useAccount'
 import { getCustomers, getProducts } from '@renderer/services/profiles'
@@ -30,6 +31,7 @@ import {
   type Checkout,
   type PosPaymentMethod,
   type Prescription,
+  type SaleHistoryRecord,
   type SaleRecord,
   type WalkInDiscount
 } from '@shared/sales'
@@ -96,7 +98,7 @@ export default function SalesWorkspace(): ReactElement {
   const [cashError, setCashError] = useState('')
   const [notice, setNotice] = useState('')
   const [receipt, setReceipt] = useState<SaleRecord | null>(null)
-  const [history, setHistory] = useState<Omit<SaleRecord, 'items'>[] | null>(null)
+  const [history, setHistory] = useState<SaleHistoryRecord[] | null>(null)
   const [more, setMore] = useState(false)
   const pending = useRef<{ fingerprint: string; requestId: string } | null>(null)
   const paying = useRef(false)
@@ -386,11 +388,13 @@ export default function SalesWorkspace(): ReactElement {
         <header className="page-intro flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="eyebrow">Daily work</p>
-            <h1 className="page-title mt-0.5">Sales &amp; Dispensing</h1>
-            <p className="page-subtitle max-w-3xl">
-              Search a medicine, add pieces or boxes to the cart, apply a Senior Citizen or PWD
-              discount when eligible, then complete the sale.
-            </p>
+            <div className="flex items-center gap-1.5">
+              <h1 className="page-title mt-0.5">Sales &amp; Dispensing</h1>
+              <InfoTip label="Sales & Dispensing">
+                Search a medicine, add pieces or boxes to the cart, apply a Senior Citizen or PWD
+                discount when eligible, then complete the sale.
+              </InfoTip>
+            </div>
           </div>
           <div className="flex flex-wrap gap-2">
             <button
@@ -504,8 +508,10 @@ export default function SalesWorkspace(): ReactElement {
                         >
                           View
                         </button>
-                        {/* Note: Only today's sales can be voided; older days are closed (M2). */}
+                        {/* Note: Only today's sales can be voided; older days are closed (M2),
+                            and so is a sale whose drawer was already counted after it. */}
                         {sale.status === 'completed' &&
+                          !sale.drawerCounted &&
                           localDate(new Date(sale.createdAt)) === localDate() && (
                             <button
                               className="secondary-button ml-2 text-rose-700"
@@ -536,10 +542,12 @@ export default function SalesWorkspace(): ReactElement {
           <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(340px,0.8fr)]">
             <section className="panel min-w-0 space-y-4 p-5 sm:p-6">
               <div>
-                <h3 className="section-title">1. Find the Medicine</h3>
-                <p className="section-subtitle">
-                  Pick a product, then add pieces or boxes from a batch.
-                </p>
+                <div className="flex items-center gap-1.5">
+                  <h3 className="section-title">1. Find the Medicine</h3>
+                  <InfoTip label="1. Find the Medicine">
+                    Pick a product, then add pieces or boxes from a batch.
+                  </InfoTip>
+                </div>
               </div>
               <label className="field-label">
                 Search Medicines
@@ -682,10 +690,12 @@ export default function SalesWorkspace(): ReactElement {
             </section>
             <section className="panel min-w-0 space-y-4 p-5 sm:p-6">
               <div>
-                <h3 className="section-title">2. Current Cart</h3>
-                <p className="section-subtitle">
-                  Set quantities, choose the customer, then take payment.
-                </p>
+                <div className="flex items-center gap-1.5">
+                  <h3 className="section-title">2. Current Cart</h3>
+                  <InfoTip label="2. Current Cart">
+                    Set quantities, choose the customer, then take payment.
+                  </InfoTip>
+                </div>
               </div>
               {!cart.length && (
                 <p className="text-sm text-slate-500">Add a product to start a transaction.</p>
@@ -935,9 +945,12 @@ export default function SalesWorkspace(): ReactElement {
                   </label>
                 </fieldset>
               )}
-              <p className="text-sm text-slate-600">
-                Senior Citizen and PWD eligibility (registered profile or walk-in ID) removes the
-                12% VAT, then applies a 20% discount.
+              <p className="flex items-center gap-1 text-sm text-slate-600">
+                Senior Citizen / PWD: VAT removed, then 20% off.
+                <InfoTip label="Senior Citizen and PWD discount">
+                  Senior Citizen and PWD eligibility (registered profile or walk-in ID) removes the
+                  12% VAT, then applies a 20% discount.
+                </InfoTip>
               </p>
               {rxProducts.length > 0 && (
                 <fieldset className="space-y-3 rounded-md border border-amber-300 bg-amber-50/60 p-3">
@@ -1226,7 +1239,15 @@ export default function SalesWorkspace(): ReactElement {
             }}
           />
         )}
-        {cashCount && <CashCountDialog close={() => setCashCount(false)} />}
+        {cashCount && (
+          <CashCountDialog
+            close={() => {
+              setCashCount(false)
+              // Note: A saved count closes voids for earlier sales, so the open list is reloaded.
+              if (history) void loadHistory()
+            }}
+          />
+        )}
         {confirmDialog}
       </div>
     </DashboardShell>

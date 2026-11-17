@@ -94,7 +94,7 @@ function Profile(): ReactElement {
               onValueChange={setPhone}
             />
           </FormField>
-          <FormField label="Current Password" required hint="Needed to confirm any change.">
+          <FormField label="Current Password" required info="Needed to confirm any change.">
             <input
               required
               type="password"
@@ -106,7 +106,7 @@ function Profile(): ReactElement {
           </FormField>
           <FormField
             label="New Password"
-            hint="Leave blank to keep your current password. At least 8 characters with a letter and a number."
+            info="Leave blank to keep your current password. At least 8 characters with a letter and a number."
           >
             <input
               type="password"

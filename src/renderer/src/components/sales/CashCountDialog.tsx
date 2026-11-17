@@ -99,10 +99,7 @@ export default function CashCountDialog({ close }: { close: VoidFunction }): Rea
             strong
           />
         </dl>
-        <p className="mt-3 text-sm text-slate-600">
-          Saved under your name. The administrator sees every count in Reports, End-of-Day Cash
-          Counts.
-        </p>
+        <p className="mt-3 text-sm text-slate-600">Saved under your name.</p>
         <div className="mt-4 flex justify-end">
           <button type="button" className="primary-button" onClick={close}>
             Done
@@ -113,7 +110,7 @@ export default function CashCountDialog({ close }: { close: VoidFunction }): Rea
   return (
     <Modal
       title="End-of-Day Cash Count"
-      description="Count the cash drawer at closing. Enter how many of each bill and coin you have."
+      info="Count the cash drawer at closing. Enter how many of each bill and coin you have."
       close={close}
       size="md"
       busy={saving}
@@ -139,7 +136,7 @@ export default function CashCountDialog({ close }: { close: VoidFunction }): Rea
         <FormField
           label="Opening Float (₱)"
           required
-          hint="Change money placed in the drawer at the start of the day. Enter 0 if none."
+          info="Change money placed in the drawer at the start of the day. Enter 0 if none."
         >
           <input
             className="field sm:max-w-48"
