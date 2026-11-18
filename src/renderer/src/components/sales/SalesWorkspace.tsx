@@ -57,6 +57,20 @@ const emptyPrescription: Prescription = {
   prescriberS2License: ''
 }
 
+/**
+ * Stock the counter may sell: pieces promised to undelivered wholesale orders are still on the
+ * shelf but are kept for the pharmacy client, so the POS works with what is left (`stock` here
+ * is the free stock; `reserved` keeps the promised pieces for the batch card).
+ */
+const forCounter = (items: ItemProfile[]): ItemProfile[] =>
+  items.map((item) => ({
+    ...item,
+    batches: item.batches.map((batch) => ({
+      ...batch,
+      stock: Math.max(0, batch.stock - batch.reserved)
+    }))
+  }))
+
 /** "Sell first": the sellable batch that expires soonest (batches arrive sorted by expiry). */
 const firstSellable = (item: ItemProfile): number | undefined =>
   item.batches.find((batch) => isBatchSellable(batch.stock, batch.expiresAt))?.id
@@ -71,7 +85,9 @@ function stockLabel(item: ItemProfile): string {
   const expired = item.batches
     .filter((batch) => batch.stock > 0 && getExpiryStatus(batch.expiresAt) === 'expired')
     .reduce((total, batch) => total + batch.stock, 0)
-  return expired ? `Expired: ${expired} pcs to write off` : 'Out of stock'
+  if (expired) return `Expired: ${expired} pcs to write off`
+  const promised = item.batches.reduce((total, batch) => total + batch.reserved, 0)
+  return promised ? `All promised to wholesale (${promised} pcs)` : 'Out of stock'
 }
 
 export default function SalesWorkspace(): ReactElement {
@@ -108,7 +124,7 @@ export default function SalesWorkspace(): ReactElement {
     setLoading(true)
     try {
       const [items, people] = await Promise.all([getProducts(), getCustomers()])
-      setProducts(items)
+      setProducts(forCounter(items))
       setCustomers(retailOnly(people))
     } catch (cause) {
       fail(cause)
@@ -121,7 +137,7 @@ export default function SalesWorkspace(): ReactElement {
     void Promise.all([getProducts(), getCustomers()])
       .then(([items, people]) => {
         if (active) {
-          setProducts(items)
+          setProducts(forCounter(items))
           setCustomers(retailOnly(people))
           setLoading(false)
         }
@@ -645,7 +661,10 @@ export default function SalesWorkspace(): ReactElement {
                             ` · ${money(priceToCents(unitSellPrice('box', batch.sellPrice, batch.boxSellPrice, batch.piecesPerBox)))} per box of ${batch.piecesPerBox}`}
                         </p>
                         <p className="text-sm text-slate-600">
-                          {piecesLabel(batch.stock, batch.piecesPerBox)} on hand ·{' '}
+                          {batch.reserved > 0
+                            ? `${piecesLabel(batch.stock, batch.piecesPerBox)} free to sell · ${batch.reserved} pcs promised to wholesale`
+                            : `${piecesLabel(batch.stock, batch.piecesPerBox)} on hand`}{' '}
+                          ·{' '}
                           <span className="whitespace-nowrap">
                             Expires {expiryDateLabel(batch.expiresAt)}
                           </span>

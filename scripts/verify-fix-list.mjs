@@ -420,6 +420,33 @@ if (!process.env.FIX_LIST_TEST_PHASE) {
   assert.equal(await stock(batch50.id), 100)
   assert.equal(await stock(batch90.id), 90)
 
+  // 4b. Boxes promised to an undelivered wholesale order stay on the shelf until delivery, but
+  // the retail counter cannot sell them; cancelling the order frees them again.
+  const holdId = (
+    await ok(
+      channels.wholesale.create,
+      wholesaleOrder([{ batchId: batch90.id, quantity: 1, unit: 'box', unitPriceCents: 100000 }])
+    )
+  ).data
+  const batchRow = async () =>
+    (await ok(channels.product.getAll)).products
+      .flatMap((product) => product.batches)
+      .find((row) => row.id === batch90.id)
+  assert.equal((await batchRow()).stock, 90)
+  assert.equal((await batchRow()).reserved, 90)
+  as(cashier)
+  await bad(channels.sales.checkout, /promised to wholesale/, {
+    requestId: randomUUID(),
+    customerId: null,
+    items: [{ batchId: batch90.id, quantity: 2, unit: 'piece', unitPriceCents: 1200 }],
+    expectedTotalCents: 2400,
+    cashCents: 3000
+  })
+  assert.equal(await stock(batch90.id), 90)
+  as(admin)
+  await ok(channels.wholesale.cancel, holdId)
+  assert.equal((await batchRow()).reserved, 0)
+
   // 5. Retail customers: one mobile number and one Senior/PWD ID per person; the same name is a
   // warning that offers the existing profile; the administrator merges duplicates.
   const customer = (fields) => ({
@@ -849,7 +876,7 @@ if (!process.env.FIX_LIST_TEST_PHASE) {
   }
   assert.equal((await sql`PRAGMA foreign_key_check`.execute(db)).rows.length, 0)
   console.log(
-    'PASS: price list and pack sizes, locked order costs, receiving differences and rejections, batch box sizes in wholesale, FEFO, duplicate customers/clients and merge, archive instead of delete, voids with admin approval, controlled drugs register, write-off reasons and losses, supplier returns and credit notes, stock count up and down, cash count, audit details, reconciliation'
+    'PASS: price list and pack sizes, locked order costs, receiving differences and rejections, batch box sizes in wholesale, counter respects wholesale holds, FEFO, duplicate customers/clients and merge, archive instead of delete, voids with admin approval, controlled drugs register, write-off reasons and losses, supplier returns and credit notes, stock count up and down, cash count, audit details, reconciliation'
   )
   await db.destroy()
 }

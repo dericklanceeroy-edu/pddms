@@ -1,6 +1,7 @@
 import { noteAudit } from '@main/audit/repository'
 import { db } from '@main/db'
 import { deductBatchStock } from '@main/inventory/repository'
+import { reservedPiecesFor } from '@main/wholesale/reservations'
 import {
   cashCountSchema,
   countedCents,
@@ -89,6 +90,12 @@ async function prepare(
       draft.items.map((item) => item.batchId)
     )
     .execute()
+  // Note: Pieces promised to undelivered wholesale orders are still on the shelf until delivery,
+  // but they are not free to sell at the counter.
+  const reserved = await reservedPiecesFor(
+    database,
+    batches.map((batch) => batch.id)
+  )
   // Note: A box and loose pieces of one batch share its stock, so check the combined pieces.
   const piecesByBatch = new Map<number, number>()
   const prescription = { required: new Set<string>(), controlled: new Set<string>() }
@@ -111,6 +118,11 @@ async function prepare(
     piecesByBatch.set(batch.id, pieceTotal)
     if (pieceTotal > batch.currentStock)
       throw new SalesError(`${batch.brandName}: insufficient batch stock.`)
+    const promised = reserved[batch.id] ?? 0
+    if (pieceTotal > batch.currentStock - promised)
+      throw new SalesError(
+        `${batch.brandName}: only ${Math.max(0, batch.currentStock - promised)} piece(s) of batch ${batch.physicalTag ?? batch.id} are free to sell; ${promised} are promised to wholesale orders.`
+      )
     if (batch.isPrescribed || batch.isControlled) prescription.required.add(batch.brandName)
     if (batch.isControlled) prescription.controlled.add(batch.brandName)
     const unitPriceCents = priceToCents(unitPrice)
