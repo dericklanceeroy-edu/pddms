@@ -1,5 +1,6 @@
 import { noteAudit } from '@main/audit/repository'
 import { db } from '@main/db'
+import { reservedPiecesFor } from '@main/wholesale/reservations'
 import type { DeleteBlock } from '@shared/controls'
 import { auditChanges } from '@shared/security'
 import { productKey } from '@shared/duplicates'
@@ -12,6 +13,8 @@ export interface ProductWithInventory extends Product {
     batchNumber: string
     supplier: string
     stock: number
+    /** Pieces promised to undelivered wholesale orders; still on hand, not free to sell. */
+    reserved: number
     sellPrice: number
     boxSellPrice: number | null
     wholesaleBoxPrice: number | null
@@ -48,6 +51,8 @@ export async function findAll(): Promise<ProductWithInventory[]> {
     .orderBy('batches.expiresAt')
     .orderBy('batches.id')
     .execute()
+
+  const reserved = await reservedPiecesFor(db)
 
   const receipts = await db
     .selectFrom('supplierDeliveryItems')
@@ -89,6 +94,7 @@ export async function findAll(): Promise<ProductWithInventory[]> {
       batchNumber: batch.physicalTag ?? `Batch ${batch.id}`,
       supplier: batch.organization,
       stock: batch.currentStock,
+      reserved: reserved[batch.id] ?? 0,
       sellPrice: batch.sellPrice,
       boxSellPrice: batch.boxSellPrice,
       wholesaleBoxPrice: batch.wholesaleBoxPrice,

@@ -8,6 +8,8 @@ export interface ItemBatch {
   batchNumber: string
   supplier: string
   stock: number
+  /** Pieces promised to undelivered wholesale orders; on hand but not free to sell. */
+  reserved: number
   /** Selling price of one piece. */
   sellPrice: number
   /** Selling price of one box; null means piece price × pieces per box. */

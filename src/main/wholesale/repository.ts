@@ -1,5 +1,6 @@
 import { db } from '@main/db'
 import { deductBatchStock } from '@main/inventory/repository'
+import { reservedPiecesFor } from '@main/wholesale/reservations'
 import { isBatchSellable, localDate } from '@shared/inventory'
 import { calculateSale, priceToCents, type SaleLine } from '@shared/sales'
 import type { Database } from '@shared/types'
@@ -110,19 +111,7 @@ export async function getOrder(id: number, financial: boolean): Promise<Wholesal
  * delivery, so the order form subtracts these to show only boxes that are still free.
  */
 export async function reservedPieces(): Promise<Record<number, number>> {
-  const rows = await db
-    .selectFrom('wholesaleOrderItems')
-    .innerJoin('wholesaleOrders', 'wholesaleOrders.id', 'wholesaleOrderItems.orderId')
-    .select([
-      'wholesaleOrderItems.batchId',
-      sql<number>`SUM(wholesale_order_items.quantity * wholesale_order_items.pieces_per_unit)`.as(
-        'pieces'
-      )
-    ])
-    .where('wholesaleOrders.status', 'in', ['pending', 'scheduled'])
-    .groupBy('wholesaleOrderItems.batchId')
-    .execute()
-  return Object.fromEntries(rows.map((row) => [row.batchId, Number(row.pieces)]))
+  return reservedPiecesFor(db)
 }
 
 export async function overdueSummary(): Promise<{ count: number; remainingCents: number }> {

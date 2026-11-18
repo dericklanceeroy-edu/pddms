@@ -64,6 +64,7 @@ const mapProduct = (
   genericEquivalentIds: [],
   batches: product.batches.map((batch) => ({
     ...batch,
+    reserved: Math.max(0, batch.reserved ?? 0),
     boxSellPrice: batch.boxSellPrice ?? null,
     wholesaleBoxPrice: batch.wholesaleBoxPrice ?? null,
     piecesPerBox: Math.max(1, batch.piecesPerBox ?? 1),
